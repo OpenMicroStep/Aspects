@@ -1,0 +1,20 @@
+{
+    "name": "Person",
+    "attributes": [
+        { "name": "_version"  , "type": "integer" },
+        { "name": "_firstName", "type": "string"  },
+        { "name": "_lastName" , "type": "string"  },
+        { "name": "_birthDate", "type": "date"    }
+    ],
+    "categories": [
+        { "name": "core", "methods": [
+            { "name": "firstName" , "arguments": [], "returnType": "string" },
+            { "name": "lastName"  , "arguments": [], "returnType": "string" },
+            { "name": "fullName"  , "arguments": [], "returnType": "string" },
+            { "name": "birthDate" , "arguments": []  , "returnType": "date" }
+        ]},
+        { "name": "calculation", "methods": [
+            { "name": "age" , "arguments": [], "returnType": "integer" }
+        ]}
+    ]
+}
