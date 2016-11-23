@@ -14,3 +14,10 @@ Description de la classe
 
 ### category calculation [objc]
 #### age()       : integer;
+
+### aspect server
+#### categories: core, calculation
+
+### aspect client
+#### categories: core
+#### farCategories: calculation
