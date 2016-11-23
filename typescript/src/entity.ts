@@ -59,16 +59,17 @@ export class EntityControl {
 
   id()     : Identifier { return this._id; }
   version(): number { return this._currentAttributes.size > 0 ? EntityControl.NextVersion : this._remoteVersion; }
+  definition() { return this._definition; }
 
   addObserver(observer: EntityObserver) {
     this._observers.add(observer);
-    this._controlCenter.objectsInUse.set(this._id, this._entity!);
+    this._controlCenter.entityManager.set(this._id, this._entity!);
   }
 
   removeObserver(observer: EntityObserver) {
     this._observers.delete(observer);
     if (this._observers.size === 0)
-      this._controlCenter.objectsInUse.delete(this._id);
+      this._controlCenter.entityManager.delete(this._id);
   }
 
   isInUse(): boolean {
