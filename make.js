@@ -13,7 +13,11 @@ module.exports =  {
         "noImplicitReturns": true,
         "lib": ["es6"],
         "types": ["node"]
-    }],},
+    }],
+    npmInstall: [{
+      "@types/node": "^4.0.30"
+    }],
+  },
   "Files=": { is: 'group', elements: [
       { is: 'group', name: 'typescript', path: 'typescript/src', elements: [
         { is: 'file', name: '*.ts' }
