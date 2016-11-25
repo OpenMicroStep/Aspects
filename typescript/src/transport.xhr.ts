@@ -1,7 +1,8 @@
-import {FarTransport, Entity, ControlCenter} from './index';
+import {FarTransport, AObject, ControlCenter} from '@microstep/aspects';
+import { MSTE } from '@microstep/mstools';
 
 class XHRTransport implements FarTransport {
-  remoteCall<T>(controlCenter: ControlCenter, to: Entity, method: string, args: any[]): Promise<T> {
+  remoteCall<T>(controlCenter: ControlCenter, to: AObject, method: string, args: any[]): Promise<T> {
     return new Promise((resolve, reject) => {
         var xhr = new XMLHttpRequest();
         xhr.open(this.httpMethod(to, method), this.httpUrl(to, method), true);
@@ -17,20 +18,20 @@ class XHRTransport implements FarTransport {
     });
   }
 
-  httpMethod(to: Entity, method: string) {
+  httpMethod(to: AObject, method: string) {
       return "GET";
   }
 
-  httpUrl(to: Entity, method: string) {
-      let def = to.__control.definition();
+  httpUrl(to: AObject, method: string) {
+      let def = to.manager().definition();
       return `${def.version}/${def.name}/${to.id()}/${method}`;
   }
 
-  encode(value) : any {
-
+  encode(value): any {
+    return MSTE.stringify(value);
   }
 
-  decode(value) : any {
-      
+  decode(value): any {
+    return MSTE.parse(value);
   }
 }

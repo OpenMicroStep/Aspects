@@ -37,7 +37,7 @@ function isEqualDate<T>(this: Date, other, level?: number) {
   return other instanceof Date && this.getTime() === other.getTime();
 }
 
-function isStrictEqual(other) {
+function isStrictEqual(this, other) {
   return this === other;
 }
 

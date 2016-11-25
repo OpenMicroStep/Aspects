@@ -1,4 +1,4 @@
-import {ControlCenter, Identifier, areEquals} from './index';
+import {ControlCenter, Identifier, areEquals} from './core';
 
 export type AObjectAttributes = Map<string, any>;
 export enum AObjectEvent {
@@ -9,7 +9,7 @@ export enum AObjectEvent {
   Conflict
 }
 export type AObjectObserver = (object: AObject, event: AObjectEvent, changes: string[], conflicts: string[], missings: string[]) => void;
-export class AObjectControl {
+export class AObjectManager {
   static NoVersion = -1;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
   static SafeMode = true;
@@ -17,7 +17,7 @@ export class AObjectControl {
   _id: Identifier;
   _object: AObject | null;
   _controlCenter: ControlCenter;
-  _definition: ControlCenter.Definition;
+  _aspect: ControlCenter.Aspect;
   _observers: Set<AObjectObserver>;
   _localAttributes: AObjectAttributes;
   _oldVersion: number;
@@ -25,12 +25,12 @@ export class AObjectControl {
   _version: number;
   _versionAttributes: AObjectAttributes;
 
-  constructor(controlCenter: ControlCenter, definition: ControlCenter.Definition, id: Identifier, attributes: Map<string, any>, version: number) {
+  constructor(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, id: Identifier, attributes: Map<string, any>, version: number) {
     this._controlCenter = controlCenter;
-    this._definition = definition;
+    this._aspect = aspect;
     this._observers = new Set();
     this._id = id;
-    this._oldVersion = AObjectControl.NoVersion;
+    this._oldVersion = AObjectManager.NoVersion;
     this._oldVersionAttributes = new Map<string, any>();
     this._version = version;
     this._versionAttributes = attributes;
@@ -40,18 +40,20 @@ export class AObjectControl {
 
   init(object: AObject) {
     this._object = object;
-    for (let attr of this._definition.attributes) {
+    for (let attr of this._aspect.definition.attributes) {
       Object.defineProperty(object, attr.name, {
         writable: true,
         enumerable: true,
         get: () => {
           if (ControlCenter.isAObjectType(attr))
-            return this._controlCenter.objectsManager.get(this.attributeValue(attr.name).id());
+            return this._controlCenter.objectsManager.get(this.attributeValue(attr.name));
           return this.attributeValue(attr.name);
         },
         set: (value) => {
-          if (AObjectControl.SafeMode && !attr.validator(value))
+          if (AObjectManager.SafeMode && !attr.validator(value))
             throw new Error(`attribute value is invalid`);
+          if (ControlCenter.isAObjectType(attr))
+            value = value.id();
           this.setAttributeValue(attr.name, value);
         }
       });
@@ -59,8 +61,21 @@ export class AObjectControl {
   }
 
   id()     : Identifier { return this._id; }
-  version(): number { return this._localAttributes.size > 0 ? AObjectControl.NextVersion : this._version; }
-  definition() { return this._definition; }
+  version(): number { return this._localAttributes.size > 0 ? AObjectManager.NextVersion : this._version; }
+  definition() { return this._aspect.definition; }
+
+  diff() : { [s: string]: any } {
+    let ret = { _id: this.id(), _version: this.version() };
+    this._localAttributes.forEach((v, k) => ret[k] = v);
+    return ret;
+  }
+
+  snapshot() : { [s: string]: any } {
+    let ret = { _id: this.id(), _version: this.version() };
+    this._versionAttributes.forEach((v, k) => ret[k] = v);
+    this._localAttributes.forEach((v, k) => ret[k] = v);
+    return ret;
+  }
 
   addObserver(observer: AObjectObserver) {
     this._observers.add(observer);
@@ -105,7 +120,7 @@ export class AObjectControl {
   setRemoteAttributes(attributes: Map<string, any>, version: number) {
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     if (version === this._version) {
-      if (AObjectControl.SafeMode) {
+      if (AObjectManager.SafeMode) {
         for (var k of attributes.keys())
           if (this._versionAttributes.has(k) && !areEquals(this._versionAttributes.get(k), attributes.get(k)))
             ret.conflicts.push(k);
@@ -136,13 +151,14 @@ export class AObjectControl {
 }
 
 export class AObject {
-  __control: AObjectControl;
+  __manager: AObjectManager;
 
-  constructor(control: AObjectControl) {
-    this.__control = control;
-    this.__control.init(this);
+  constructor(control: AObjectManager) {
+    this.__manager = control;
+    this.__manager.init(this);
   }
 
-  id()     : Identifier { return this.__control.id();      }
-  version(): number     { return this.__control.version(); }
+  id()     : Identifier { return this.__manager.id();      }
+  version(): number     { return this.__manager.version(); }
+  manager(): AObjectManager { return this.__manager; }
 }
