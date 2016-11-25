@@ -1,55 +1,56 @@
 import {ControlCenter, Identifier, areEquals} from './index';
 
-export type EntityAttributes = Map<string, any>;
-export enum EntityEvent {
+export type AObjectAttributes = Map<string, any>;
+export enum AObjectEvent {
   Creation,
   Destruction,
   RemoteUpdate,
   LocalUpdate,
   Conflict
 }
-export type EntityObserver = (entity: Entity, event: EntityEvent, changes: string[], conflicts: string[], missings: string[]) => void;
-export class EntityControl {
+export type AObjectObserver = (object: AObject, event: AObjectEvent, changes: string[], conflicts: string[], missings: string[]) => void;
+export class AObjectControl {
   static NoVersion = -1;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
   static SafeMode = true;
 
   _id: Identifier;
-  _entity: Entity | null;
+  _object: AObject | null;
   _controlCenter: ControlCenter;
   _definition: ControlCenter.Definition;
-  _observers: Set<EntityObserver>;
-  _currentAttributes: EntityAttributes;
-  _baseVersion: number;
-  _baseAttributes: EntityAttributes;
-  _remoteVersion: number;
-  _remoteAttributes: EntityAttributes;
+  _observers: Set<AObjectObserver>;
+  _localAttributes: AObjectAttributes;
+  _oldVersion: number;
+  _oldVersionAttributes: AObjectAttributes;
+  _version: number;
+  _versionAttributes: AObjectAttributes;
 
   constructor(controlCenter: ControlCenter, definition: ControlCenter.Definition, id: Identifier, attributes: Map<string, any>, version: number) {
     this._controlCenter = controlCenter;
     this._definition = definition;
     this._observers = new Set();
     this._id = id;
-    this._baseVersion = EntityControl.NoVersion;
-    this._baseAttributes = new Map<string, any>();
-    this._remoteVersion = version;
-    this._remoteAttributes = attributes;
-    this._currentAttributes = new Map<string, any>();
-    this._entity = null;
+    this._oldVersion = AObjectControl.NoVersion;
+    this._oldVersionAttributes = new Map<string, any>();
+    this._version = version;
+    this._versionAttributes = attributes;
+    this._localAttributes = new Map<string, any>();
+    this._object = null;
   }
 
-  init(entity: Entity) {
-    this._entity = entity;
+  init(object: AObject) {
+    this._object = object;
     for (let attr of this._definition.attributes) {
-      Object.defineProperty(entity, attr.name, {
+      Object.defineProperty(object, attr.name, {
         writable: true,
         enumerable: true,
         get: () => {
-          if (ControlCenter.isEntityType(attr))
+          if (ControlCenter.isAObjectType(attr))
+            return this._controlCenter.objectsManager.get(this.attributeValue(attr.name).id());
           return this.attributeValue(attr.name);
         },
         set: (value) => {
-          if (EntityControl.SafeMode && !attr.validator(value))
+          if (AObjectControl.SafeMode && !attr.validator(value))
             throw new Error(`attribute value is invalid`);
           this.setAttributeValue(attr.name, value);
         }
@@ -58,18 +59,18 @@ export class EntityControl {
   }
 
   id()     : Identifier { return this._id; }
-  version(): number { return this._currentAttributes.size > 0 ? EntityControl.NextVersion : this._remoteVersion; }
+  version(): number { return this._localAttributes.size > 0 ? AObjectControl.NextVersion : this._version; }
   definition() { return this._definition; }
 
-  addObserver(observer: EntityObserver) {
+  addObserver(observer: AObjectObserver) {
     this._observers.add(observer);
-    this._controlCenter.entityManager.set(this._id, this._entity!);
+    this._controlCenter.objectsManager.set(this._id, this._object!);
   }
 
-  removeObserver(observer: EntityObserver) {
+  removeObserver(observer: AObjectObserver) {
     this._observers.delete(observer);
     if (this._observers.size === 0)
-      this._controlCenter.entityManager.delete(this._id);
+      this._controlCenter.objectsManager.delete(this._id);
   }
 
   isInUse(): boolean {
@@ -77,50 +78,56 @@ export class EntityControl {
   }
   
   attributeValue(attribute: string) {
-    if (this._currentAttributes.has(attribute))
-      return this._currentAttributes.get(attribute);
-    if (this._remoteAttributes.has(attribute))
-      return this._remoteAttributes.get(attribute);
-    if (this._baseAttributes.has(attribute))
+    if (this._localAttributes.has(attribute))
+      return this._localAttributes.get(attribute);
+    if (this._versionAttributes.has(attribute))
+      return this._versionAttributes.get(attribute);
+    if (this._oldVersionAttributes.has(attribute))
       throw new Error(`attribute '${attribute}' is unaccessible due to version change`);
     throw new Error(`attribute '${attribute}' is unaccessible and never was`);
   }
 
+  versionAttributeValue(attribute: string) {
+    if (this._versionAttributes.has(attribute))
+      return this._versionAttributes.get(attribute);
+    throw new Error(`attribute '${attribute}' is unaccessible and never was`);
+  }
+
   setAttributeValue(attribute: string, value) {
-    if (areEquals(this._remoteAttributes.get(attribute), value)) {
-      this._currentAttributes.delete(attribute);
+    if (areEquals(this._versionAttributes.get(attribute), value)) {
+      this._localAttributes.delete(attribute);
     }
-    else if (!areEquals(this._currentAttributes.get(attribute), value)) {
-      this._currentAttributes.set(attribute, value);
+    else if (!areEquals(this._localAttributes.get(attribute), value)) {
+      this._localAttributes.set(attribute, value);
     }
   }
 
   setRemoteAttributes(attributes: Map<string, any>, version: number) {
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
-    if (version === this._remoteVersion) {
-      if (EntityControl.SafeMode) {
+    if (version === this._version) {
+      if (AObjectControl.SafeMode) {
         for (var k of attributes.keys())
-          if (this._remoteAttributes.has(k) && !areEquals(this._remoteAttributes.get(k), attributes.get(k)))
+          if (this._versionAttributes.has(k) && !areEquals(this._versionAttributes.get(k), attributes.get(k)))
             ret.conflicts.push(k);
       }
-      Object.assign(this._remoteAttributes, attributes);
+      Object.assign(this._versionAttributes, attributes);
     }
     else {
-      this._baseVersion = this._remoteVersion;
-      this._baseAttributes = this._remoteAttributes;
-      this._remoteAttributes = attributes;
-      for (var k of this._remoteAttributes.keys()) {
-        if (!this._baseAttributes.has(k) || !areEquals(this._baseAttributes.get(k), attributes.get(k)))
+      this._oldVersion = this._version;
+      this._oldVersionAttributes = this._versionAttributes;
+      this._versionAttributes = attributes;
+      for (var k of this._versionAttributes.keys()) {
+        if (!this._oldVersionAttributes.has(k) || !areEquals(this._oldVersionAttributes.get(k), attributes.get(k)))
           ret.changes.push(k);
-        if (this._currentAttributes.has(k)) {
-          if (areEquals(this._currentAttributes.get(k), this._remoteAttributes.get(k)))
-            this._currentAttributes.delete(k);
-          else if (!areEquals(this._baseAttributes.get(k), this._remoteAttributes.get(k)))
+        if (this._localAttributes.has(k)) {
+          if (areEquals(this._localAttributes.get(k), this._versionAttributes.get(k)))
+            this._localAttributes.delete(k);
+          else if (!areEquals(this._oldVersionAttributes.get(k), this._versionAttributes.get(k)))
             ret.conflicts.push(k);
         }
       }
-      for (var k of this._baseAttributes.keys()) {
-        if (!this._remoteAttributes.has(k))
+      for (var k of this._oldVersionAttributes.keys()) {
+        if (!this._versionAttributes.has(k))
           ret.missings.push(k);
       }
     }
@@ -128,10 +135,10 @@ export class EntityControl {
   }
 }
 
-export class Entity {
-  __control: EntityControl;
+export class AObject {
+  __control: AObjectControl;
 
-  constructor(control: EntityControl) {
+  constructor(control: AObjectControl) {
     this.__control = control;
     this.__control.init(this);
   }
