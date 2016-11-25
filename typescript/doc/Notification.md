@@ -1,115 +1,42 @@
-## class AObject
+## Notification
+En fait, juste un objet javascript avec 3 clés.
 
-La classe AObject est la classe mère dont hérite tous les objets à aspects.
+### keys
 
-Les classes de ces objets sont décrites sous forme de fichiers .interface.md.  
+#### name: string
+Un nom d'événement
 
-Un tel fichier contient les attributs de l'objet, les méthodes classées en catégories et les aspects.
+#### name: string
+Un objet
 
-Exemple:
+#### name: info
+Un dictionnaire d'informations suplémentaire
 
-```
-## class Person
+## class NotificationCenter
 
-### attributes
-#### _firstName: string
-#### _lastName:  string
-#### _birthDate: date
-
-### category core [ts, objc]
-#### firstName() : string
-#### lastName()  : string
-#### fullName()  : string
-#### birthDate() : date
-
-### category calculation [objc]
-#### age()       : integer
-
-### aspect server
-#### categories: core, calculation
-
-### aspect client
-#### categories: core
-#### farCategories: calculation
-```
-
-Si l'on se place du point de vue d'un aspect particulier (ex: client) l'objet dispose en local des méthodes incluses dans les catégories de l'aspect.  
-
-Il peut aussi utiliser les méthodes des catégories indiquées en farCategories mais leur utilisation se fait alors comme indiqué ci-après.
+Permet d'observer soit un événement, soit un objet soit un événement sur un objet.
  
-Tout d'abort, une méthode d'une catégorie lointaine est une méthode tout-à-fait classique et qui s'utilise en local normalement. Elle n'a cependant qu'un seul argument mais qui peut être un dictionnaire.
+### category observer [ts]
+Management des observateurs
 
-	result= object.method(arg);
+#### addObserver(observer:object, method:string, name:string, anObject:object)
+Enregistre l'observateur sur le nom de l'événement `name` et sur l'objet `anObject` (ou seulement l'un des deux).
 
-Lorsqu'elle est utilisée à distance, le retour est **asynchrone**, donc pour récupérer le résultat il faut utiliser une technique asynchrone proposée par le centre de contrôle (cc).
+Lorsqu'un événement correspondant survient, une notification est envoyée à l'observateur avec la méthode `method`.
 
-Première possibilité: le callback avec la fonction `far`:
+#### removeObserver(observer:object)
+Retire l'observateur de toutes ces observations.
 
-	cc.far(object, method, arg, (object, result)=>{…});
+#### removeObserver(observer,name,object)
+Retire l'observateur de toutes les observations correspondantes.  
+Si `name` et `object` sont null, retire toutes les observations de l'observateur.  
+Si `name` est null, retire tous les événements relatifs à `object`.  
+Si `object` est null, retire tous les événements `name`.  
+Si `name` et `object` sont non null, retire juste l'observation de l'événement `name` sur `object`.
 
-Deuxième possibilité via `farEvent`:
+### category post [ts]
+Posting Notifications
 
-	identifiant de la requête= cc.farEvent(object, method, arg, 'event'); 
-
-Lors du retour, l'évènement `event` est publié sur l'objet `object` avec en information l'identifiant de la requête et le résultat (éventuellement partiel). Pour le recevoir, il faut s'etre déclaré comme observateur dans le centre de notification (nc).
-
-	nc.addObserver(this, method, object, 'event')
-
-	method(notification) // {object, évent, info}
-
-Troisième possibilité via farAsync:  
-TODO: voir ce qui sera le plus pratique.
-
-	cc.farAsync(pool, object, method, arg); // le résultat est dans pool.context.result
-	cc.farAsync(pool, object, method, arg, 'res'); // le résultat est dans pool.context.res
-
-TODO: Pour les réceptions partielles: 
-
-Versions:
-
-Lorsqu'un objet est récupéré, il existe dans une version donnée. Si on modifie la valeur d'un attribut en local, c'est cette valeur qui devient la valeur courante et quand l'objet sera sauvé la valeur localoe deviendra la valeur de la nouvelle version.
-
-Il est cependant toujours possible de connaître la valeur de référence de la version en utilisant la méthode:
-
-	methode
-
-Lorsqu'une nouvelle version de l'objet est reçu, il y a conflit si la nouvelle valeur n'est ni celle de l'ancienne version ni celle modifiée localement (quelqu'un d'autre a modifié la valeur). Dans ce cas, une notification est levée.
-
-### attributes
-
-#### _id: Identifier
-L'identifiant de l'objet.
-
-#### _entity: Entity | null
-???
-
-#### _controlCenter: AControlCenter
-Le CdC qui gère cet objet.
-
-#### _definition: AControlCenter.Definition;
-??? Définition de la classe et plus précisément de l'aspect courant de la classe => du coup `aspect` ?
-
-#### _observers: Set<AObserver>;
-A priori non => dans le centre de notification
-
-##### _localAttributes: AAttributes
-Les attributs et les valeurs qui ont été modifiées localement.
-Une valeur locale est toujours différente de la valeur de la version.
-Si la valeur est supprimée, elle est à null.
-
-##### _version: number
-La version de référence.
-
-##### _versionAttributes: AAttributes
-Les attributs et les valeurs de la version de référence.
-
-##### _oldVersion: number
-Uniquement en cas de conflit. C'est la version que l'on avait précédemment.
-
-##### _oldVersionAttributes: AAttributes
-Uniquement en cas de conflit. C'est la version que l'on avait précédemment.
-
-manque si l'objet a été chargé partiellement ou non: un attribut particuler du style `_isPartial` ?
- 
-### category core [ts]
-#### firstName() : string;
+#### postNotification(notification)
+Poste une notification ce qui a pour effet de prévenir les observateurs.  
+La notification est un objet {name: aName, object: anObject, info: aDict} où info est optionnelle.
