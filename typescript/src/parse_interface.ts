@@ -4,11 +4,11 @@ in:                                   out:
 Description de la classe              Person=: {
                                         is:class,
                                         superclass: Object
-### attributs                           attributs: [=_version, ..., =_birthDate], 
-#### _version:   integer                _version=:   {is: attribut, type:integer},
-#### _firstName: string                 _firstName=: {is: attribut, type:string},
-#### _lastName:  string                 _lastName=:  {is: attribut, type:string},
-#### _birthDate: date                   _birthDate=: {is: attribut, type:date}
+### attributes                          attributes: [=_version, ..., =_birthDate], 
+#### _version:   integer                _version=:   {is: attribute, type:integer},
+#### _firstName: string                 _firstName=: {is: attribute, type:string},
+#### _lastName:  string                 _lastName=:  {is: attribute, type:string},
+#### _birthDate: date                   _birthDate=: {is: attribute, type:date}
                                         categories: [=core, =calculation],
                                         core=: {
 ### category core [ts, objc]              is:category, langages:  [ts,objc],
@@ -20,8 +20,10 @@ Description de la classe              Person=: {
                                           },
 ### category calculation [objc]         calculation=: {
 #### age()       : integer                is:category, langages:  [objc],
-                                          methods: [=age],
-                                          age=: {is:method, type:{arguments:[],return:string}}
+                                          methods: [=age,=tst],
+                                          age=: {is:method, type:{arguments:[],return:string}},
+#### tst(x:date ,y:{a:int}): {r:[1,*,{r:int}]};
+                                          tst=:{is:method,type:{arguments:[date,{a:int}],return:{r:[1,*,{r:int}]}}}
                                           }
                                         aspects= [=server, =client],
 ### aspect server                       server=: {
@@ -37,9 +39,10 @@ Description de la classe              Person=: {
                                       AnotherClass=: {...}
                                       }
 */
+import * as fs from 'fs';
+
 // response in pool.context.response or pool.context.error
 export function interfaceParseFileCont(pool,path) {
-  var fs= require('fs');
   fs.readFile(path, null, function(err, data) {
     if (err) {
       pool.context.error= "interfaceParseFileCont error: " + err;
@@ -49,22 +52,25 @@ export function interfaceParseFileCont(pool,path) {
   }
 
 export function interfaceParseCont(pool,data) {
-  pool.context.response= interfaceParse(data);
+  var x= interfaceParse(data);
+  if (x.is==='error') pool.context.error= x;
+  else pool.context.response= x;
   pool.continue();
   }
 
+// retourne la source md traduite en JSON.
+// Si erreur, retourne {is:error, errors:[{line,index,err}], result:r}
 export function interfaceParse(source) {
   var err;
   var text,
       ch,     // The current character ch = text[at-1]
-      at,lg   // The index of the next character and the lg of the text
+      at,lg,  // The index of the next character and the lg of the text
+      line,   // le numéro de la ligne
+      atline, // l'index du premier caractère de la ligne
+      errors
       ;
   function _error(m) {
-    throw {
-      name: 'SyntaxError',
-      message: m,
-      at: at,
-      text: text};}
+    errors.push({line:line, index: at-atline, error:m});}
   // Get the next character. When there are no more characters,
   // return the empty string.
   function _next(c?) {
@@ -74,7 +80,7 @@ export function interfaceParse(source) {
     return ch;}
   function _nextLine() {
     while (ch && ch !== '\n') _next();
-    if (ch) _next();}
+    if (ch) {_next(); line++; atline= at;}}
   function _white() {
     while (ch && ch <= ' ' && ch!=='\n') _next();}
   // Parse a string begining and ending with ".
@@ -84,12 +90,12 @@ export function interfaceParse(source) {
       while (_next() && ch !== '"') str+= ch;}
     else _error("Bad string");
     return str;}
-  // Parse a word as "xxx" or yyy where yyy is letters or numbers.
   function _inWord() {
     return  ch === '_' ||
            ('A' <= ch && ch <= 'Z') ||
            ('a' <= ch && ch <= 'z') ||
            ('0' <= ch && ch <= '9');}
+  // _word: Parse a word as "xxx" or yyy where yyy is letters or numbers.
   function _word() {
     var str= '';
     _white();
@@ -97,13 +103,44 @@ export function interfaceParse(source) {
     else {
       while (_inWord()) {str+= ch; _next();}}
     return str;}
-  function _inset(areRefs:boolean) {
-    var set= [];
+  // _type: Retourne un string ou un dico
+  function _type() {
+    var type:any= _word(), x;
+    if (!type) {
+      if (ch==='{') {_next('{'); type= _inset(3); _next('}');}
+      else if (ch==='[') {_next('['); type= _inset(4); _next(']');}
+      else _error('no type');}
+    return type;}
+  // _inset: Retourne l'ensemble des éléments
+  // ex: Si param=0, a, b, c => [a, b, c]
+  // Si 1, areRefs : a, b, c => [=a, =b, =c]
+  // Si 2, argTypes: a:x, b:y => [x,y]
+  // Si 3, keyTypes: a:x, b:y => {a:x, b:y}
+  // Si 4, arrayType: 0, *, type => [0,*,type]
+  function _inset(param) {
+    var areRefs=  param===1;
+    var argTypes= param===2;
+    var keyTypes= param===3;
+    var arrayType= param==4;
+    var key= argTypes || keyTypes;
+    var set:any= keyTypes ? {} : [];
     _white();
-    while (_inWord()) {
-      var w= _word();
-      if (w) set.push(areRefs ? '='+w : w);
+    while (_inWord() || (arrayType && (ch==='*' || ch==='{' || ch==='['))) {
+      var w, k;
+      if (arrayType) {
+        if (ch==='*') {w= '*'; _next('*');}
+        else if ('0' <= ch && ch <= '9') w= _word();
+        else w= _type();}
+      else w= _word();
       _white();
+      if (key) {
+        k= w;
+        if (ch===':') _next(':');
+        else _error('bad argType');
+        w= _type();
+        _white();}
+      if (keyTypes) set[k]= w;
+      else if (w) set.push(areRefs ? '='+w : w);
       if (ch===',') _next(',');
       _white();}
     return set;}
@@ -121,14 +158,14 @@ export function interfaceParse(source) {
   var firstLevel= 2, currentLevel= 0, currentElementType= null;
   var result;
   //        key:              is            |  set name      |set| sets                            | subs are ?    
-  var el= {'class':         ['class'        , 'classes'      , [], ['attribut','category','aspect'],  ''],
-           'attributs':     ['attributs'    , ''             , [], []                              ,  'attribut'],
-           'attribut':      ['attribut'     , 'attributs'    , [], []                              ,  ''],
-           'category':      ['category'     , 'categories'   , [], ['method']                      ,  'method'],
-           'method':        ['method'       , 'methods'      , [], []                              ,  ''],
-           'aspect':        ['aspect'       , 'aspects'      , [], []                              ,  ''],
-           'categories':    ['categories'   , ''             , [], []                              ,  ''],
-           'farCategories': ['farCategories', ''             , [], []                              ,  '']};
+  var el= {'class':         ['class'        , 'classes'      , [], ['attribute','category','aspect'],  ''],
+           'attributes':    ['attributes'   , ''             , [], []                               ,  'attribute'],
+           'attribute':     ['attribute'    , 'attributes'   , [], []                               ,  ''],
+           'category':      ['category'     , 'categories'   , [], ['method']                       ,  'method'],
+           'method':        ['method'       , 'methods'      , [], []                               ,  ''],
+           'aspect':        ['aspect'       , 'aspects'      , [], []                               ,  ''],
+           'categories':    ['categories'   , ''             , [], []                               ,  ''],
+           'farCategories': ['farCategories', ''             , [], []                               ,  '']};
 
   result= [{}];
   function _pop(n) {
@@ -144,26 +181,26 @@ export function interfaceParse(source) {
     var r= result[result.length-1];
     var is= currentElementType ? currentElementType[0] : undefined;
     if (!is) _error("_addObject: element type unknonw");
-    else if (is==='attributs') result.push(r);
-    else if (is==='class'||is==='attribut'||is==='category'||is==='method'||is==='aspect') {
+    else if (is==='attributes') result.push(r);
+    else if (is==='class'||is==='attribute'||is==='category'||is==='method'||is==='aspect') {
       var o= {is:is}, x;
       if (!name) name= _word();
       switch (is) {
-        case 'class':
+        case 'class': // : SuperClass (optionnel)
           _white();
           if (ch===':') {_next(':'); x= _word(); if (!x) _error('superclass'); else o['superclass']= x;}
           break;
-        case 'attribut':
-          _white(); _next(':'); x= _word(); if (!x) _error('type'); else o['type']= x;
+        case 'attribute':
+          _white(); _next(':'); x= _type(); if (!x) _error('type'); else o['type']= x;
           break;
-        case 'category':
+        case 'category': // [ts] (optionnel ?)
           _white();
-          if (ch==='[') {_next('['); x= _inset(false); if (x) o['languages']= x; _next(']');}
+          if (ch==='[') {_next('['); x= _inset(0); if (x) o['languages']= x; _next(']');}
           break;
-        case 'method':
+        case 'method': // (a:integer, b:integer) : string
           var type= {};
-          _white(); _next('('); x= _inset(false); type['arguments']= x; _next(')');
-          _white(); _next(':'); x= _word(); if (!x) _error('return type'); else type['return']= x;
+          _white(); _next('('); x= _inset(2); type['arguments']= x; _next(')');
+          _white(); _next(':'); x= _type(); if (!x) _error('return type'); else type['return']= x;
           o['type']= type;
           break;
         default: break;}
@@ -172,7 +209,7 @@ export function interfaceParse(source) {
       result.push(o);}
     else if (is==='categories'||is==='farCategories') {
       _white(); _next(':');
-      var set= _inset(true);
+      var set= _inset(1);
       if (set) r[is]= set;}
   //console.log('_addObject',result);
     }
@@ -182,7 +219,7 @@ export function interfaceParse(source) {
       _pop(level-firstLevel+1);
       var is= _word(), name= null;
       if (!is) _error("parseLine: Bad word");
-      else if (el[is]) { // class attributs...
+      else if (el[is]) { // class attributes...
         currentElementType= el[is];
         //_white(); if (ch===':') _next();
         _addObject(null);
@@ -192,8 +229,8 @@ export function interfaceParse(source) {
         _addObject(name);}}
     _nextLine();}
 
-  text= source; at= 0; lg= text.length;
+  text= source; at= 0; lg= text.length; line= 1; atline= 0; errors= [];
   for (ch= ' '; ch;) _parseLine();
   _pop(1);
-  return result[0];
+  return !errors.length ? result[0] : {is:'error', errors:errors, result:result[0]};
   }
