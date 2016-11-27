@@ -1,6 +1,6 @@
 ## class AObject
 
-La classe AObject est la classe mère dont hérite tous les objets à aspects.
+La classe AObject est la classe mère dont héritent tous les objets à aspects.
 
 Les classes de ces objets sont décrites sous forme de fichiers .interface.md.  
 
@@ -22,7 +22,7 @@ Exemple:
 #### fullName()  : string
 #### birthDate() : date
 
-### category calculation [objc]
+### farCategory calculation [objc]
 #### age()       : integer
 
 ### aspect server
@@ -35,35 +35,9 @@ Exemple:
 
 Si l'on se place du point de vue d'un aspect particulier (ex: client) l'objet dispose en local des méthodes incluses dans les catégories de l'aspect.  
 
-Il peut aussi utiliser les méthodes des catégories indiquées en farCategories mais leur utilisation se fait alors comme indiqué ci-après.
+Il peut aussi utiliser les méthodes des catégories indiquées en farCategories mais leur utilisation se fait alors au travers d'invocations (cf. ci-après).
  
-Tout d'abort, une méthode d'une catégorie lointaine est une méthode tout-à-fait classique et qui s'utilise en local normalement. Elle n'a cependant qu'un seul argument mais qui peut être un dictionnaire.
-
-	result= object.method(arg);
-
-Lorsqu'elle est utilisée à distance, le retour est **asynchrone**, donc pour récupérer le résultat il faut utiliser une technique asynchrone proposée par le centre de contrôle (cc).
-
-Première possibilité: le callback avec la fonction `far`:
-
-	cc.far(object, method, arg, (object, result)=>{…});
-
-Deuxième possibilité via `farEvent`:
-
-	identifiant de la requête= cc.farEvent(object, method, arg, 'event'); 
-
-Lors du retour, l'évènement `event` est publié sur l'objet `object` avec en information l'identifiant de la requête et le résultat (éventuellement partiel). Pour le recevoir, il faut s'etre déclaré comme observateur dans le centre de notification (nc).
-
-	nc.addObserver(this, method, object, 'event')
-
-	method(notification) // {object, évent, info}
-
-Troisième possibilité via farAsync:  
-TODO: voir ce qui sera le plus pratique.
-
-	cc.farAsync(pool, object, method, arg); // le résultat est dans pool.context.result
-	cc.farAsync(pool, object, method, arg, 'res'); // le résultat est dans pool.context.res
-
-TODO: Pour les réceptions partielles: 
+Tout d'abort, une méthode d'une catégorie lointaine n'a qu'un seul argument mais qui peut être un dictionnaire. Et elle a un résultat. Elle doit s'utiliser au travers d'une invocation.
 
 Versions:
 
