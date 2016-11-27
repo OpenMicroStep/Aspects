@@ -1,8 +1,12 @@
 import * as Ajv from 'ajv';
-import {FarTransport, PublicTransport, AObject} from './core';
+import {FarTransport, PublicTransport, AObject, NotificationCenter} from './core';
 const ajv = new Ajv();
 
 export type Identifier = string | number;
+
+export interface AComponent {
+
+}
 
 export interface FarTransport {
   remoteCall<T>(controlCenter: ControlCenter, to: AObject, method: string, args: any[]): Promise<T>;
@@ -12,7 +16,62 @@ export interface PublicTransport {
 }
 
 export class ControlCenter {
-  objectsManager = new Map<Identifier, AObject>();
+  _notificationCenter = new NotificationCenter();
+  _objects = new Map<ControlCenter.Aspect, Map<Identifier, { object: AObject, components: AComponent[] }>>();
+  _aspects = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
+
+  getAspect(implementation: ControlCenter.Implementation) : ControlCenter.Aspect {
+    return this._aspects.get(implementation)!;
+  }
+
+  getObject(aspect: ControlCenter.Aspect, id: Identifier) : AObject | null {
+    let o = this._objectsInAspect(aspect).get(id);
+    return o ? o.object : null;
+  }
+
+  mergeObject(object: AObject) {
+    let m = object.manager();
+    let o = this.getObject(m.aspect(), object.id());
+    if (o && o !== object)
+      o.manager().setRemote(m);
+    return o || object;
+  }
+
+  _objectsInAspect(aspect: ControlCenter.Aspect) {
+    let i = this._objects.get(aspect);
+    if (!i)
+      i = new Map();
+    return i;
+  }
+
+  registerObjects(component: AComponent, objects: AObject[], method: string | null = null, events: string[] | null = null) {
+    objects.forEach(o => {
+      let id = o.id();
+      let i = this._objectsInAspect(o.manager().aspect());
+      let d = i.get(id);
+      if (!d)
+        i.set(id, d = { object: o, components: [] });
+      d.components.push(component);
+    });
+  }
+
+  unregisterObjects(component: AComponent, objects: AObject[]) {
+    objects.forEach(o => {
+      let i = this._objectsInAspect(o.manager().aspect());
+      let d = i.get(o.id());
+      if (!d)
+        throw new Error(`cannot unregister an object that is not registered`);
+      let idx = d.components.indexOf(component);
+      if (idx === -1)
+        throw new Error(`cannot unregister an object that is not registered by the given component`);
+      if (d.components.length === 1)
+        i.delete(o.id());
+      else
+        d.components.splice(idx, 1);
+    });
+  }
+
+  notificationCenter() { return this._notificationCenter; }
 
   install(aspect: ControlCenter.Aspect, implementation: ControlCenter.Implementation, bridges: ControlCenter.Bridge[]) {
     this.installLocalCategories(aspect.categories, aspect.definition, implementation);
@@ -33,10 +92,6 @@ export class ControlCenter {
         this.installPublicCategories(bridge.categories, bridge.server.transport, aspect, implementation);
       }
     });
-  }
-
-  mergeEntities<T>(entities: T) {
-    return entities;
   }
 
   protected installLocalCategories(localCategories: string[], definition: ControlCenter.Definition, implementation: ControlCenter.Implementation) {
