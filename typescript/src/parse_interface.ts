@@ -18,8 +18,8 @@ Description de la classe              Person=: {
 #### fullName()  : string                 fullName=:  {is:method, type:{arguments:[],return:string}},
 #### birthDate() : date                   birthDate=: {is:method, type:{arguments:[],return:date}},
                                           },
-### category calculation [objc]         calculation=: {
-#### age()       : integer                is:category, langages:  [objc],
+### farCategory calculation [objc]      calculation=: {
+#### age()       : integer                is:farCategory, langages:  [objc],
                                           methods: [=age,=tst],
                                           age=: {is:method, type:{arguments:[],return:string}},
 #### tst(x:date ,y:{a:int}): {r:[1,*,{r:int}]};
@@ -162,6 +162,7 @@ export function interfaceParse(source) {
            'attributes':    ['attributes'   , ''             , [], []                               ,  'attribute'],
            'attribute':     ['attribute'    , 'attributes'   , [], []                               ,  ''],
            'category':      ['category'     , 'categories'   , [], ['method']                       ,  'method'],
+           'farCategory':   ['farCategory'  , 'farCategories', [], ['method']                       ,  'method'],
            'method':        ['method'       , 'methods'      , [], []                               ,  ''],
            'aspect':        ['aspect'       , 'aspects'      , [], []                               ,  ''],
            'categories':    ['categories'   , ''             , [], []                               ,  ''],
@@ -182,7 +183,7 @@ export function interfaceParse(source) {
     var is= currentElementType ? currentElementType[0] : undefined;
     if (!is) _error("_addObject: element type unknonw");
     else if (is==='attributes') result.push(r);
-    else if (is==='class'||is==='attribute'||is==='category'||is==='method'||is==='aspect') {
+    else if (is==='class'||is==='attribute'||is==='category'||is==='farCategory'||is==='method'||is==='aspect') {
       var o= {is:is}, x;
       if (!name) name= _word();
       switch (is) {
@@ -194,6 +195,7 @@ export function interfaceParse(source) {
           _white(); _next(':'); x= _type(); if (!x) _error('type'); else o['type']= x;
           break;
         case 'category': // [ts] (optionnel ?)
+        case 'farCategory':
           _white();
           if (ch==='[') {_next('['); x= _inset(0); if (x) o['languages']= x; _next(']');}
           break;
@@ -232,5 +234,5 @@ export function interfaceParse(source) {
   text= source; at= 0; lg= text.length; line= 1; atline= 0; errors= [];
   for (ch= ' '; ch;) _parseLine();
   _pop(1);
-  return !errors.length ? result[0] : {is:'error', errors:errors, result:result[0]};
+  return !errors.length ? result[0] : {is:'error', reasons:errors, uncompletedResult:result[0]};
   }
