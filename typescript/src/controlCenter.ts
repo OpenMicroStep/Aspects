@@ -1,5 +1,6 @@
 import * as Ajv from 'ajv';
-import {FarTransport, PublicTransport, AObject, NotificationCenter} from './core';
+import {Async, Flux} from '@microstep/async';
+import {FarTransport, PublicTransport, AObject, AObjectManager, NotificationCenter, Invocation} from './core';
 const ajv = new Ajv();
 
 export type Identifier = string | number;
@@ -19,6 +20,25 @@ export class ControlCenter {
   _notificationCenter = new NotificationCenter();
   _objects = new Map<ControlCenter.Aspect, Map<Identifier, { object: AObject, components: AComponent[] }>>();
   _aspects = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
+
+  farCallback<I extends Invocation<any, any>>(call: I, callback: (invocation: I) => void) {
+    call.invoke(callback);
+  }
+  farPromise<I extends Invocation<any, any>>(call: I) : Promise<I> {
+    return new Promise((resolve) => { this.farCallback(call, resolve); })
+  }
+  farAsync<I extends Invocation<any, any>>(flux: Flux<{ envelop: I }>, call: I) {
+    this.farCallback(call, (invocation) => {
+      flux.context.envelop = invocation;
+      flux.continue();
+    });
+  }
+
+  managerFactory() {
+    return (object: AObject) => {
+      return new AObjectManager(this, object);
+    }
+  }
 
   getAspect(implementation: ControlCenter.Implementation) : ControlCenter.Aspect {
     return this._aspects.get(implementation)!;
@@ -108,9 +128,13 @@ export class ControlCenter {
     let farMethods = methodsInCategories(farCategories, aspect.definition);
     let controlCenter = this;
     farMethods.forEach((farMethod) => {
-      protectFarImpl(prototype, farMethod, function(this: AObject, ...args) {
-        return transport.remoteCall(controlCenter, this, farMethod.name, args);
-      });
+      return prototype[farMethod.name] = function(this: AObject, ...args) {
+        return new Invocation(this, farMethod, args[0], (arg, result) => {
+          transport.remoteCall(controlCenter, this, farMethod.name, [arg])
+            .then((ret) => result(null, ret))
+            .catch((err) => result(err))
+        });
+      };
     });
   }
 
@@ -119,7 +143,7 @@ export class ControlCenter {
     let publicMethods = methodsInCategories(publicCategories, aspect.definition);
     publicMethods.forEach((publicMethod) => {
       let publicImpl = localImplInPrototype(prototype, publicMethod);
-      transport.register(this, aspect, publicMethod, protectFarImpl(prototype, publicMethod, publicImpl));
+      transport.register(this, aspect, publicMethod, protectPublicImpl(prototype, publicMethod, publicImpl));
     });
   }
 
@@ -191,14 +215,37 @@ function protectLocalImpl(prototype, localMethod: ControlCenter.Method, localImp
   };
 }
 
-function protectFarImpl(prototype, farMethod: ControlCenter.Method, farImpl: (...args) => Promise<any>) {
+function fastSafeCall(impl: Function, self, arg0) : Promise<any> {
+  try {
+    let ret = impl.call(self, arg0);
+    if (!(ret instanceof Promise))
+      ret = Promise.resolve(ret);
+    return ret;
+  } catch(e) {
+    return Promise.reject(e);
+  }
+}
+
+function protectPublicImpl(prototype, farMethod: ControlCenter.Method, farImpl: Function) : (this, arg0) => Promise<any> {
     let argumentValidators = farMethod.argumentValidators;
     let returnValidator = farMethod.returnValidator;
-    return prototype[farMethod.name] = function(this, ...args) {
-      for (var i = 0, len = argumentValidators.length; i < len; i++)
-        if (!argumentValidators[i](args[i]))
-          return Promise.reject(`argument ${i} is invalid`);
-      return farImpl.apply(this, args).then(function(ret) {
+    return prototype[farMethod.name] = function(this, arg0) {
+      if (!argumentValidators[0](arg0))
+        return Promise.reject(`argument is invalid`);
+      let ret: Promise<any>;
+      if (farImpl.length === 1) {
+        ret = fastSafeCall(farImpl, this, arg0);
+      }
+      else {
+        ret = new Promise((resolve) => {
+          Async.run({ result: undefined }, [
+            (p) => { farImpl.call(this, p, arg0); },
+            (p) => { resolve(p.context.result); p.continue(); }
+          ]);
+        });
+      }
+
+      return ret.then(function(ret) {
         return returnValidator(ret) ? Promise.resolve(ret) : Promise.reject(`return value is invalid`);
       });
     };

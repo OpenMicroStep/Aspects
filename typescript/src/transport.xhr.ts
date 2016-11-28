@@ -8,10 +8,10 @@ class XHRTransport implements FarTransport {
         xhr.open(this.httpMethod(to, method), this.httpUrl(to, method), true);
         xhr.onreadystatechange = () => {
             if (xhr.readyState == 4) {
-                if (xhr.status >= 200 && xhr.status < 300)
-                    resolve(controlCenter.mergeEntities(this.decode(xhr.responseText)));
+                if (xhr.status >= 200 && xhr.status < 300) 
+                    resolve(this.decode(controlCenter, xhr.responseText));
                 else
-                    reject(this.decode(xhr.responseText));
+                    reject(this.decode(controlCenter, xhr.responseText));
             }
         }
         xhr.send(this.encode(args[0]));
@@ -31,7 +31,11 @@ class XHRTransport implements FarTransport {
     return MSTE.stringify(value);
   }
 
-  decode(value): any {
-    return MSTE.parse(value);
+  decode(controlCenter: ControlCenter, value): any {
+    let ret;
+    AObject.willConstructObjects(() => {
+      ret = MSTE.parse(value);
+    }, controlCenter.managerFactory()).forEach(o => controlCenter.mergeObject(o));
+    return ret;
   }
 }

@@ -161,10 +161,13 @@ var constructedObjects: AObject[] | null = null;
 export class AObject {
   static createManager: (object: AObject) => AObjectManager;
 
-  static willConstructObjects(constructor: () => void) {
+  static willConstructObjects(constructor: () => void, createManager?: (object: AObject) => AObjectManager) {
+    let cm = AObject.createManager;
     let ret = constructedObjects = [];
+    AObject.createManager = createManager || cm;
     constructor();
     constructedObjects = null;
+    AObject.createManager = cm;
     return ret;
   }
 
