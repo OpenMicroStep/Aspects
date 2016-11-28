@@ -3,6 +3,16 @@ import {Async, Flux} from '@microstep/async';
 import {FarTransport, PublicTransport, AObject, AObjectManager, NotificationCenter, Invocation} from './core';
 const ajv = new Ajv();
 
+const classifiedTypes = ['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object'];
+function classifiedType(type: string) {
+  if (classifiedTypes.indexOf(type) !== -1)
+    return type;
+  else if (type.startsWith('['))
+    return 'array';
+  else if (type.startsWith('{'))
+    return 'dictionary';
+  return 'object';
+}
 export type Identifier = string | number;
 
 export interface AComponent {
@@ -16,13 +26,49 @@ export interface PublicTransport {
   register(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>);
 }
 
+
+function tmpLoad(o, k) {
+  return typeof k === 'string' ? Object.assign({ name: k }, o[`${k}=`]) : k;
+}
 export class ControlCenter {
   _notificationCenter = new NotificationCenter();
   _objects = new Map<ControlCenter.Aspect, Map<Identifier, { object: AObject, components: AComponent[] }>>();
   _aspects = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
 
-  static aspect(interfaceDefinition, aspect: string) : ControlCenter.Aspect {
-    return null!;
+  static aspect(interfaceDefinition, classname: string, aspect: string) : ControlCenter.Aspect {
+    let rawDef = interfaceDefinition[`${classname}=`];
+    let definition: ControlCenter.Definition = {
+      name: classname,
+      version: 0,
+      attributes: rawDef.attributes
+        .map(k => tmpLoad(rawDef, k))
+        .map(a => Object.assign(a, {
+          classifiedType: classifiedType(a.type),
+          validator: ControlCenter.createValidator(a.type) 
+        })),
+      categories: rawDef.categories
+        .map(k => tmpLoad(rawDef, k))
+        .map(c => Object.assign(c, { 
+          methods: c.methods
+            .map(m => tmpLoad(c, m))
+            .map(m => Object.assign(m, {
+              argumentTypes: m.type.arguments,
+              argumentValidators: m.type.arguments.map(t => ControlCenter.createValidator(t)),
+              returnType: m.type.return,
+              returnValidator: ControlCenter.createValidator(m.type.return),
+            })) 
+        })),
+    };
+    let aspects = rawDef.aspects
+      .map(k => tmpLoad(rawDef, k))
+      .filter(a => a.name === aspect);
+    return {
+      name: aspect,
+      version: 0,
+      definition: interfaceDefinition,
+      categories: aspects[0].categories,
+      farCategories: aspects[0].categories
+    };
   }
 
   farCallback<I extends Invocation<any, any>>(call: I, callback: (invocation: I) => void) {
@@ -151,7 +197,7 @@ export class ControlCenter {
     });
   }
 
-  createValidator(type: ControlCenter.Type) : ControlCenter.TypeValidator {
+  static createValidator(type: ControlCenter.Type) : ControlCenter.TypeValidator {
     // TODO: provide simple and shared validators for primitive types or cache validators
     return <ControlCenter.TypeValidator>ajv.compile(convertTypeToJsonSchema(type));
   }
@@ -192,13 +238,11 @@ export namespace ControlCenter {
     argumentValidators: TypeValidator[];
     returnType: Type;
     returnValidator: TypeValidator;
-    extensions: Extension[];
   };
-  export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier';
+  export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object';
   export type Type = PrimaryType | string | [number, number | '*', any /*Type*/] | {[s: string]: Type};
   export type TypeValidator = ((value) => boolean) & { errors: any[] };
   export type Implementation = { new (...args) };
-  export type Extension = never;
 
   export function isAObjectType(attr: Attribute) {
     return attr.classifiedType === "entity";
@@ -271,6 +315,7 @@ function methodsInCategories(categories: string[], definition: ControlCenter.Def
 function convertTypeToJsonSchema(type: ControlCenter.Type): any {
   if (typeof type === "string") {
     switch(type) {
+      case 'any':        return { };
       case 'integer':    return { type: "integer"   };
       case 'decimal':    return { type: "number"    };
       case 'date':       return { type: "date"      };
@@ -278,6 +323,7 @@ function convertTypeToJsonSchema(type: ControlCenter.Type): any {
       case 'string':     return { type: "string"    };
       case 'array':      return { type: "array"     };
       case 'dictionary': return { type: "object"    };
+      case 'object':     return { type: "object"    };
       case 'identifier': return { type: "string"    };
       default: throw new Error(`unsupported type: ${type}`);
     }
