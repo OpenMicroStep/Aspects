@@ -21,6 +21,10 @@ export class ControlCenter {
   _objects = new Map<ControlCenter.Aspect, Map<Identifier, { object: AObject, components: AComponent[] }>>();
   _aspects = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
 
+  static aspect(interfaceDefinition, aspect: string) : ControlCenter.Aspect {
+    return null!;
+  }
+
   farCallback<I extends Invocation<any, any>>(call: I, callback: (invocation: I) => void) {
     call.invoke(callback);
   }
@@ -97,14 +101,14 @@ export class ControlCenter {
     this.installLocalCategories(aspect.categories, aspect.definition, implementation);
     let remainings = new Set(aspect.farCategories);
     bridges.forEach(bridge => {
-      if (bridge.client.aspect === aspect.name) {
+      if (bridge.client.aspect === aspect.name && bridge.client.transport) {
         bridge.categories.forEach(c => {
           if (!remainings.delete(c))
             throw new Error(`category '${c}' is either already installed or not a far category`);
         });
         this.installFarCategories(bridge.categories, bridge.client.transport, aspect, implementation);
       }
-      else if (bridge.server.aspect === aspect.name) {
+      else if (bridge.server.aspect === aspect.name && bridge.server.transport) {
         bridge.categories.forEach(c => {
           if (aspect.categories.indexOf(c) === -1)
             throw new Error(`category '${c}' is not implemented`);
@@ -163,8 +167,8 @@ export namespace ControlCenter {
   };
   export type Bridge = {
     categories: string[];
-    client: { aspect: string, transport: FarTransport };
-    server: { aspect: string, transport: PublicTransport };
+    client: { aspect: string, transport?: FarTransport };
+    server: { aspect: string, transport?: PublicTransport };
   }
   export type Definition = {
     name: string;

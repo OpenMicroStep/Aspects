@@ -33,7 +33,7 @@ class XHRTransport implements FarTransport {
 
   decode(controlCenter: ControlCenter, value): any {
     let ret;
-    AObject.willConstructObjects(() => {
+    AObject.willConstructObjects(( ) => {
       ret = MSTE.parse(value);
     }, controlCenter.managerFactory()).forEach(o => controlCenter.mergeObject(o));
     return ret;

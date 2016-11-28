@@ -1,0 +1,34 @@
+{
+"Person=":
+    {
+    "is":"class",
+
+    "_firstName=": {"is":"attribut", "type":"string"},
+    "_lastName=":  {"is":"attribut", "type":"string"},
+    "_birthDate=": {"is":"attribut", "type":"date"  },
+    "attributs":["=_firstName","=_lastName","=_birthDate"],
+
+    "core=":
+        {
+        "is":"category",
+        "languages":["ts","objc"],
+        "firstName=": {"is":"method","type":{"arguments":[],"return":"string"}},
+        "lastName=":  {"is":"method","type":{"arguments":[],"return":"string"}},
+        "fullName=":  {"is":"method","type":{"arguments":[],"return":"string"}},
+        "birthDate=": {"is":"method","type":{"arguments":[],"return":"date"  }},
+        "methods":["=firstName","=lastName","=fullName","=birthDate"]
+        },
+    "calculation=":
+        {
+        "is":"category",
+        "languages":["objc"],
+        "age=":{"is":"method","type":{"arguments":[],"return":"integer"}},
+        "methods":["=age"]
+        },
+    "categories":["=core","=calculation"],
+
+    "server=":{"is":"aspect","categories":["=core","=calculation"]},
+    "client=":{"is":"aspect","categories":["=core"],"farCategories":["=calculation"]},
+    "aspects":["=server","=client"]
+    }
+}
