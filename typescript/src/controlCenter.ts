@@ -91,6 +91,15 @@ export class ControlCenter {
   farCallback<I extends Invocation<any, any>>(call: I, callback: (invocation: I) => void) {
     call.invoke(callback);
   }
+  farEvent<I extends Invocation<any, any>>(call: I, eventName: string, onObject: Object) {
+    call.invoke((invocation) => {
+      this._notificationCenter.postNotification({
+        name: eventName,
+        object: onObject || call.receiver(),
+        info: { invocation: invocation }
+      })
+    });
+  }
   farPromise<I extends Invocation<any, any>>(call: I) : Promise<I> {
     return new Promise((resolve) => { this.farCallback(call, resolve); })
   }
