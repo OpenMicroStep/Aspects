@@ -270,12 +270,12 @@ Enfin il est possible d'annuler une invocation enoyée et non terminée en utili
 
 ### Implémentation de d'une méthode lointaine
 
-Si la méthode est synchrone, elle retourne son résultat qui est alors immédiatement transmis au client et placé dans l'enveloppe.
+Si la méthode est synchrone, elle retourne son résultat (qui peut être une erreur) qui est alors immédiatement transmis au client et placé dans l'enveloppe.
 
 Si la méthode est asynchrone:
 
-- soit elle prend la forme d'une fonction Async (le premier argument est un pool et la méthode retourne void) et dans ce cas, on attend la terminaison de la fonction (pool.continue()) pour renvoyer le résultat qui se trouve dans pool.context.result.
-- soit elle retourne une promise et on attend alors sa réalisation avant de retourner le résultat.
+- soit elle prend la forme d'une fonction Async (le premier argument est un pool et la méthode retourne void) et dans ce cas, on attend la terminaison de la fonction (pool.continue()) pour renvoyer le résultat qui se trouve dans pool.context.result ou pool.context.error (éventuellement pool.context.partialResult, dans ce cas la fonction émettra des pool.continue() jusqu'à ce que l'on ait un résult ou error).
+- soit elle retourne une promise et on attend alors sa réalisation avant de retourner le résultat ou l'erreur.
 
 ## validation (Futur ?)
 

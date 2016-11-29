@@ -6,11 +6,11 @@ En fait, juste un objet javascript avec 3 clés.
 #### name: string
 Un nom d'événement
 
-#### name: string
+#### object: object
 Un objet
 
-#### name: info
-Un dictionnaire d'informations suplémentaire
+#### info: any
+Un dictionnaire d'informations suplémentaire ou un objet
 
 ## class NotificationCenter
 
