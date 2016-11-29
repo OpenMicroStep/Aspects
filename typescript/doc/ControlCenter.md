@@ -20,6 +20,6 @@ Le centre de notification du CdC à partir duquel on peut enregistrer un observa
 
 ### category dataSource
 
-#### dataSource()
-#### setDataSource()
+#### defaultDataSource()
+#### setDefaultDataSource()
 

@@ -107,6 +107,7 @@ Le type est soit un type primaire, soit un type décrit.
 - identifier
 - object
 - nom d'un classe
+- any
 
 Si on veut décrire le type plus finement on ajoutera la cardinalité et la constitution éventuelle du type si c'est un tableau ou un dictionnaire.
 
@@ -127,10 +128,12 @@ Pour les méthodes des catégories lointaines, on vérifiera les types des argum
 ### category calculation [objc]
   age(void)    : integer;
   labels(void) : {first-last:string, last-first:string, names:[2, 2, string]},
-  mess(dict)   : {_key:identifier, nom:string, prénom:string},
+  mess(dict)   : {_key:identifier, nom:string, prénom:string, *:int},
 
 [2, 2, string]: un array de 2 strings
 dict: pas d'autre verif que c'est un dico
+{k1:t1,k2:t2} le dico ne contient que les clés k1 et k2
+{k1:t1,*:t2} les autres clés sont de type t2 
 ~~~
 
 ## <a name="Aspects"></a>Aspects et catégories [☝︎](#☝︎)
@@ -212,7 +215,7 @@ Futur: une méthode partialResult si le résultat est partiel.
 
 Lors de l'application d'une méthode lointaine, il y a une vérification des types de l'argument et du résultat. Cette vérification peut mener à une erreur et éventuellement à un uncompletedResult si c'est le résultat qui ne vérifie pas le type déclaré. La profondeur de la vérification dépend de la signature donnée à la méthode (cf. plus haut signature des méthodes).
 
-Par exemple, le retour peut avoir comme type {aKey:[1,2,integer]} ce qui signifie que le résultat est un dictionnaire devant contenir une clé aKey qui a pour valeur un tableau de 1 ou 2 entiers. Les autres clés ne sont pas vérifiées.
+Par exemple, le retour peut avoir comme type {aKey:[1,2,integer]} ce qui signifie que le résultat est un dictionnaire devant contenir une clé aKey qui a pour valeur un tableau de 1 ou 2 entiers. Il n'y a pas d'autres clés. Si on veut que le dico puisse contenir d"autres clés non vérifiées il faut écrire *:any.
 
 De plus si le résultat contient des objets, il doivent respecter les attributs et leurs types déclarés pour leur classe. Autrement dit, chaque attribut doit appartenir aux attributs de la classe et avoir le bon type.
 
@@ -264,6 +267,15 @@ Construit une promise à partir de l'enveloppe.
 Enfin il est possible d'annuler une invocation enoyée et non terminée en utilisant la méthode
 
 	envelop.abort()
+
+### Implémentation de d'une méthode lointaine
+
+Si la méthode est synchrone, elle retourne son résultat qui est alors immédiatement transmis au client et placé dans l'enveloppe.
+
+Si la méthode est asynchrone:
+
+- soit elle prend la forme d'une fonction Async (le premier argument est un pool et la méthode retourne void) et dans ce cas, on attend la terminaison de la fonction (pool.continue()) pour renvoyer le résultat qui se trouve dans pool.context.result.
+- soit elle retourne une promise et on attend alors sa réalisation avant de retourner le résultat.
 
 ## validation (Futur ?)
 
