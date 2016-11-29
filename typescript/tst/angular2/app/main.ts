@@ -4,7 +4,7 @@ import { XHRTransport } from '@microstep/aspects.xhr';
 import { AppModule } from './app.module';
 import {Person, DemoApp, interfaces} from '../shared/index';
 
-const controlCenter = new ControlCenter();
+export const controlCenter = new ControlCenter();
 AObject.createManager = controlCenter.managerFactory();
 const transport = new XHRTransport();
 

@@ -16,7 +16,7 @@ export type Operators =
   { $exists: boolean } |
   { $type: boolean };
 
-export abstract class DataSource {
+export abstract class DataSource extends AObject {
   abstract query(objectClass: string, conditions: Conditions, scope: Scope): Promise<AObject[]>;
   abstract load(objects: (AObject | Identifier)[], scope: Scope): Promise<AObject[]>;
   abstract save(objects: AObject[]): Promise<boolean>;
