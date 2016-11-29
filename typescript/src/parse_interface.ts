@@ -125,12 +125,15 @@ export function interfaceParse(source) {
     var key= argTypes || keyTypes;
     var set:any= keyTypes ? {} : [];
     _white();
-    while (_inWord() || (arrayType && (ch==='*' || ch==='{' || ch==='['))) {
+    while (_inWord() ||
+           (arrayType && (ch==='*' || ch==='{' || ch==='[')) ||
+           (keyTypes && ch==='*')) {
       var w, k;
       if (arrayType) {
         if (ch==='*') {w= '*'; _next('*');}
         else if ('0' <= ch && ch <= '9') w= _word();
         else w= _type();}
+      else if (keyTypes && ch==='*') {w= '*'; _next('*');}
       else w= _word();
       _white();
       if (key) {
