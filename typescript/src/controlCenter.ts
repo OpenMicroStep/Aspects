@@ -1,7 +1,6 @@
 import * as Ajv from 'ajv';
 import {Async, Flux} from '@microstep/async';
 import {FarTransport, PublicTransport, AObject, AObjectManager, NotificationCenter, Invocation} from './core';
-const ajv = new Ajv();
 
 const classifiedTypes = ['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object'];
 function classifiedType(type: string) {
@@ -26,48 +25,66 @@ export interface PublicTransport {
   register(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>);
 }
 
-
 function tmpLoad(o, k) {
-  return typeof k === 'string' ? Object.assign({ name: k }, o[`${k}=`]) : k;
+  return typeof k === 'string' && (k=k.substring(1)) ? Object.assign({ name: k }, o[`${k}=`]) : k;
 }
 export class ControlCenter {
   _notificationCenter = new NotificationCenter();
   _objects = new Map<ControlCenter.Aspect, Map<Identifier, { object: AObject, components: AComponent[] }>>();
   _aspects = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
+  _ajv = new Ajv();
 
-  static aspect(interfaceDefinition, classname: string, aspect: string) : ControlCenter.Aspect {
+  constructor() {
+    this._ajv.addKeyword('instanceof', { compile: (schema) => {
+      let cache: any = undefined;
+      return (data) => {
+        if (!cache) {
+          if (schema === "Date")
+            cache = Date;
+          else
+            this._aspects.forEach((a, i) => {
+              if (a.definition.name === schema)
+                cache = i;
+            });
+        }
+        return cache && data instanceof cache;
+      };
+    }})
+  }
+
+  aspect(interfaceDefinition, classname: string, aspect: string) : ControlCenter.Aspect {
     let rawDef = interfaceDefinition[`${classname}=`];
     let definition: ControlCenter.Definition = {
       name: classname,
       version: 0,
-      attributes: rawDef.attributes
+      attributes: (rawDef.attributes || [])
         .map(k => tmpLoad(rawDef, k))
         .map(a => Object.assign(a, {
           classifiedType: classifiedType(a.type),
-          validator: ControlCenter.createValidator(a.type) 
+          validator: this.createValidator(a.type) 
         })),
-      categories: rawDef.categories
+      categories: (rawDef.categories || [])
         .map(k => tmpLoad(rawDef, k))
         .map(c => Object.assign(c, { 
-          methods: c.methods
+          methods: (c.methods || [])
             .map(m => tmpLoad(c, m))
             .map(m => Object.assign(m, {
               argumentTypes: m.type.arguments,
-              argumentValidators: m.type.arguments.map(t => ControlCenter.createValidator(t)),
+              argumentValidators: m.type.arguments.map(t => this.createValidator(t)),
               returnType: m.type.return,
-              returnValidator: ControlCenter.createValidator(m.type.return),
+              returnValidator: this.createValidator(m.type.return),
             })) 
         })),
     };
-    let aspects = rawDef.aspects
+    let aspects = (rawDef.aspects || [])
       .map(k => tmpLoad(rawDef, k))
       .filter(a => a.name === aspect);
     return {
       name: aspect,
       version: 0,
-      definition: interfaceDefinition,
-      categories: aspects[0].categories,
-      farCategories: aspects[0].categories
+      definition: definition,
+      categories: aspects.length ? (aspects[0].categories || []).map(k => k.replace(/^=/, '')) : [],
+      farCategories: aspects.length ? (aspects[0].farCategories || []).map(k => k.replace(/^=/, '')) : []
     };
   }
 
@@ -91,7 +108,10 @@ export class ControlCenter {
   }
 
   getAspect(implementation: ControlCenter.Implementation) : ControlCenter.Aspect {
-    return this._aspects.get(implementation)!;
+    let r = this._aspects.get(implementation);
+    if (r)
+      return r;
+    throw new Error(`Cannot find aspect attached to implementation '${implementation.name}'`);
   }
 
   getObject(aspect: ControlCenter.Aspect, id: Identifier) : AObject | null {
@@ -144,7 +164,7 @@ export class ControlCenter {
   notificationCenter() { return this._notificationCenter; }
 
   install(aspect: ControlCenter.Aspect, implementation: ControlCenter.Implementation, bridges: ControlCenter.Bridge[]) {
-    this.installLocalCategories(aspect.categories, aspect.definition, implementation);
+    this._aspects.set(implementation, aspect);
     let remainings = new Set(aspect.farCategories);
     bridges.forEach(bridge => {
       if (bridge.client.aspect === aspect.name && bridge.client.transport) {
@@ -157,11 +177,12 @@ export class ControlCenter {
       else if (bridge.server.aspect === aspect.name && bridge.server.transport) {
         bridge.categories.forEach(c => {
           if (aspect.categories.indexOf(c) === -1)
-            throw new Error(`category '${c}' is not implemented`);
+            throw new Error(`category '${c}' is not implemented: ${aspect.categories.join(', ')}`);
         });
         this.installPublicCategories(bridge.categories, bridge.server.transport, aspect, implementation);
       }
     });
+    this.installLocalCategories(aspect.categories, aspect.definition, implementation);
   }
 
   protected installLocalCategories(localCategories: string[], definition: ControlCenter.Definition, implementation: ControlCenter.Implementation) {
@@ -180,7 +201,7 @@ export class ControlCenter {
     farMethods.forEach((farMethod) => {
       return prototype[farMethod.name] = function(this: AObject, ...args) {
         return new Invocation(this, farMethod, args[0], (arg, result) => {
-          transport.remoteCall(controlCenter, this, farMethod.name, [arg])
+          transport.remoteCall(controlCenter, this, farMethod.name, args.length ? [arg] : [])
             .then((ret) => result(null, ret))
             .catch((err) => result(err))
         });
@@ -197,9 +218,10 @@ export class ControlCenter {
     });
   }
 
-  static createValidator(type: ControlCenter.Type) : ControlCenter.TypeValidator {
+  createValidator(type: ControlCenter.Type) : ControlCenter.TypeValidator {
     // TODO: provide simple and shared validators for primitive types or cache validators
-    return <ControlCenter.TypeValidator>ajv.compile(convertTypeToJsonSchema(type));
+    let jsonSchema = convertTypeToJsonSchema(type);
+    return <ControlCenter.TypeValidator>this._ajv.compile(jsonSchema);
   }
 }
 
@@ -263,7 +285,18 @@ function protectLocalImpl(prototype, localMethod: ControlCenter.Method, localImp
   };
 }
 
-function fastSafeCall(impl: Function, self, arg0) : Promise<any> {
+function fastSafeCall0(impl: Function, self) : Promise<any> {
+  try {
+    let ret = impl.call(self);
+    if (!(ret instanceof Promise))
+      ret = Promise.resolve(ret);
+    return ret;
+  } catch(e) {
+    return Promise.reject(e);
+  }
+}
+
+function fastSafeCall1(impl: Function, self, arg0) : Promise<any> {
   try {
     let ret = impl.call(self, arg0);
     if (!(ret instanceof Promise))
@@ -277,12 +310,15 @@ function fastSafeCall(impl: Function, self, arg0) : Promise<any> {
 function protectPublicImpl(prototype, farMethod: ControlCenter.Method, farImpl: Function) : (this, arg0) => Promise<any> {
     let argumentValidators = farMethod.argumentValidators;
     let returnValidator = farMethod.returnValidator;
-    return prototype[farMethod.name] = function(this, arg0) {
-      if (!argumentValidators[0](arg0))
+    return function(this, arg0) {
+      if (argumentValidators[0] && !argumentValidators[0](arg0))
         return Promise.reject(`argument is invalid`);
       let ret: Promise<any>;
-      if (farImpl.length === 1) {
-        ret = fastSafeCall(farImpl, this, arg0);
+      if (farImpl.length === 0) {
+        ret = fastSafeCall0(farImpl, this);
+      }
+      else if (farImpl.length === 1) {
+        ret = fastSafeCall1(farImpl, this, arg0);
       }
       else {
         ret = new Promise((resolve) => {
@@ -294,7 +330,7 @@ function protectPublicImpl(prototype, farMethod: ControlCenter.Method, farImpl: 
       }
 
       return ret.then(function(ret) {
-        return returnValidator(ret) ? Promise.resolve(ret) : Promise.reject(`return value is invalid`);
+        return (!returnValidator || returnValidator(ret)) ? Promise.resolve(ret) : Promise.reject(`return value is invalid`);
       });
     };
 }
@@ -304,7 +340,7 @@ function localImplInPrototype(prototype, localMethod: ControlCenter.Method) {
   if (typeof localImpl !== "function")
     throw new Error(`implementation of local method ${localMethod.name} must be a function, got ${typeof localImpl}`);
   if (localImpl.length !== localMethod.argumentTypes.length) 
-    throw new Error(`arguments count in implementation of local method ${localMethod.name} doesn't match interface definition`);
+    throw new Error(`arguments count in implementation of local method ${localMethod.name} doesn't match interface definition: ${localImpl.length} !== ${localMethod.argumentTypes.length}`);
   return localImpl;
 }
 
@@ -318,14 +354,14 @@ function convertTypeToJsonSchema(type: ControlCenter.Type): any {
       case 'any':        return { };
       case 'integer':    return { type: "integer"   };
       case 'decimal':    return { type: "number"    };
-      case 'date':       return { type: "date"      };
+      case 'date':       return { instanceof: "Date" };
       case 'localdate':  return { type: "localdate" };
       case 'string':     return { type: "string"    };
       case 'array':      return { type: "array"     };
       case 'dictionary': return { type: "object"    };
       case 'object':     return { type: "object"    };
       case 'identifier': return { type: "string"    };
-      default: throw new Error(`unsupported type: ${type}`);
+      default: return { }; // TODO: throw new Error(`unsupported type: ${type}`);
     }
   }
   else if (Array.isArray(type)) {

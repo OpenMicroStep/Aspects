@@ -1,25 +1,37 @@
 import { PublicTransport, ControlCenter, AObject, Identifier } from '@microstep/aspects';
-import { Application } from 'express';
+import { Router } from 'express';
+import * as bodyparser from 'body-parser';
 import { MSTE } from '@microstep/mstools';
 
+const text_middleware = bodyparser.text({type: () => true });
+
 export class ExpressTransport implements PublicTransport {
-  app: Application;
+  app: Router;
   findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<AObject>;
 
-  constructor(app: Application, findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<AObject>) {
+  constructor(app: Router, findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<AObject>) {
     this.app = app;
     this.findObject = findObject;
   }
 
   register(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>) {
-    this.app.get(`${aspect.definition.version}/${aspect.definition.name}/:id/${localMethod.name}`, (req, res) => {
-      this.findObject(aspect, req.params.id).then((entity) => {
-        return localImpl.call(entity, this.decode(req.body));
+    let path = `/${aspect.definition.version}/${aspect.definition.name}/:id/${localMethod.name}`;
+    let isVoid = localMethod.argumentTypes.length === 0;
+    console.info('GET:', path);
+    if (!isVoid)
+      this.app.use(path, text_middleware);
+    this.app[isVoid ? "get" : "post"](path, (req, res) => {
+      let id = req.params.id;
+      this.findObject(aspect, /^[0-9]+$/.test(id) ? parseInt(id) : id).then((entity) => {
+        if (!isVoid)
+          return localImpl.call(entity, this.decode(req.body));
+        else
+          return localImpl.call(entity);
       }).then((result) => {
-        res.send(this.encode(result));
-        res.end();
+        res.status(200).send(this.encode(result));
       }).catch((error) => {
-        res.send(400);
+        console.info(error);
+        res.status(400).send(error.message);
       });
     });
   }

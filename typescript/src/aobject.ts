@@ -2,7 +2,7 @@ import {ControlCenter, Identifier, areEquals} from './core';
 import {MSTE} from '@microstep/mstools';
 
 export type AObjectAttributes = Map<string, any>;
-export class AObjectManager {
+export class AObjectManager<AObject> {
   static NoVersion = -1;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
   static SafeMode = true;
@@ -33,7 +33,6 @@ export class AObjectManager {
     this._object = object;
 
     Object.defineProperty(object, '_id', {
-      writable: true,
       enumerable: true,
       get: () => { return this._id; },
       set: (value) => {
@@ -45,7 +44,6 @@ export class AObjectManager {
       }
     });
     Object.defineProperty(object, '_version', {
-      writable: true,
       enumerable: true,
       get: () => { return this._version; },
       set: (value) => {
@@ -56,7 +54,6 @@ export class AObjectManager {
     });
     for (let attr of this._aspect.definition.attributes) {
       Object.defineProperty(object, attr.name, {
-        writable: true,
         enumerable: true,
         get: () => {
           return this.attributeValue(attr.name);
@@ -77,21 +74,21 @@ export class AObjectManager {
   definition() { return this._aspect.definition; }
   aspect() { return this._aspect; }
 
-  _snapshot(isDiff: boolean) : { [s: string]: any } {
+  _snapshot(isDiff: boolean) : AObject { // TODO: find a better typing
     let ret = new AObjectSnapshot(this.definition().name);
     ret._id = this.id();
     ret._version= this.version();
-    if (isDiff)
+    if (!isDiff)
       this._versionAttributes.forEach((v, k) => ret[k] = v);
     this._localAttributes.forEach((v, k) => ret[k] = v);
-    return ret;
+    return <AObject><any>ret;
   }
 
-  diff() : { [s: string]: any } {
+  diff() : AObject {
     return this._snapshot(true);
   }
 
-  snapshot() : { [s: string]: any } {
+  snapshot() : AObject {
     return this._snapshot(false);
   }
   
@@ -120,7 +117,13 @@ export class AObjectManager {
     }
   }
 
-  setRemote(manager: AObjectManager) {
+  setVersion(version: number) {
+    this._localAttributes.forEach((v, k) => this._versionAttributes.set(k, v));
+    this._localAttributes.clear();
+    this._version = version;
+  }
+
+  setRemote(manager: AObjectManager<AObject>) {
     this.setRemoteAttributes(manager._versionAttributes, manager._version);
   }
 
@@ -159,9 +162,9 @@ export class AObjectManager {
 
 var constructedObjects: AObject[] | null = null;
 export class AObject {
-  static createManager: (object: AObject) => AObjectManager;
+  static createManager: <T extends AObject>(object: T) => AObjectManager<T>;
 
-  static willConstructObjects(constructor: () => void, createManager?: (object: AObject) => AObjectManager) {
+  static willConstructObjects(constructor: () => void, createManager?: <T extends AObject>(object: T) => AObjectManager<T>) {
     let cm = AObject.createManager;
     let ret = constructedObjects = [];
     AObject.createManager = createManager || cm;
@@ -171,7 +174,7 @@ export class AObject {
     return ret;
   }
 
-  __manager: AObjectManager;
+  __manager: AObjectManager<this>;
   _id: Identifier;
   _version: number;
 
@@ -183,7 +186,7 @@ export class AObject {
 
   id()     : Identifier { return this._id; }
   version(): number { return this._version; }
-  manager(): AObjectManager { return this.__manager; }
+  manager(): AObjectManager<this> { return this.__manager; }
 
   encodeToMSTE(encoder /*: MSTE.Encoder*/) {
     // unless specified, only _id and _version are encoded

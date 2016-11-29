@@ -5,8 +5,8 @@ import { Component } from '@angular/core';
     template: 
 `
     <h1>My First Angular 2 App</h1>
-    <ms-searchlist/>
-    <person />
+    <ms-searchlist></ms-searchlist>
+    <person></person>
 `
 })
 export class AppComponent {

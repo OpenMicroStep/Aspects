@@ -48,10 +48,11 @@ export class Invocation<O extends AObject, R> {
   }
 
   invoke(callback: (invocation: Invocation<O, R>) => void) {
-    if (!this._method.argumentValidators[0](this._argument))
+    let argValidator = this._method.argumentValidators[0];
+    if (argValidator && !argValidator(this._argument))
       throw new Error(`argument is invalid`);
     this._invoker(this._argument, (err, ret) => {
-      if (!err && !this._method.returnValidator(ret))
+      if (!err && this._method.returnValidator && !this._method.returnValidator(ret))
         err = { is: 'error', reasons: this._method.returnValidator.errors };
       if (err) {
         this._err = err;

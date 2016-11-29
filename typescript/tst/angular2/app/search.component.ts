@@ -4,8 +4,8 @@ import { Component } from '@angular/core';
     selector: 'ms-searchlist',
     template: 
 `
-    <ms-input/>
-    <ms-list />
+    <ms-input></ms-input>
+    <ms-list ></ms-list >
 `
 })
 export class SearchListComponent {

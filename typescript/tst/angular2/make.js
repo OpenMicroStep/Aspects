@@ -63,6 +63,9 @@ module.exports =  {
       { is: 'group', name: 'server', path: 'server/', elements: [
         { is: 'file', name: 'server.ts'},
       ]},
+      { is: 'group', name: 'shared', path: 'shared/', elements: [
+        { is: 'file', name: 'person.ts'},
+      ]},
   ]},
   "targets=": { is: 'group',
     "app=":  {

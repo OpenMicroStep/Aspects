@@ -3,9 +3,11 @@ module.exports =  {
   name: "Aspects",
   "ts base=": { is: 'component', type: "javascript", compiler: "typescript",
       tsConfig: [{
+        "module": "commonjs",
         "target": "es6",
         "declaration": true,
         "sourceMap": true,
+        "inlineSources": true,
         "moduleResolution": "node",
         "experimentalDecorators": true,
         "strictNullChecks": true,
@@ -37,7 +39,7 @@ module.exports =  {
     //packager: "browserify",
     components: ["=ts base"],
     tsConfig: [{
-      "module": "umd",
+      "module": "commonjs",
       "lib": ["es6", "dom"]
     }],
     compatibleEnvironments: ["ts"],
@@ -82,12 +84,20 @@ module.exports =  {
       npmInstall: [{
         "express": "^4.14.0",
         "@types/express": "^4.0.34",
-        "express-serve-static-core": "^0.1.1"
+        "express-serve-static-core": "^0.1.1",
+        "@types/body-parser": "^0.0.33",
+        "body-parser": "^1.15.2",
       }]
     },
     "client=":  {
       is: 'target',
-      outputName: "@microstep/aspects.express",
+      packager: "npm",
+      outputName: "@microstep/aspects.xhr",
+      npmPackage: [{
+        "version": "0.1.0",
+        "main": "transport.xhr.js",
+        "typings": "transport.xhr.d.ts"
+      }],
       targets: ["=core"],
       environments: ["=browser"],
       files: ["=Files:typescript ? client"],
