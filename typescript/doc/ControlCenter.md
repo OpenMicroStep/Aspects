@@ -6,7 +6,7 @@ La classe AControlCenter
 
 ### category component [ts]
 
-#### registerObjects(conmponent: AComponent, objects:array, method: string, events:array)
+#### registerObjects(component: AComponent, objects:array, method: string, events:array)
 Déclare au CdC qu'un composant utilise un objet ou un ensemble d'objets.  
 En même temps, si `method` non null et `events` non null et non vide, cela enregistre le composant comme observateur des événements sur les objects.  
 Donc lorqu'un événement de events survient sur l'un des objets, la méthode désignée est appellée.  

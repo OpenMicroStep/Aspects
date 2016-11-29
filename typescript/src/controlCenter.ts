@@ -1,8 +1,23 @@
 import * as Ajv from 'ajv';
-import {FarTransport, PublicTransport, AObject} from './core';
+import {Async, Flux} from '@microstep/async';
+import {FarTransport, PublicTransport, AObject, AObjectManager, NotificationCenter, Invocation} from './core';
 const ajv = new Ajv();
 
+const classifiedTypes = ['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object'];
+function classifiedType(type: string) {
+  if (classifiedTypes.indexOf(type) !== -1)
+    return type;
+  else if (type.startsWith('['))
+    return 'array';
+  else if (type.startsWith('{'))
+    return 'dictionary';
+  return 'object';
+}
 export type Identifier = string | number;
+
+export interface AComponent {
+
+}
 
 export interface FarTransport {
   remoteCall<T>(controlCenter: ControlCenter, to: AObject, method: string, args: any[]): Promise<T>;
@@ -11,21 +26,135 @@ export interface PublicTransport {
   register(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>);
 }
 
+
+function tmpLoad(o, k) {
+  return typeof k === 'string' ? Object.assign({ name: k }, o[`${k}=`]) : k;
+}
 export class ControlCenter {
-  objectsManager = new Map<Identifier, AObject>();
+  _notificationCenter = new NotificationCenter();
+  _objects = new Map<ControlCenter.Aspect, Map<Identifier, { object: AObject, components: AComponent[] }>>();
+  _aspects = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
+
+  static aspect(interfaceDefinition, classname: string, aspect: string) : ControlCenter.Aspect {
+    let rawDef = interfaceDefinition[`${classname}=`];
+    let definition: ControlCenter.Definition = {
+      name: classname,
+      version: 0,
+      attributes: rawDef.attributes
+        .map(k => tmpLoad(rawDef, k))
+        .map(a => Object.assign(a, {
+          classifiedType: classifiedType(a.type),
+          validator: ControlCenter.createValidator(a.type) 
+        })),
+      categories: rawDef.categories
+        .map(k => tmpLoad(rawDef, k))
+        .map(c => Object.assign(c, { 
+          methods: c.methods
+            .map(m => tmpLoad(c, m))
+            .map(m => Object.assign(m, {
+              argumentTypes: m.type.arguments,
+              argumentValidators: m.type.arguments.map(t => ControlCenter.createValidator(t)),
+              returnType: m.type.return,
+              returnValidator: ControlCenter.createValidator(m.type.return),
+            })) 
+        })),
+    };
+    let aspects = rawDef.aspects
+      .map(k => tmpLoad(rawDef, k))
+      .filter(a => a.name === aspect);
+    return {
+      name: aspect,
+      version: 0,
+      definition: interfaceDefinition,
+      categories: aspects[0].categories,
+      farCategories: aspects[0].categories
+    };
+  }
+
+  farCallback<I extends Invocation<any, any>>(call: I, callback: (invocation: I) => void) {
+    call.invoke(callback);
+  }
+  farPromise<I extends Invocation<any, any>>(call: I) : Promise<I> {
+    return new Promise((resolve) => { this.farCallback(call, resolve); })
+  }
+  farAsync<I extends Invocation<any, any>>(flux: Flux<{ envelop: I }>, call: I) {
+    this.farCallback(call, (invocation) => {
+      flux.context.envelop = invocation;
+      flux.continue();
+    });
+  }
+
+  managerFactory() {
+    return (object: AObject) => {
+      return new AObjectManager(this, object);
+    }
+  }
+
+  getAspect(implementation: ControlCenter.Implementation) : ControlCenter.Aspect {
+    return this._aspects.get(implementation)!;
+  }
+
+  getObject(aspect: ControlCenter.Aspect, id: Identifier) : AObject | null {
+    let o = this._objectsInAspect(aspect).get(id);
+    return o ? o.object : null;
+  }
+
+  mergeObject(object: AObject) {
+    let m = object.manager();
+    let o = this.getObject(m.aspect(), object.id());
+    if (o && o !== object)
+      o.manager().setRemote(m);
+    return o || object;
+  }
+
+  _objectsInAspect(aspect: ControlCenter.Aspect) {
+    let i = this._objects.get(aspect);
+    if (!i)
+      i = new Map();
+    return i;
+  }
+
+  registerObjects(component: AComponent, objects: AObject[], method: string | null = null, events: string[] | null = null) {
+    objects.forEach(o => {
+      let id = o.id();
+      let i = this._objectsInAspect(o.manager().aspect());
+      let d = i.get(id);
+      if (!d)
+        i.set(id, d = { object: o, components: [] });
+      d.components.push(component);
+    });
+  }
+
+  unregisterObjects(component: AComponent, objects: AObject[]) {
+    objects.forEach(o => {
+      let i = this._objectsInAspect(o.manager().aspect());
+      let d = i.get(o.id());
+      if (!d)
+        throw new Error(`cannot unregister an object that is not registered`);
+      let idx = d.components.indexOf(component);
+      if (idx === -1)
+        throw new Error(`cannot unregister an object that is not registered by the given component`);
+      if (d.components.length === 1)
+        i.delete(o.id());
+      else
+        d.components.splice(idx, 1);
+    });
+  }
+
+  notificationCenter() { return this._notificationCenter; }
 
   install(aspect: ControlCenter.Aspect, implementation: ControlCenter.Implementation, bridges: ControlCenter.Bridge[]) {
     this.installLocalCategories(aspect.categories, aspect.definition, implementation);
     let remainings = new Set(aspect.farCategories);
     bridges.forEach(bridge => {
-      if (bridge.client.aspect === aspect.name) {
+      if (bridge.client.aspect === aspect.name && bridge.client.transport) {
         bridge.categories.forEach(c => {
           if (!remainings.delete(c))
             throw new Error(`category '${c}' is either already installed or not a far category`);
         });
         this.installFarCategories(bridge.categories, bridge.client.transport, aspect, implementation);
       }
-      else if (bridge.server.aspect === aspect.name) {
+      else if (bridge.server.aspect === aspect.name && bridge.server.transport) {
         bridge.categories.forEach(c => {
           if (aspect.categories.indexOf(c) === -1)
             throw new Error(`category '${c}' is not implemented`);
@@ -33,10 +162,6 @@ export class ControlCenter {
         this.installPublicCategories(bridge.categories, bridge.server.transport, aspect, implementation);
       }
     });
-  }
-
-  mergeEntities<T>(entities: T) {
-    return entities;
   }
 
   protected installLocalCategories(localCategories: string[], definition: ControlCenter.Definition, implementation: ControlCenter.Implementation) {
@@ -53,9 +178,13 @@ export class ControlCenter {
     let farMethods = methodsInCategories(farCategories, aspect.definition);
     let controlCenter = this;
     farMethods.forEach((farMethod) => {
-      protectFarImpl(prototype, farMethod, function(this: AObject, ...args) {
-        return transport.remoteCall(controlCenter, this, farMethod.name, args);
-      });
+      return prototype[farMethod.name] = function(this: AObject, ...args) {
+        return new Invocation(this, farMethod, args[0], (arg, result) => {
+          transport.remoteCall(controlCenter, this, farMethod.name, [arg])
+            .then((ret) => result(null, ret))
+            .catch((err) => result(err))
+        });
+      };
     });
   }
 
@@ -64,11 +193,11 @@ export class ControlCenter {
     let publicMethods = methodsInCategories(publicCategories, aspect.definition);
     publicMethods.forEach((publicMethod) => {
       let publicImpl = localImplInPrototype(prototype, publicMethod);
-      transport.register(this, aspect, publicMethod, protectFarImpl(prototype, publicMethod, publicImpl));
+      transport.register(this, aspect, publicMethod, protectPublicImpl(prototype, publicMethod, publicImpl));
     });
   }
 
-  createValidator(type: ControlCenter.Type) : ControlCenter.TypeValidator {
+  static createValidator(type: ControlCenter.Type) : ControlCenter.TypeValidator {
     // TODO: provide simple and shared validators for primitive types or cache validators
     return <ControlCenter.TypeValidator>ajv.compile(convertTypeToJsonSchema(type));
   }
@@ -84,8 +213,8 @@ export namespace ControlCenter {
   };
   export type Bridge = {
     categories: string[];
-    client: { aspect: string, transport: FarTransport };
-    server: { aspect: string, transport: PublicTransport };
+    client: { aspect: string, transport?: FarTransport };
+    server: { aspect: string, transport?: PublicTransport };
   }
   export type Definition = {
     name: string;
@@ -109,13 +238,11 @@ export namespace ControlCenter {
     argumentValidators: TypeValidator[];
     returnType: Type;
     returnValidator: TypeValidator;
-    extensions: Extension[];
   };
-  export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier';
+  export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object';
   export type Type = PrimaryType | string | [number, number | '*', any /*Type*/] | {[s: string]: Type};
   export type TypeValidator = ((value) => boolean) & { errors: any[] };
   export type Implementation = { new (...args) };
-  export type Extension = never;
 
   export function isAObjectType(attr: Attribute) {
     return attr.classifiedType === "entity";
@@ -136,14 +263,37 @@ function protectLocalImpl(prototype, localMethod: ControlCenter.Method, localImp
   };
 }
 
-function protectFarImpl(prototype, farMethod: ControlCenter.Method, farImpl: (...args) => Promise<any>) {
+function fastSafeCall(impl: Function, self, arg0) : Promise<any> {
+  try {
+    let ret = impl.call(self, arg0);
+    if (!(ret instanceof Promise))
+      ret = Promise.resolve(ret);
+    return ret;
+  } catch(e) {
+    return Promise.reject(e);
+  }
+}
+
+function protectPublicImpl(prototype, farMethod: ControlCenter.Method, farImpl: Function) : (this, arg0) => Promise<any> {
     let argumentValidators = farMethod.argumentValidators;
     let returnValidator = farMethod.returnValidator;
-    return prototype[farMethod.name] = function(this, ...args) {
-      for (var i = 0, len = argumentValidators.length; i < len; i++)
-        if (!argumentValidators[i](args[i]))
-          return Promise.reject(`argument ${i} is invalid`);
-      return farImpl.apply(this, args).then(function(ret) {
+    return prototype[farMethod.name] = function(this, arg0) {
+      if (!argumentValidators[0](arg0))
+        return Promise.reject(`argument is invalid`);
+      let ret: Promise<any>;
+      if (farImpl.length === 1) {
+        ret = fastSafeCall(farImpl, this, arg0);
+      }
+      else {
+        ret = new Promise((resolve) => {
+          Async.run({ result: undefined }, [
+            (p) => { farImpl.call(this, p, arg0); },
+            (p) => { resolve(p.context.result); p.continue(); }
+          ]);
+        });
+      }
+
+      return ret.then(function(ret) {
         return returnValidator(ret) ? Promise.resolve(ret) : Promise.reject(`return value is invalid`);
       });
     };
@@ -165,6 +315,7 @@ function methodsInCategories(categories: string[], definition: ControlCenter.Def
 function convertTypeToJsonSchema(type: ControlCenter.Type): any {
   if (typeof type === "string") {
     switch(type) {
+      case 'any':        return { };
       case 'integer':    return { type: "integer"   };
       case 'decimal':    return { type: "number"    };
       case 'date':       return { type: "date"      };
@@ -172,6 +323,7 @@ function convertTypeToJsonSchema(type: ControlCenter.Type): any {
       case 'string':     return { type: "string"    };
       case 'array':      return { type: "array"     };
       case 'dictionary': return { type: "object"    };
+      case 'object':     return { type: "object"    };
       case 'identifier': return { type: "string"    };
       default: throw new Error(`unsupported type: ${type}`);
     }

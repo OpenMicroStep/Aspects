@@ -1,4 +1,4 @@
-import {ControlCenter, AObject} from '@logitud/aspects';
+import {ControlCenter, AObject} from '@microstep/aspects';
 
 // server side
 export class Person extends AObject {

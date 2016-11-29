@@ -1,59 +1,71 @@
 import {ControlCenter, Identifier, areEquals} from './core';
+import {MSTE} from '@microstep/mstools';
 
 export type AObjectAttributes = Map<string, any>;
-export enum AObjectEvent {
-  Creation,
-  Destruction,
-  RemoteUpdate,
-  LocalUpdate,
-  Conflict
-}
-export type AObjectObserver = (object: AObject, event: AObjectEvent, changes: string[], conflicts: string[], missings: string[]) => void;
 export class AObjectManager {
   static NoVersion = -1;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
   static SafeMode = true;
+  static LocalIdCounter = 0;
+  static isLocalId(id: Identifier) {
+    return typeof id === "string" && id.startsWith("_localid:");
+  }
 
   _id: Identifier;
   _object: AObject | null;
   _controlCenter: ControlCenter;
   _aspect: ControlCenter.Aspect;
-  _observers: Set<AObjectObserver>;
   _localAttributes: AObjectAttributes;
   _oldVersion: number;
   _oldVersionAttributes: AObjectAttributes;
   _version: number;
   _versionAttributes: AObjectAttributes;
 
-  constructor(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, id: Identifier, attributes: Map<string, any>, version: number) {
+  constructor(controlCenter: ControlCenter, object: AObject) {
     this._controlCenter = controlCenter;
-    this._aspect = aspect;
-    this._observers = new Set();
-    this._id = id;
+    this._aspect = controlCenter.getAspect(<ControlCenter.Implementation>object.constructor);
+    this._id = `_localid:${++AObjectManager.LocalIdCounter}`;
     this._oldVersion = AObjectManager.NoVersion;
     this._oldVersionAttributes = new Map<string, any>();
-    this._version = version;
-    this._versionAttributes = attributes;
+    this._version = AObjectManager.NoVersion;
+    this._versionAttributes = new Map<string, any>();
     this._localAttributes = new Map<string, any>();
-    this._object = null;
-  }
-
-  init(object: AObject) {
     this._object = object;
+
+    Object.defineProperty(object, '_id', {
+      writable: true,
+      enumerable: true,
+      get: () => { return this._id; },
+      set: (value) => {
+        if (AObjectManager.isLocalId(value))
+          throw new Error(`cannot change identifier to a local identifier`);
+        if (!AObjectManager.isLocalId(this._id)) 
+          throw new Error(`cannot real identifier to another identifier`);
+        this._id = value; // local -> real id (ie. object _id attribute got loaded)
+      }
+    });
+    Object.defineProperty(object, '_version', {
+      writable: true,
+      enumerable: true,
+      get: () => { return this._version; },
+      set: (value) => {
+        if (this._version !== AObjectManager.NoVersion)
+          throw new Error(`Cannot change object version directly`); 
+        this._version = value; 
+      }
+    });
     for (let attr of this._aspect.definition.attributes) {
       Object.defineProperty(object, attr.name, {
         writable: true,
         enumerable: true,
         get: () => {
-          if (ControlCenter.isAObjectType(attr))
-            return this._controlCenter.objectsManager.get(this.attributeValue(attr.name));
           return this.attributeValue(attr.name);
         },
         set: (value) => {
           if (AObjectManager.SafeMode && !attr.validator(value))
             throw new Error(`attribute value is invalid`);
           if (ControlCenter.isAObjectType(attr))
-            value = value.id();
+            value = controlCenter.getObject(this._aspect, value.id()) || value; // value will be merged later
           this.setAttributeValue(attr.name, value);
         }
       });
@@ -63,33 +75,24 @@ export class AObjectManager {
   id()     : Identifier { return this._id; }
   version(): number { return this._localAttributes.size > 0 ? AObjectManager.NextVersion : this._version; }
   definition() { return this._aspect.definition; }
+  aspect() { return this._aspect; }
 
-  diff() : { [s: string]: any } {
-    let ret = { _id: this.id(), _version: this.version() };
+  _snapshot(isDiff: boolean) : { [s: string]: any } {
+    let ret = new AObjectSnapshot(this.definition().name);
+    ret._id = this.id();
+    ret._version= this.version();
+    if (isDiff)
+      this._versionAttributes.forEach((v, k) => ret[k] = v);
     this._localAttributes.forEach((v, k) => ret[k] = v);
     return ret;
+  }
+
+  diff() : { [s: string]: any } {
+    return this._snapshot(true);
   }
 
   snapshot() : { [s: string]: any } {
-    let ret = { _id: this.id(), _version: this.version() };
-    this._versionAttributes.forEach((v, k) => ret[k] = v);
-    this._localAttributes.forEach((v, k) => ret[k] = v);
-    return ret;
-  }
-
-  addObserver(observer: AObjectObserver) {
-    this._observers.add(observer);
-    this._controlCenter.objectsManager.set(this._id, this._object!);
-  }
-
-  removeObserver(observer: AObjectObserver) {
-    this._observers.delete(observer);
-    if (this._observers.size === 0)
-      this._controlCenter.objectsManager.delete(this._id);
-  }
-
-  isInUse(): boolean {
-    return this._observers.size > 0;
+    return this._snapshot(false);
   }
   
   attributeValue(attribute: string) {
@@ -115,6 +118,10 @@ export class AObjectManager {
     else if (!areEquals(this._localAttributes.get(attribute), value)) {
       this._localAttributes.set(attribute, value);
     }
+  }
+
+  setRemote(manager: AObjectManager) {
+    this.setRemoteAttributes(manager._versionAttributes, manager._version);
   }
 
   setRemoteAttributes(attributes: Map<string, any>, version: number) {
@@ -150,15 +157,53 @@ export class AObjectManager {
   }
 }
 
+var constructedObjects: AObject[] | null = null;
 export class AObject {
-  __manager: AObjectManager;
+  static createManager: (object: AObject) => AObjectManager;
 
-  constructor(control: AObjectManager) {
-    this.__manager = control;
-    this.__manager.init(this);
+  static willConstructObjects(constructor: () => void, createManager?: (object: AObject) => AObjectManager) {
+    let cm = AObject.createManager;
+    let ret = constructedObjects = [];
+    AObject.createManager = createManager || cm;
+    constructor();
+    constructedObjects = null;
+    AObject.createManager = cm;
+    return ret;
   }
 
-  id()     : Identifier { return this.__manager.id();      }
-  version(): number     { return this.__manager.version(); }
+  __manager: AObjectManager;
+  _id: Identifier;
+  _version: number;
+
+  constructor() {
+    this.__manager = AObject.createManager(this); // this will fill _id and _version attributes
+    if (constructedObjects)
+      constructedObjects.push(this);
+  }
+
+  id()     : Identifier { return this._id; }
+  version(): number { return this._version; }
   manager(): AObjectManager { return this.__manager; }
+
+  encodeToMSTE(encoder /*: MSTE.Encoder*/) {
+    // unless specified, only _id and _version are encoded
+    // see manager().snapshot() and manager().diff() for variants
+    encoder.encodeDictionary({ _id: this._id, _version: this._version }, this.manager().definition().name);
+  }
+}
+
+class AObjectSnapshot {
+  __cls: string;
+  _id: Identifier;
+  _version: number;
+  [s: string]: any;
+
+  constructor(cls: string) {
+    Object.defineProperty(this, '__cls', {
+      enumerable: false, value: cls
+    });
+  }
+  encodeToMSTE(encoder /*: MSTE.Encoder*/) {
+    encoder.encodeDictionary(this, this.__cls);
+  }
 }

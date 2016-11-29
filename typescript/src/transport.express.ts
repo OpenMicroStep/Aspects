@@ -1,8 +1,8 @@
-import { PublicTransport, ControlCenter, AObject, Identifier } from './core';
+import { PublicTransport, ControlCenter, AObject, Identifier } from '@microstep/aspects';
 import { Application } from 'express';
 import { MSTE } from '@microstep/mstools';
 
-class ExpressTransport implements PublicTransport {
+export class ExpressTransport implements PublicTransport {
   app: Application;
   findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<AObject>;
 
