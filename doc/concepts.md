@@ -68,7 +68,7 @@ Voici à quoi ressemble les interfaces de Person rassemblés dans un même fichi
 ## class Person
 Description de la classe
 
-### attributs
+### attributes
 #### _firstName: string;
 #### _lastName:  string;
 #### _birthDate: date;
@@ -83,7 +83,7 @@ Description de la classe
 #### age()       : integer;
 ```
 
-Dans l'exmeple ci-dessus, on a 4 mots clés qui sont `class`, `attributs`, `category` et `farCategory`.
+Dans l'exmeple ci-dessus, on a 4 mots clés qui sont `class`, `attributes`, `category` et `farCategory`.
 
 Toute méthode doit faire partie d'une catégorie. Chaque catégorie doit être implémentée dans les langages spécifiés pour cette catégorie.
 
@@ -144,30 +144,33 @@ Un aspect représente alors l'objet selon un point de vue particulier. Dès lors
 
 ~~~
 ### aspect server
-#### category: core, calculation
+#### categories: core, calculation
 
 ### aspect client
-#### category: core
-#### farCategory: calculation
+#### categories: core
+#### farCategories: calculation
 ~~~
 
-Les méthodes de `calculation` ne s'exécutent pas au niveau du client mais au niveau du serveur. Par contre, le client y a accès si la catégorie est signalée comme `farCategory` (catégorie lointaine).
+Les méthodes de `calculation` s'exécutent sur le serveur (en fait sur l'aspect qui a mis cette `farCategory` dans ses `categories`) et non sur le client. Par contre, le client y a accès si la catégorie est signalée dans les `farCategories` de l'aspect.
 
 Ici, on n'a donné que deux aspects à l'objet Person mais il peut exister plus d'aspects aussi bien client que serveur. Supposons par exemple que l'on ait un serveur carto qui implémente certaines méthodes regroupées dans une catégorie `carto`. Alors l'aspect `server-carto` contiendra les catégories `core`et `carto` et cette dernière partie pourra être incluse comme `farCategory` du client.
 
 ~~~
-Person       core calculation      carto
+Person              core calculation(far) carto(far)
 
-server       core calculation
-server-carto core                  carto
-client       core calculation(far) carto(far)
+aspect server       core calculation
+aspect server-carto core                  carto
+aspect client       core calculation(far) carto(far)
 ~~~
 
 Pour introduire les aspects, nous avons parlé de clients et de serveurs mais de manière plus générale, un aspect est simplement la description d'un environnement qui exécute un certain nombre de catégories et qui peut accéder à d'autres catégories implémentées sur d'autres environnements.
 
 La seule restriction est qu'une catégorie déclarée comme farCategorie ne doit appartenir en tant que catégorie qu'à un et un seul aspect, celui qui implémente efectivement cette catégorie. (Peut évoluer dans le futur.)
 
-Futur: un aspect peut déclarer explicitement ses attributs s'il veut en restreindre la liste ?
+Futur:
+
+- un aspect peut déclarer explicitement ses attributs s'il veut en restreindre la liste ?
+- si une catégorie de `categories` est multi-languages mais que l'aspect ne contient qu'une implémentation, il faut pouvoir dire laquelle. A priori, cela dépend de la target donc c'est sans donc voir comment on sait que la target étant en objc il faut prendre l'implémentation objc.
 
 ## farCategorie
 
@@ -268,7 +271,7 @@ Enfin il est possible d'annuler une invocation enoyée et non terminée en utili
 
 	envelop.abort()
 
-### Implémentation de d'une méthode lointaine
+### Implémentation d'une méthode lointaine
 
 Si la méthode est synchrone, elle retourne son résultat (qui peut être une erreur) qui est alors immédiatement transmis au client et placé dans l'enveloppe.
 
@@ -284,7 +287,7 @@ Est-ce qu'on valide au niveau de la classe ou au niveau d'un aspect ? Ou encore 
 Pour chaque attribut (éventuellement au niveau d'un aspect), on précise en plus de son type, s'il est requis et sa validité.
 
 ~~~
-### attributs
+### attributes
 #### _firstName: string;  required:true; valid:{min-length:4};
 #### _firstName: string;  cardinality:1:1; valid:{min-length:4}; // ??
 #### _someInt:   integer; required:true; valid:{min:12, max:15};
