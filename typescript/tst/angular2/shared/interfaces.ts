@@ -20,12 +20,13 @@ export const interfaces = {
         },
     "calculation=":
         {
-        "is":"category",
+        "is":"farCategory",
         "languages":["objc"],
         "age=":{"is":"method","type":{"arguments":<any[]>[],"return":"integer"}},
         "methods":["=age"]
         },
-    "categories":["=core","=calculation"],
+    "categories":["=core"],
+    "farCategories":["=calculation"],
 
     "server=":{"is":"aspect","categories":["=core","=calculation"]},
     "client=":{"is":"aspect","categories":["=core"],"farCategories":["=calculation"]},
@@ -35,14 +36,14 @@ export const interfaces = {
     {
     "is":"class",
     "public=": {
-        "is": "category",
+        "is": "farCategory",
         "giveMeANumber=":{"is":"method","type":{"arguments":<any[]>[],"return":"decimal"}},
         "pass=":{"is":"method","type":{"arguments": ["any"],"return":"any"}},
         "p0=":{"is":"method","type":{"arguments":<any[]>[],"return":"Person"}},
         "arr_p0_1=":{"is":"method","type":{"arguments":<any[]>[],"return":"Person"}},
         "methods":["=giveMeANumber", "=pass", "=p0", "=arr_p0_1"]
     },
-    "categories": ["=public"],
+    "farCategories": ["=public"],
 
     "server=":{"is":"aspect","categories":["=public"]},
     "client=":{"is":"aspect","categories":<string[]>[],"farCategories":["=public"]},
