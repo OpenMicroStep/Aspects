@@ -1,23 +1,40 @@
-import { Component, ViewChild } from '@angular/core';
+import { Component, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import {Person} from '../shared/index';
-import {controlCenter} from './main';
-import {Invocation, DataSource} from '@microstep/aspects';
+import {controlCenter, dataSource} from './main';
+import {Invocation, DataSource, Notification} from '@microstep/aspects';
 @Component({
     selector: 'person',
     template: `
-<form>
-    <div><label>First name</label><input [value]="this.loadedPerson!.firstName()" /></div>
-    <div><label>Last name</label><input [value]="this.loadedPerson!.lastName()" /></div>
+<form *ngIf="this.loadedPerson">
+    <h2>{{ this.loadedPerson.fullName() }}</h2>
+    <div class="form-group"><label>First name</label><input class="form-control" readonly [value]="this.loadedPerson.firstName()" /></div>
+    <div class="form-group"><label>Last name</label><input class="form-control" readonly [value]="this.loadedPerson.lastName()" /></div>
+    <div class="form-group"><label>Birthdate</label><input class="form-control" readonly [value]="this.loadedPerson.birthDate()" /></div>
+    <div class="form-group"><label>Age</label><input class="form-control" readonly [value]="this.loadedPerson.age()" /></div>
 </form>
+<div *ngIf="!this.loadedPerson">
+    <div class="alert alert-info" role="alert">Sélectionner une personne dans la liste.</div>
+</div>
 `
 })
-export class PersonComponent {
+export class PersonComponent implements AfterViewInit, OnDestroy {
     loadedPerson: Person;
 
-    setPerson(p: Person) {
-        // controlCenter.farEvent(dataSource.load([p]), 'personLoaded', this);
+    ngAfterViewInit() {
+        controlCenter.registerComponent(this);
+        controlCenter.notificationCenter().addObserver(this, 'personLoaded', 'personLoaded', this);
     }
-    personLoaded(invocation: Invocation<DataSource, Person>) {
-        this.loadedPerson = invocation.result();
+
+    ngOnDestroy() {
+        controlCenter.notificationCenter().removeObserver(this);
+        controlCenter.unregisterComponent(this);
+    }
+
+    setPerson(p: Person) {
+        controlCenter.registerObjects(this, [p]);
+        controlCenter.farEvent(dataSource.load([p]), 'personLoaded', this);
+    }
+    personLoaded(notification: Notification) {
+        this.loadedPerson = notification.info.invocation.result()[0];
     }
 }

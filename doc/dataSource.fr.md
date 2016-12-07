@@ -52,3 +52,6 @@ Les opérateurs de recherches génériques sont:
 #### Existance `$exists: <YES | NO>` 
 #### Type `$type: <définition d'un type>`
 
+### Opérateurs textuels
+
+#### Fulltext search `$text: { $search: <string value> }`

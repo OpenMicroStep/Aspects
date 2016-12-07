@@ -1,12 +1,14 @@
-import { Identifier, AObject } from './core';
+import { Identifier, VersionedObject, areEquals, Invocation } from './core';
 
 export type Scope = string[];
 export type Conditions = Operators | { [s: string]: any };
 export type Operators =
+  { $class: string } |
   { $eq: any } |
   { $ne: any } |
+  { $gt: any } |
   { $gte: any } |
-  {  $lt: any } |
+  { $lt: any } |
   { $lte: any } |
   { $in: any[] } |
   { $nin: any[] } |
@@ -16,8 +18,66 @@ export type Operators =
   { $exists: boolean } |
   { $type: boolean };
 
-export abstract class DataSource extends AObject {
-  abstract query(objectClass: string, conditions: Conditions, scope: Scope): Promise<AObject[]>;
-  abstract load(objects: (AObject | Identifier)[], scope: Scope): Promise<AObject[]>;
-  abstract save(objects: AObject[]): Promise<boolean>;
+export class DataSource extends VersionedObject {
+  static operators = new Map<string, (value, options) => boolean>();
+  static passConditions(value, conditions: Conditions): boolean {
+    for (var k in conditions) {
+      let operator = DataSource.operators.get(k);
+      if (operator) {
+        if (!operator(value, conditions[k]))
+          return false;
+      }
+      else if(k in value) {
+        if (!DataSource.passConditions(value[k], conditions[k]))
+          return false;
+      }
+      else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /// category core 
+  filter(objects: VersionedObject[], conditions: Conditions): VersionedObject[] {
+    return objects.filter(o => DataSource.passConditions(o, conditions));
+  }
+  /// far category db
+  query(conditions: Conditions, scope?: Scope): Invocation<DataSource, VersionedObject[]> {
+    return <any>this._query(scope ? { conditions: conditions, scope: scope }: { conditions: conditions });
+  }
+  load(objects: VersionedObject[], scope?: Scope): Invocation<DataSource, VersionedObject[]> {
+    return <any>this._load(scope ? { objects: objects, scope: scope }: { objects: objects });
+  }
+  save(objects: VersionedObject[]): Invocation<DataSource, VersionedObject[]> { 
+    return <any>this._save(objects);
+  }
+
+  /// far category transport
+  protected _query({conditions, scope}: {conditions: Conditions, scope?: Scope}): Promise<VersionedObject[]> | VersionedObject[] { throw new Error('not implemented'); }
+  protected _load({objects, scope}: {objects: VersionedObject[], scope?: Scope}): Promise<VersionedObject[]> | VersionedObject[] { throw new Error('not implemented'); }
+  protected _save(objects: VersionedObject[]): Promise<boolean> { throw new Error('not implemented'); }
 }
+
+DataSource.operators.set("$eq", (value, expected) => { return  areEquals(value, expected); });
+DataSource.operators.set("$ne", (value, expected) => { return !areEquals(value, expected); });
+DataSource.operators.set("$gt", (value, expected) => { return value > expected });
+DataSource.operators.set("$gte", (value, expected) => { return value >= expected });
+DataSource.operators.set("$lt", (value, expected) => { return value < expected });
+DataSource.operators.set("$lte", (value, expected) => { return value <= expected });
+DataSource.operators.set("$in", (value, values: any[]) => { return values.indexOf(value) !== -1 });
+DataSource.operators.set("$nin", (value, values: any[]) => { return values.indexOf(value) === -1 });
+DataSource.operators.set("$and", (value, conditions: Conditions[]) => { 
+  return conditions.every(c => DataSource.passConditions(value, c));
+});
+DataSource.operators.set("$or", (value, conditions: Conditions[]) => { 
+  return conditions.some(c => DataSource.passConditions(value, c));
+});
+DataSource.operators.set("$not", (value, conditions: Conditions) => { 
+  return !DataSource.passConditions(value, conditions);
+});
+
+DataSource.operators.set("$text", (value, conditions: { $search: string }) => { 
+  // TODO: fix this very bad quick writing... :)
+  return !!Object.keys(value).some(k => k !== '_id' && value && typeof value[k] === "string" && value[k].toLowerCase().indexOf(conditions.$search.toLowerCase()) !== -1);
+});

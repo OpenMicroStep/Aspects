@@ -1,6 +1,6 @@
-## class AObject
+## class VersionedObject
 
-La classe AObject est la classe mère dont héritent tous les objets à aspects.
+La classe VersionedObject est la classe mère dont héritent tous les objets à aspects.
 
 Les classes de ces objets sont décrites sous forme de fichiers .interface.md.  
 

@@ -11,6 +11,7 @@ module.exports =  {
         "moduleResolution": "node",
         "experimentalDecorators": true,
         "strictNullChecks": true,
+        "skipLibCheck": true,
         "noImplicitThis": true,
         "noImplicitReturns": true,
         "lib": ["es6"]
@@ -49,7 +50,8 @@ module.exports =  {
       { is: 'group', name: 'typescript', path: 'typescript/src/', elements: [
         { is: 'file', name: 'core.ts', tags: ['core'] },
         { is: 'file', name: 'transport.express.ts', tags: ['express'] },
-        { is: 'file', name: 'transport.xhr.ts', tags: ['client'] }
+        { is: 'file', name: 'transport.xhr.ts', tags: ['client'] },
+        { is: 'file', name: 'datasource.sequelize.ts', tags: ['sequelize'] }
       ]}
   ]},
   "typescript targets=": { is: 'group',
@@ -87,6 +89,22 @@ module.exports =  {
         "express-serve-static-core": "^0.1.1",
         "@types/body-parser": "^0.0.33",
         "body-parser": "^1.15.2",
+      }]
+    },
+    "sequelize=":  {
+      is: 'target',
+      outputName: "@microstep/aspects.sequelize",
+      targets: ["=core"],
+      environments: ["=node"],
+      files: ["=Files:typescript ? sequelize"],
+      npmPackage: [{
+        "version": "0.1.0",
+        "main": "datasource.sequelize.js",
+        "typings": "datasource.sequelize.d.ts"
+      }],
+      npmInstall: [{
+        "sequelize": "^3.27.0",
+        "@types/sequelize": "^4.0.39"
       }]
     },
     "client=":  {

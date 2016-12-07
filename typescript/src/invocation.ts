@@ -1,4 +1,4 @@
-import { AObject, ControlCenter } from './core';
+import { VersionedObject, ControlCenter } from './core';
 import { Flux } from '@microstep/async';
 
 export enum InvocationState {
@@ -13,7 +13,7 @@ export interface Diagnostic {
   reasons: any[];
 }
 
-export class Invocation<O extends AObject, R> {
+export class Invocation<O extends VersionedObject, R> {
   _receiver: O;
   _method: ControlCenter.Method;
   _argument: any;
@@ -49,8 +49,8 @@ export class Invocation<O extends AObject, R> {
 
   invoke(callback: (invocation: Invocation<O, R>) => void) {
     let argValidator = this._method.argumentValidators[0];
-    if (argValidator && !argValidator(this._argument))
-      throw new Error(`argument is invalid`);
+    //if (argValidator && !argValidator(this._argument))
+    //  throw new Error(`argument is invalid`);
     this._invoker(this._argument, (err, ret) => {
       if (!err && this._method.returnValidator && !this._method.returnValidator(ret))
         err = { is: 'error', reasons: this._method.returnValidator.errors };
