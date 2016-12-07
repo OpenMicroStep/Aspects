@@ -1,8 +1,8 @@
-import {FarTransport, AObject, ControlCenter} from '@microstep/aspects';
+import {FarTransport, VersionedObject, ControlCenter} from '@microstep/aspects';
 import { MSTE } from '@microstep/mstools';
 
 export class XHRTransport implements FarTransport {
-  remoteCall<T>(controlCenter: ControlCenter, to: AObject, method: string, args: any[]): Promise<T> {
+  remoteCall<T>(controlCenter: ControlCenter, to: VersionedObject, method: string, args: any[]): Promise<T> {
     return new Promise((resolve, reject) => {
         var isVoid = args.length === 0;
         var xhr = new XMLHttpRequest();
@@ -24,11 +24,11 @@ export class XHRTransport implements FarTransport {
     });
   }
 
-  httpMethod(to: AObject, method: string) {
+  httpMethod(to: VersionedObject, method: string) {
       return "GET";
   }
 
-  httpUrl(to: AObject, method: string) {
+  httpUrl(to: VersionedObject, method: string) {
       let def = to.manager().definition();
       return `${def.version}/${def.name}/${to.id()}/${method}`;
   }
@@ -39,8 +39,10 @@ export class XHRTransport implements FarTransport {
 
   decode(controlCenter: ControlCenter, value): any {
     let ret;
-    AObject.willConstructObjects(( ) => {
-      ret = MSTE.parse(value);
+    let classes = {};
+    controlCenter._aspectsByName.forEach((a, n) => classes[n] = a.implementation);
+    VersionedObject.willConstructObjects(( ) => {
+      ret = MSTE.parse(value, { classes: classes });
     }, controlCenter.managerFactory()).forEach(o => controlCenter.mergeObject(o));
     return ret;
   }

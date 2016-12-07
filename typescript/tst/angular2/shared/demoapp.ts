@@ -1,7 +1,11 @@
-import {AObject} from '@microstep/aspects';
+import {VersionedObject, DataSource} from '@microstep/aspects';
 import {Person} from './person';
 
-export class DemoApp extends AObject {
+export class DemoApp extends VersionedObject {
+    _dataSource: DataSource;
+
+    dataSource() { return this._dataSource; }
+
     giveMeANumber(): number {
         return Math.random();
     }

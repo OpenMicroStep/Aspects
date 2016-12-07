@@ -9,21 +9,29 @@ import {Notification} from '@microstep/aspects';
     selector: 'my-app',
     template: 
 `
+<div class="container">
+  <div class="row">
     <h1>My First Angular 2 App</h1>
-    <person-list></person-list>
-    <person></person>
+  </div>
+  <div class="row">
+    <div class="col-md-4"><person-list></person-list></div>
+    <div class="col-md-6"><person></person></div>
+  </div>
+</div>
 `
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
-    @ViewChild('person') personComponent: PersonComponent;
-    @ViewChild('person-list') personListComponent: PersonListComponent;
+    @ViewChild(PersonComponent) personComponent: PersonComponent;
+    @ViewChild(PersonListComponent) personListComponent: PersonListComponent;
 
     ngAfterViewInit() {
+        controlCenter.registerComponent(this);
         controlCenter.notificationCenter().addObserver(this, 'personSelected', 'select', this.personListComponent);
     }
 
     ngOnDestroy() {
         controlCenter.notificationCenter().removeObserver(this);
+        controlCenter.unregisterComponent(this);
     }
 
     personSelected(notification: Notification) {

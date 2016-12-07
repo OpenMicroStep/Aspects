@@ -7,6 +7,7 @@ module.exports =  {
       "target": "es6",
       "declaration": true,
       "sourceMap": true,
+      "skipLibCheck": true,
       "moduleResolution": "node",
       "experimentalDecorators": true,
       "strictNullChecks": true,

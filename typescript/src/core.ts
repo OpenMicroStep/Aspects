@@ -1,4 +1,4 @@
-export * from './aobject';
+export * from './versionedObject';
 export * from './invocation';
 export * from './datasource';
 export * from './notificationCenter';

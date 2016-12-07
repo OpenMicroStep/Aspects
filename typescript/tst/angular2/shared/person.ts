@@ -1,12 +1,11 @@
-import {ControlCenter, AObject} from '@microstep/aspects';
+import {ControlCenter, VersionedObject} from '@microstep/aspects';
 
 // server side
-export class Person extends AObject {
-  _version:   number;
+export class Person extends VersionedObject {
+  //
   _firstName: string;
   _lastName:  string;
   _birthDate: Date;
-  _parent: Person;
 
   firstName() : string { return this._firstName; }
   lastName()  : string { return this._lastName; }

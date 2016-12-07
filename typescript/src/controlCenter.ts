@@ -1,6 +1,6 @@
 import * as Ajv from 'ajv';
 import {Async, Flux} from '@microstep/async';
-import {FarTransport, PublicTransport, AObject, AObjectManager, NotificationCenter, Invocation} from './core';
+import {FarTransport, PublicTransport, VersionedObject, VersionedObjectManager, NotificationCenter, Invocation, DataSource} from './core';
 
 const classifiedTypes = ['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object'];
 function classifiedType(type: string) {
@@ -19,7 +19,7 @@ export interface AComponent {
 }
 
 export interface FarTransport {
-  remoteCall<T>(controlCenter: ControlCenter, to: AObject, method: string, args: any[]): Promise<T>;
+  remoteCall<T>(controlCenter: ControlCenter, to: VersionedObject, method: string, args: any[]): Promise<T>;
 }
 export interface PublicTransport {
   register(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>);
@@ -28,31 +28,127 @@ export interface PublicTransport {
 function tmpLoad(o, k) {
   return typeof k === 'string' && (k=k.substring(1)) ? Object.assign({ name: k }, o[`${k}=`]) : k;
 }
+
 export class ControlCenter {
   _notificationCenter = new NotificationCenter();
-  _objects = new Map<ControlCenter.Aspect, Map<Identifier, { object: AObject, components: AComponent[] }>>();
-  _aspects = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
+  _objects = new Map<Identifier, { object: VersionedObject, components: Set<AComponent> }>();
+  _aspectsByImpl = new Map<ControlCenter.Implementation, ControlCenter.Aspect>();
+  _aspectsByName = new Map<string, { implementation: ControlCenter.Implementation, aspect: ControlCenter.Aspect }>();
+  _components = new Set<AComponent>();
   _ajv = new Ajv();
 
-  constructor() {
-    this._ajv.addKeyword('instanceof', { compile: (schema) => {
-      let cache: any = undefined;
-      return (data) => {
-        if (!cache) {
-          if (schema === "Date")
-            cache = Date;
-          else
-            this._aspects.forEach((a, i) => {
-              if (a.definition.name === schema)
-                cache = i;
-            });
-        }
-        return cache && data instanceof cache;
-      };
-    }})
+  constructor() {}
+  /// events
+  notificationCenter() { return this._notificationCenter; }
+
+  /// category invocation
+  farCallback<I extends Invocation<any, any>>(call: I, callback: (invocation: I) => void) {
+    call.invoke(callback);
+  }
+  farEvent<I extends Invocation<any, any>>(call: I, eventName: string, onObject: Object) {
+    call.invoke((invocation) => {
+      this._notificationCenter.postNotification({
+        name: eventName,
+        object: onObject || call.receiver(),
+        info: { invocation: invocation }
+      })
+    });
+  }
+  farPromise<I extends Invocation<any, any>>(call: I) : Promise<I> {
+    return new Promise((resolve) => { this.farCallback(call, resolve); })
+  }
+  farAsync<I extends Invocation<any, any>>(flux: Flux<{ envelop: I }>, call: I) {
+    this.farCallback(call, (invocation) => {
+      flux.context.envelop = invocation;
+      flux.continue();
+    });
   }
 
-  aspect(interfaceDefinition, classname: string, aspect: string) : ControlCenter.Aspect {
+  /// category component
+  registeredObject(id: Identifier) : VersionedObject | null {
+    let o = this._objects.get(id);
+    return o ? o.object : null;
+  }
+  
+  registeredObjects(component: AComponent) : VersionedObject[] {
+    let ret = <VersionedObject[]>[];
+    this._objects.forEach((o, k) => {
+      if (o.components.has(component))
+        ret.push(o.object);
+    });
+    return ret;
+  }
+
+  registerComponent(component: AComponent) {
+    this._components.add(component);
+  }
+
+  unregisterComponent(component: AComponent) {
+    if (!this._components.delete(component))
+      throw new Error(`cannot remove unregistered component`);
+    this._objects.forEach((o, k) => {
+      if (o.components.delete(component)) {
+        if (o.components.size === 0)
+          this._objects.delete(k);
+      }
+    });
+  }
+
+  registerObjects(component: AComponent, objects: VersionedObject[], method: string | null = null, events: string[] | null = null) {
+    if (!this._components.has(component))
+      throw new Error(`you must register the component with 'addComponent' before registering objects`);
+    const notificationCenter = this.notificationCenter();
+    objects.forEach(o => {
+      let id = o.id();
+      let i = this._objects;
+      let d = i.get(id);
+      if (method)
+        (<(string | null)[]>(events || [null])).forEach(event => notificationCenter.addObserver(component, method, event, o));
+      if (!d)
+        i.set(id, d = { object: o, components: new Set() });
+      d.components.add(component);
+    });
+  }
+
+  unregisterObjects(component: AComponent, objects: VersionedObject[]) {
+    objects.forEach(o => {
+      let i = this._objects;
+      let d = i.get(o.id());
+      if (!d)
+        throw new Error(`cannot unregister an object that is not registered`);
+      if (!d.components.delete(component))
+        throw new Error(`cannot unregister an object that is not registered by the given component`);
+      if (d.components.size === 0)
+        i.delete(o.id());
+    });
+  }
+
+  /// category VersionedObject
+
+  managerFactory() {
+    return (object: VersionedObject) => {
+      return new VersionedObjectManager(this, object);
+    }
+  }
+
+  aspect(implementation: ControlCenter.Implementation) : ControlCenter.Aspect {
+    let r = this._aspectsByImpl.get(implementation);
+    if (r)
+      return r;
+    throw new Error(`Cannot find aspect attached to implementation '${implementation.name}'`);
+  }
+
+  mergeObject(object: VersionedObject) {
+    let m = object.manager();
+    let o = this.registeredObject(object.id());
+    if (o && o !== object)
+      o.manager().setRemote(m);
+    return o || object;
+  }
+
+  /// category init
+  // TODO: refactor init
+  loadAspect(interfaceDefinition, classname: string, aspect: string) : ControlCenter.Aspect {
     let rawDef = interfaceDefinition[`${classname}=`];
     let definition: ControlCenter.Definition = {
       name: classname,
@@ -61,9 +157,9 @@ export class ControlCenter {
         .map(k => tmpLoad(rawDef, k))
         .map(a => Object.assign(a, {
           classifiedType: classifiedType(a.type),
-          validator: this.createValidator(a.type) 
+          validator: this.createValidator(a.type)
         })),
-      categories: (rawDef.categories || [])
+      categories: (<string[]>[]).concat(rawDef.categories || [], rawDef.farCategories || [])
         .map(k => tmpLoad(rawDef, k))
         .map(c => Object.assign(c, { 
           methods: (c.methods || [])
@@ -88,92 +184,9 @@ export class ControlCenter {
     };
   }
 
-  farCallback<I extends Invocation<any, any>>(call: I, callback: (invocation: I) => void) {
-    call.invoke(callback);
-  }
-  farEvent<I extends Invocation<any, any>>(call: I, eventName: string, onObject: Object) {
-    call.invoke((invocation) => {
-      this._notificationCenter.postNotification({
-        name: eventName,
-        object: onObject || call.receiver(),
-        info: { invocation: invocation }
-      })
-    });
-  }
-  farPromise<I extends Invocation<any, any>>(call: I) : Promise<I> {
-    return new Promise((resolve) => { this.farCallback(call, resolve); })
-  }
-  farAsync<I extends Invocation<any, any>>(flux: Flux<{ envelop: I }>, call: I) {
-    this.farCallback(call, (invocation) => {
-      flux.context.envelop = invocation;
-      flux.continue();
-    });
-  }
-
-  managerFactory() {
-    return (object: AObject) => {
-      return new AObjectManager(this, object);
-    }
-  }
-
-  getAspect(implementation: ControlCenter.Implementation) : ControlCenter.Aspect {
-    let r = this._aspects.get(implementation);
-    if (r)
-      return r;
-    throw new Error(`Cannot find aspect attached to implementation '${implementation.name}'`);
-  }
-
-  getObject(aspect: ControlCenter.Aspect, id: Identifier) : AObject | null {
-    let o = this._objectsInAspect(aspect).get(id);
-    return o ? o.object : null;
-  }
-
-  mergeObject(object: AObject) {
-    let m = object.manager();
-    let o = this.getObject(m.aspect(), object.id());
-    if (o && o !== object)
-      o.manager().setRemote(m);
-    return o || object;
-  }
-
-  _objectsInAspect(aspect: ControlCenter.Aspect) {
-    let i = this._objects.get(aspect);
-    if (!i)
-      i = new Map();
-    return i;
-  }
-
-  registerObjects(component: AComponent, objects: AObject[], method: string | null = null, events: string[] | null = null) {
-    objects.forEach(o => {
-      let id = o.id();
-      let i = this._objectsInAspect(o.manager().aspect());
-      let d = i.get(id);
-      if (!d)
-        i.set(id, d = { object: o, components: [] });
-      d.components.push(component);
-    });
-  }
-
-  unregisterObjects(component: AComponent, objects: AObject[]) {
-    objects.forEach(o => {
-      let i = this._objectsInAspect(o.manager().aspect());
-      let d = i.get(o.id());
-      if (!d)
-        throw new Error(`cannot unregister an object that is not registered`);
-      let idx = d.components.indexOf(component);
-      if (idx === -1)
-        throw new Error(`cannot unregister an object that is not registered by the given component`);
-      if (d.components.length === 1)
-        i.delete(o.id());
-      else
-        d.components.splice(idx, 1);
-    });
-  }
-
-  notificationCenter() { return this._notificationCenter; }
-
   install(aspect: ControlCenter.Aspect, implementation: ControlCenter.Implementation, bridges: ControlCenter.Bridge[]) {
-    this._aspects.set(implementation, aspect);
+    this._aspectsByImpl.set(implementation, aspect);
+    this._aspectsByName.set(aspect.definition.name, { implementation: implementation, aspect: aspect });
     let remainings = new Set(aspect.farCategories);
     bridges.forEach(bridge => {
       if (bridge.client.aspect === aspect.name && bridge.client.transport) {
@@ -208,7 +221,7 @@ export class ControlCenter {
     let farMethods = methodsInCategories(farCategories, aspect.definition);
     let controlCenter = this;
     farMethods.forEach((farMethod) => {
-      return prototype[farMethod.name] = function(this: AObject, ...args) {
+      return prototype[farMethod.name] = function(this: VersionedObject, ...args) {
         return new Invocation(this, farMethod, args[0], (arg, result) => {
           transport.remoteCall(controlCenter, this, farMethod.name, args.length ? [arg] : [])
             .then((ret) => result(null, ret))
@@ -275,12 +288,13 @@ export namespace ControlCenter {
   export type TypeValidator = ((value) => boolean) & { errors: any[] };
   export type Implementation = { new (...args) };
 
-  export function isAObjectType(attr: Attribute) {
+  export function isVersionedObjectType(attr: Attribute) {
     return attr.classifiedType === "entity";
   }
 }
 
 function protectLocalImpl(prototype, localMethod: ControlCenter.Method, localImpl: (...args) => any) {
+  return localImpl;/*
   let argumentValidators = localMethod.argumentValidators;
   let returnValidator = localMethod.returnValidator;
   return prototype[localMethod.name] = function(this) {
@@ -291,7 +305,7 @@ function protectLocalImpl(prototype, localMethod: ControlCenter.Method, localImp
     if (!returnValidator(ret))
       throw new Error(`return value is invalid`);
     return ret;
-  };
+  };*/
 }
 
 function fastSafeCall0(impl: Function, self) : Promise<any> {
@@ -320,8 +334,8 @@ function protectPublicImpl(prototype, farMethod: ControlCenter.Method, farImpl: 
     let argumentValidators = farMethod.argumentValidators;
     let returnValidator = farMethod.returnValidator;
     return function(this, arg0) {
-      if (argumentValidators[0] && !argumentValidators[0](arg0))
-        return Promise.reject(`argument is invalid`);
+      //if (argumentValidators[0] && !argumentValidators[0](arg0))
+      //  return Promise.reject(`argument is invalid`);
       let ret: Promise<any>;
       if (farImpl.length === 0) {
         ret = fastSafeCall0(farImpl, this);
@@ -338,9 +352,9 @@ function protectPublicImpl(prototype, farMethod: ControlCenter.Method, farImpl: 
         });
       }
 
-      return ret.then(function(ret) {
+      return ret/*.then(function(ret) {
         return (!returnValidator || returnValidator(ret)) ? Promise.resolve(ret) : Promise.reject(`return value is invalid`);
-      });
+      });*/
     };
 }
 

@@ -1,15 +1,15 @@
 import { NgModule }      from '@angular/core';
+import { FormsModule }      from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 
 import { AppComponent }  from './app.component';
 import { PersonComponent }  from './person.component';
-import { ListComponent }  from './list.component';
+import { PersonListComponent }  from './person-list.component';
 import { InputComponent }  from './input.component';
-import { SearchListComponent }  from './search.component';
 
 @NgModule({
-  imports: [ BrowserModule ],
-  declarations: [ AppComponent, PersonComponent, ListComponent, InputComponent, SearchListComponent ],
+  imports: [ BrowserModule, FormsModule ],
+  declarations: [ AppComponent, PersonComponent, PersonListComponent, InputComponent ],
   bootstrap: [ AppComponent ]
 })
 export class AppModule { }

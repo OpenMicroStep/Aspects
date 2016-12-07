@@ -1,4 +1,4 @@
-import { PublicTransport, ControlCenter, AObject, Identifier } from '@microstep/aspects';
+import { PublicTransport, ControlCenter, VersionedObject, Identifier } from '@microstep/aspects';
 import { Router } from 'express';
 import * as bodyparser from 'body-parser';
 import { MSTE } from '@microstep/mstools';
@@ -7,9 +7,9 @@ const text_middleware = bodyparser.text({type: () => true });
 
 export class ExpressTransport implements PublicTransport {
   app: Router;
-  findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<AObject>;
+  findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<VersionedObject>;
 
-  constructor(app: Router, findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<AObject>) {
+  constructor(app: Router, findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<VersionedObject>) {
     this.app = app;
     this.findObject = findObject;
   }

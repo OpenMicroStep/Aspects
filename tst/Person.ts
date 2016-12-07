@@ -1,7 +1,7 @@
-import {ControlCenter, AObject} from '@logitud/aspects';
+import {ControlCenter, VersionedObject} from '@logitud/aspects';
 
 // server side
-export class Person extends AObject {
+export class Person extends VersionedObject {
   _version:   number;
   _firstName: string;
   _lastName:  string;

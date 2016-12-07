@@ -8,15 +8,15 @@ Sous-classable.
 ### farCategory far [ts]
 Méthodes à implémenter quelque soit la dataSource.
 
-#### query(objectClass: string, conditions: dico, scope: [0, *, string]): [0, *, AObject]
+#### query(conditions: dico, scope: [0, *, string]): [0, *, VersionedObject]
 query permet de récupérer des objets en posant une question et de les ramener en spécifiant les attributs à ramener pour chaque classe d'objets.
 Ex: ramener les Person dont le nom commence par A, en ramenant juste le nom.
 
-#### load(objects: [0, *, AObject], scope: [0, *, string]): [0, *, AObject]
+#### load(objects: [0, *, VersionedObject], scope: [0, *, string]): [0, *, VersionedObject]
 Retourne un ensemble d'objets sous forme de dico avec pour clé les identifiants.
 Pas de profondeur, quand la valeur est un objet la valeur retournée est juste l'identifiant.
 
-#### save(objects: [0, *, AObject]): boolean
+#### save(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 Sauve un ensemble d'objets et retourne null si la sauvegarde n'a pas marché et sinon un dico des objets complet dans leur nouvelle version.
 
 ### aspect client
