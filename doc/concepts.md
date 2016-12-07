@@ -12,6 +12,7 @@ Le pluriel veut souligner qu'un même objet n'est pas vue exactement de la même
 
 [Objets et interfaces](#Objets)  
 [Aspects et catégories](#Aspects)  
+[FarCategory](#farCategory)  
 [Centre de contrôle](#CdC)  
 
 ## <a name="Objets"></a>Objets et interfaces [☝︎](#☝︎)
@@ -83,7 +84,7 @@ Description de la classe
 #### age()       : integer;
 ```
 
-Dans l'exmeple ci-dessus, on a 4 mots clés qui sont `class`, `attributes`, `category` et `farCategory`.
+Dans l'exemple ci-dessus, on a 4 mots clés qui sont `class`, `attributes`, `category` et `farCategory`.
 
 Toute méthode doit faire partie d'une catégorie. Chaque catégorie doit être implémentée dans les langages spécifiés pour cette catégorie.
 
@@ -131,7 +132,7 @@ Pour les méthodes des catégories lointaines, on vérifiera les types des argum
   mess(dict)   : {_key:identifier, nom:string, prénom:string, *:int},
 
 [2, 2, string]: un array de 2 strings
-dict: pas d'autre verif que c'est un dico
+dict: pas d'autre vérification que c'est un dico
 {k1:t1,k2:t2} le dico ne contient que les clés k1 et k2
 {k1:t1,*:t2} les autres clés sont de type t2 
 ~~~
@@ -165,14 +166,14 @@ aspect client       core calculation(far) carto(far)
 
 Pour introduire les aspects, nous avons parlé de clients et de serveurs mais de manière plus générale, un aspect est simplement la description d'un environnement qui exécute un certain nombre de catégories et qui peut accéder à d'autres catégories implémentées sur d'autres environnements.
 
-La seule restriction est qu'une catégorie déclarée comme farCategorie ne doit appartenir en tant que catégorie qu'à un et un seul aspect, celui qui implémente efectivement cette catégorie. (Peut évoluer dans le futur.)
+La seule restriction est qu'une catégorie déclarée comme farCategory ne doit appartenir en tant que catégorie qu'à un et un seul aspect, celui qui implémente effectivement cette catégorie. (Peut évoluer dans le futur.)
 
 Futur:
 
 - un aspect peut déclarer explicitement ses attributs s'il veut en restreindre la liste ?
 - si une catégorie de `categories` est multi-languages mais que l'aspect ne contient qu'une implémentation, il faut pouvoir dire laquelle. A priori, cela dépend de la target donc c'est sans donc voir comment on sait que la target étant en objc il faut prendre l'implémentation objc.
 
-## farCategorie
+## <a name="farCategory"></a>farCategory [☝︎](#☝︎)
 
 Restriction des méthodes pour les méthodes des catégories lointaines:
 
@@ -196,31 +197,40 @@ Avant cela, nous devons tout d'abord préciser la notion de résultat puis celle
 
 Lorsqu'on applique une méthode lointaine, il y a un résultat ordinaire qui est celui que type le retour de la méthode. Par exemple, une méthode `age` retourne l'âge, une méthode `save` retourne le nouvel état de tous les objets sauvés.
 
-Et il y a tous les retours qui ne sont pas ordinaires et que l'on qualifie d'erreurs. C'est un retour comme un autre mais ce n'est pas celui auquel on s'attend. Par exemple, l'âge ne peut pas être calculé par manque d'informations, la sauvegarde ne peut pas se faire car un objet est en conflit ou parce que la base de donnée n'est pas accessible. Une erreur peut aussi survenir lors de la connexion au serveur (serveur inaccessible, connexion interrompue).
+Et il y a tous les retours qui ne sont pas ordinaires que l'on qualifie habituellement d'erreurs mais que nous nommerons un diagnostic. C'est un retour comme un autre mais ce n'est pas celui auquel on s'attend. Par exemple, l'âge ne peut pas être calculé par manque d'informations, la sauvegarde ne peut pas se faire car un objet est en conflit ou parce que la base de donnée n'est pas accessible. Une erreur peut aussi survenir lors de la connexion au serveur (serveur inaccessible, connexion interrompue). Ou encore, la donnée retournée n'est pas valide.
 
 Il peut aussi se faire qu'une erreur se soit produite mais que l'on ait quand même un résultat. C'est un cas classique lors du décodage d'une donnée, par exemple on décode un fichier .interface.md ou .json et il n'est pas bien formé. Il y a une erreur car la donnée est pas bien formée mais il y a potentiellement un résultat de tout ce qui a été traduit. Enfin, on peut aussi vouloir récupérer plusieurs erreurs comme lors de l'analyse d'un fichier par un compilateur.
 
-Donc outre le résultat classique, une méthode lointaine peut **toujours** retourner un objet Error (AError ?, dico {is: error, reasons:[]} ?) qui contient un ensemble de raisons. Chaque raison a au moins un nom mais peut aussi contenir toute information complémentaire (date, ligne, colonne, texte explicatif, etc.). Si un résultat est quand même retourné, il est présent dans l'erreur (clé, attribut ou méthode uncompletedResult).
+Donc outre le résultat classique, une méthode lointaine peut **toujours** retourner un objet Diagnostic (dico {is: diagnostic, reasons:[]} ?) qui contient un ensemble de raisons. Chaque raison a au moins un nom mais peut aussi contenir toute information complémentaire (date, ligne, colonne, texte explicatif, etc.). Si un résultat est quand même retourné, il est présent:
 
-### Envelope
-
-Tout d'abord, on fabrique une enveloppe pour l'envoi. Cette enveloppe contient le receveur, le nom de la méthode et l'argument (un objet qui ressemble à {receiver: r, methodName: n, argument: arg}).
-
-L'enveloppe contient aussi un état (non envoyé, en attente de réponse, réponse reçue, terminé, aborted). Dans le futur, ajout éventuel d'un état réponse partielle.
-
-On appelle cette enveloppe une invocation.
-
-Lorsque la réponse est reçue, elle est placée dans l'enveloppe et accessible par la méthode result si le résultat est complet et par la méthode error si le résultat n'est pas celui attendu.
-
-Futur: une méthode partialResult si le résultat est partiel.
+- soit dans le résultat s'il est valide,
+- soit dans le diagnostic (clé, attribut ou méthode uncompletedResult) s'il est inachevé. S'il se retrouve là, il est à utiliser avec précaution car c'est:
+	- soit que le résultat a été intentionnellement placé à cet endroit par la méthode lointaine pour pouvoir retourner un résultat dont elle veut éviter la vérification du type,
+	- soit que le résultat était initialement dans `result` mais que la vérification a échoué.
 
 ### Vérification 
 
 Lors de l'application d'une méthode lointaine, il y a une vérification des types de l'argument et du résultat. Cette vérification peut mener à une erreur et éventuellement à un uncompletedResult si c'est le résultat qui ne vérifie pas le type déclaré. La profondeur de la vérification dépend de la signature donnée à la méthode (cf. plus haut signature des méthodes).
 
-Par exemple, le retour peut avoir comme type {aKey:[1,2,integer]} ce qui signifie que le résultat est un dictionnaire devant contenir une clé aKey qui a pour valeur un tableau de 1 ou 2 entiers. Il n'y a pas d'autres clés. Si on veut que le dico puisse contenir d"autres clés non vérifiées il faut écrire *:any.
+Par exemple, le retour peut avoir comme type {aKey:[1,2,integer]} ce qui signifie que le résultat est un dictionnaire devant contenir une clé aKey qui a pour valeur un tableau de 1 ou 2 entiers. Il n'y a pas d'autres clés. Si on veut que le dico puisse contenir d'autres clés non vérifiées il faut écrire *:any.
 
 De plus si le résultat contient des objets, il doivent respecter les attributs et leurs types déclarés pour leur classe. Autrement dit, chaque attribut doit appartenir aux attributs de la classe et avoir le bon type.
+
+### Envelope
+
+Tout d'abord, on fabrique une enveloppe pour l'envoi. Cette enveloppe contient le receveur, le nom de la méthode et l'argument (enveloppe= un objet qui ressemble à {receiver: r, methodName: n, argument: arg}).
+
+L'enveloppe contient aussi un état (non envoyé, en attente de réponse, réponse reçue, terminé, aborted). Dans le futur, ajout éventuel d'un état réponse partielle.
+
+On appelle cette enveloppe une invocation.
+
+Lorsque la réponse est reçue, elle est placée dans l'enveloppe et accessible par la méthode `result` si le résultat est complet et valide et par la méthode `diagnostic` si le résultat n'est pas celui attendu.
+
+Une méthode (comme save par exemple) peut donc tout-à-fait répondre un résultat valide et un diagnostic pour signifier que ce n'est pas entièrement ce à quoi on s'attend.
+
+Par contre, un résultat accessible par `result` signifie toujours que le résultat a été vérifié et qu'il est conforme à la signature de la méthode lointaine.
+
+Futur: une méthode partialResult si le résultat est partiel.
 
 ### Appel d'une méthode lointaine 
 
@@ -251,7 +261,7 @@ Lors du retour, l'évènement `event` est publié sur l'objet `receiver` avec en
 
 	nc.addObserver(observer, method, object, 'event')
 
-où l'observeur est celui qui veut recevoir l'événement et `méthod` une méthode de l'observateur :
+où l'`observeur` est celui qui veut recevoir l'événement et `méthod` une méthode de l'observateur :
 
 	method(notification) // notification: {receiver, event, envelop}
 
@@ -267,7 +277,7 @@ Construit une fonction Async pouvant s'utiliser dans un pool et qui place l'enve
 	
 Construit une promise à partir de l'enveloppe.
 
-Enfin il est possible d'annuler une invocation enoyée et non terminée en utilisant la méthode
+Enfin il est possible d'annuler une invocation envoyée et non terminée en utilisant la méthode
 
 	envelop.abort()
 
@@ -277,32 +287,8 @@ Si la méthode est synchrone, elle retourne son résultat (qui peut être une er
 
 Si la méthode est asynchrone:
 
-- soit elle prend la forme d'une fonction Async (le premier argument est un pool et la méthode retourne void) et dans ce cas, on attend la terminaison de la fonction (pool.continue()) pour renvoyer le résultat qui se trouve dans pool.context.result ou pool.context.error (éventuellement pool.context.partialResult, dans ce cas la fonction émettra des pool.continue() jusqu'à ce que l'on ait un résult ou error).
-- soit elle retourne une promise et on attend alors sa réalisation avant de retourner le résultat ou l'erreur.
-
-## validation (Futur ?)
-
-Est-ce qu'on valide au niveau de la classe ou au niveau d'un aspect ? Ou encore les deux avec surcherge pour l'aspect ?
-
-Pour chaque attribut (éventuellement au niveau d'un aspect), on précise en plus de son type, s'il est requis et sa validité.
-
-~~~
-### attributes
-#### _firstName: string;  required:true; valid:{min-length:4};
-#### _firstName: string;  cardinality:1:1; valid:{min-length:4}; // ??
-#### _someInt:   integer; required:true; valid:{min:12, max:15};
-~~~
-
-`required` est la même chose qu'une cardinalité `1:-` ?
-
-`valid`regroupe selon le type des vérifications classiques du genre min, max, min-length.
-
-En plus de cela, on peut déclarer
-
-~~~
-validation: isValid, // nom + prénom + age > 18
-validationAttributs:[firstName, lastName, birthdate],
-~~~
+- soit elle prend la forme d'une fonction Async (la méthode retourne void et le premier argument est un pool) et dans ce cas, on attend la terminaison de la fonction (pool.continue()) pour renvoyer le résultat qui se trouve dans pool.context.result et/ou pool.context.diagnostic (éventuellement pool.context.partialResult, dans ce cas la fonction émettra des pool.continue() jusqu'à ce que l'on ait un résult ou diagnostic).
+- soit elle retourne une promise et on attend alors sa réalisation avant de retourner le résultat et/ou le diagnostic (toujours dans `.then)`.
 
 ## Persistence DataSource
 
@@ -413,6 +399,30 @@ Les actions vues au travers de cet exemple sont:
 - sélection (L)
 - nouveau/action? (A)
 - validation (F)
+
+## validation (Futur ?)
+
+Est-ce qu'on valide au niveau de la classe ou au niveau d'un aspect ? Ou encore les deux avec surcherge pour l'aspect ?
+
+Pour chaque attribut (éventuellement au niveau d'un aspect), on précise en plus de son type, s'il est requis et sa validité.
+
+~~~
+### attributes
+#### _firstName: string;  required:true; valid:{min-length:4};
+#### _firstName: string;  cardinality:1:1; valid:{min-length:4}; // ??
+#### _someInt:   integer; required:true; valid:{min:12, max:15};
+~~~
+
+`required` est la même chose qu'une cardinalité `1:-` ?
+
+`valid`regroupe selon le type des vérifications classiques du genre min, max, min-length.
+
+En plus de cela, on peut déclarer
+
+~~~
+validation: isValid, // nom + prénom + age > 18
+validationAttributs:[firstName, lastName, birthdate],
+~~~
 
 ## Thèmes
 
