@@ -1,4 +1,4 @@
-import { Identifier, VersionedObject, areEquals, Invocation } from './core';
+import { Identifier, VersionedObject, areEquals, Invocation, Invokable } from './core';
 
 export type Scope = string[];
 export type Conditions = Operators | { [s: string]: any };
@@ -43,20 +43,20 @@ export class DataSource extends VersionedObject {
     return objects.filter(o => DataSource.passConditions(o, conditions));
   }
   /// far category db
-  query(conditions: Conditions, scope?: Scope): Invocation<DataSource, VersionedObject[]> {
-    return <any>this._query(scope ? { conditions: conditions, scope: scope }: { conditions: conditions });
+  query(q: {conditions: Conditions, scope?: Scope}): Promise<VersionedObject[]> {
+    return this.farPromise("_query", q).then(i => i.result());
   }
-  load(objects: VersionedObject[], scope?: Scope): Invocation<DataSource, VersionedObject[]> {
-    return <any>this._load(scope ? { objects: objects, scope: scope }: { objects: objects });
+  load(l: {objects: VersionedObject[], scope?: Scope}): Promise<VersionedObject[]> {
+    return this.farPromise("_load", l).then(i => i.result());
   }
-  save(objects: VersionedObject[]): Invocation<DataSource, VersionedObject[]> { 
-    return <any>this._save(objects);
+  save(objects: VersionedObject[]): Promise<VersionedObject[]> { 
+    return this.farPromise("_save", objects).then(i => i.result());
   }
 
   /// far category transport
-  protected _query({conditions, scope}: {conditions: Conditions, scope?: Scope}): Promise<VersionedObject[]> | VersionedObject[] { throw new Error('not implemented'); }
-  protected _load({objects, scope}: {objects: VersionedObject[], scope?: Scope}): Promise<VersionedObject[]> | VersionedObject[] { throw new Error('not implemented'); }
-  protected _save(objects: VersionedObject[]): Promise<boolean> { throw new Error('not implemented'); }
+  _query: Invokable<{conditions: Conditions, scope?: Scope}, VersionedObject[]>;
+  _load: Invokable<{objects: VersionedObject[], scope?: Scope}, VersionedObject[]>;
+  _save: Invokable<VersionedObject[], boolean>;
 }
 
 DataSource.operators.set("$eq", (value, expected) => { return  areEquals(value, expected); });

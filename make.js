@@ -69,7 +69,7 @@ module.exports =  {
         "@microstep/async": "^0.1.0",
         "ajv": "^4.9.0",
         "@types/ajv": "^0.0.4",
-        "@microstep/mstools": "^1.0.0"
+        "@microstep/mstools": "^1.0.1"
       }]
     },
     "express=":  {

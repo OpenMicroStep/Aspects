@@ -9,12 +9,12 @@ export class ExpressTransport implements PublicTransport {
   app: Router;
   findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<VersionedObject>;
 
-  constructor(app: Router, findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<VersionedObject>) {
+  constructor(app: Router, findObject: (aspect: ControlCenter.InstalledAspect, id: Identifier) => Promise<VersionedObject>) {
     this.app = app;
     this.findObject = findObject;
   }
 
-  register(controlCenter: ControlCenter, aspect: ControlCenter.Aspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>) {
+  register(controlCenter: ControlCenter, aspect: ControlCenter.InstalledAspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>) {
     let path = `/${aspect.definition.version}/${aspect.definition.name}/:id/${localMethod.name}`;
     let isVoid = localMethod.argumentTypes.length === 0;
     console.info('GET:', path);

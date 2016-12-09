@@ -29,15 +29,15 @@ export const dataSource = new DataSource();
 dataSource._id = '__dataSource';
 dataSource._version = 0;
 
-controlCenter
-    .farPromise(<Invocation<DemoApp, number>><any>app.giveMeANumber())
+app
+    .farPromise('giveMeANumber', void 0)
     .then(n => console.info(n.result()));
 
 
-controlCenter
-    .farPromise(<Invocation<DemoApp, number>><any>app.pass({ date: new Date() }))
+app
+    .farPromise('pass', { date: new Date() })
     .then(n => console.info(n.result()));
 
-controlCenter
-    .farPromise(<Invocation<DemoApp, number>><any>app.p0())
+app
+    .farPromise('p0', void 0)
     .then(n => console.info(n.result()));

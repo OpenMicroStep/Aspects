@@ -44,6 +44,11 @@ module.exports =  {
     npmInstall: [{
       "@types/node": "^4.0.30"
     }],
+    npmInstall: [{
+      "express": "^4.14.0",
+      "@types/express": "^4.0.34",
+      "express-serve-static-core": "^0.1.1"
+    }],
     compatibleEnvironments: ["ts"],
   },
   "browser=": { 
