@@ -185,6 +185,10 @@ export class VersionedObject implements MSTE.Decodable {
     return ret;
   }
 
+  static addCategory<C extends { new(): T }, T extends VersionedObject>(cstor: C, name: string, implementation: { [s: string]: (this: T, ...args: any[]) => any }) {
+    Object.keys(implementation).forEach(k => cstor.prototype[k] = implementation[k]);
+  }
+
   __manager: VersionedObjectManager<this>;
   _id: Identifier;
   _version: number;

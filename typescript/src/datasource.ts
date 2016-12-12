@@ -1,4 +1,5 @@
 import { Identifier, VersionedObject, areEquals, Invocation, Invokable } from './core';
+import { DataSource } from './aspects.generated.interfaces';
 
 export type Scope = string[];
 export type Conditions = Operators | { [s: string]: any };
@@ -18,7 +19,7 @@ export type Operators =
   { $exists: boolean } |
   { $type: boolean };
 
-export class DataSource extends VersionedObject {
+class DataSource extends VersionedObject {
   static operators = new Map<string, (value, options) => boolean>();
   static passConditions(value, conditions: Conditions): boolean {
     for (var k in conditions) {
@@ -37,27 +38,26 @@ export class DataSource extends VersionedObject {
     }
     return true;
   }
+}
 
+DataSource.category('core', {
   /// category core 
   filter(objects: VersionedObject[], conditions: Conditions): VersionedObject[] {
     return objects.filter(o => DataSource.passConditions(o, conditions));
   }
+});
+DataSource.category('db', {
   /// far category db
   query(q: {conditions: Conditions, scope?: Scope}): Promise<VersionedObject[]> {
     return this.farPromise("_query", q).then(i => i.result());
-  }
+  },
   load(l: {objects: VersionedObject[], scope?: Scope}): Promise<VersionedObject[]> {
     return this.farPromise("_load", l).then(i => i.result());
-  }
+  },
   save(objects: VersionedObject[]): Promise<VersionedObject[]> { 
     return this.farPromise("_save", objects).then(i => i.result());
-  }
-
-  /// far category transport
-  _query: Invokable<{conditions: Conditions, scope?: Scope}, VersionedObject[]>;
-  _load: Invokable<{objects: VersionedObject[], scope?: Scope}, VersionedObject[]>;
-  _save: Invokable<VersionedObject[], boolean>;
-}
+  },
+});
 
 DataSource.operators.set("$eq", (value, expected) => { return  areEquals(value, expected); });
 DataSource.operators.set("$ne", (value, expected) => { return !areEquals(value, expected); });
