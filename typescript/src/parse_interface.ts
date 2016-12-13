@@ -161,7 +161,7 @@ export function interfaceParse(source) {
   var firstLevel= 2, currentLevel= 0, currentElementType= null;
   var result;
   //        key:              is            |  set name      |set| sets                            | subs are ?    
-  var el= {'class':         ['class'        , 'classes'      , [], ['attribute','category','aspect'],  ''],
+  var el= {'class':         ['class'        , 'classes'      , [], ['attribute','category','farCategory','aspect'],  ''],
            'attributes':    ['attributes'   , ''             , [], []                               ,  'attribute'],
            'attribute':     ['attribute'    , 'attributes'   , [], []                               ,  ''],
            'category':      ['category'     , 'categories'   , [], ['method']                       ,  'method'],
