@@ -5,9 +5,10 @@ Sous-classable.
 
 ### attributes
 
-### farCategory far [ts]
-Méthodes à implémenter quelque soit la dataSource.
+### category core [ts]
+#### filter(objects: [0, *, VersionedObject], conditions: dico): [0, *, VersionedObject]
 
+### farCategory db [ts]
 #### query(conditions: dico, scope: [0, *, string]): [0, *, VersionedObject]
 query permet de récupérer des objets en posant une question et de les ramener en spécifiant les attributs à ramener pour chaque classe d'objets.
 Ex: ramener les Person dont le nom commence par A, en ramenant juste le nom.
@@ -19,8 +20,16 @@ Pas de profondeur, quand la valeur est un objet la valeur retournée est juste l
 #### save(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 Sauve un ensemble d'objets et retourne null si la sauvegarde n'a pas marché et sinon un dico des objets complet dans leur nouvelle version.
 
+### farCategory transport [ts]
+Méthodes à implémenter quelque soit la dataSource.
+
+#### _query(conditions: dico, scope: [0, *, string]): [0, *, VersionedObject]
+#### _load(objects: [0, *, VersionedObject], scope: [0, *, string]): [0, *, VersionedObject]
+#### _save(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
+
 ### aspect client
-#### farCategories: far
+#### categories: core db
+#### farCategories: transport
 
 ### aspect db
 #### categories: far

@@ -31,7 +31,10 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
     }
     set query(value) {
         this._query = value;
-        controlCenter.farEvent(dataSource.query({ /*$class: 'Person', */$text: { $search: value } }, ['_firstName', '_lastName']), 'queryResults', this);
+        dataSource.farEvent('query', { 
+            conditions:{ /*$class: 'Person', */$text: { $search: value } }, 
+            scope: ['_firstName', '_lastName']
+        }, 'queryResults', this);
     }
     
     ngAfterViewInit() {

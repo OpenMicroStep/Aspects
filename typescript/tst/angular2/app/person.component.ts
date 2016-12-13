@@ -32,7 +32,7 @@ export class PersonComponent implements AfterViewInit, OnDestroy {
 
     setPerson(p: Person) {
         controlCenter.registerObjects(this, [p]);
-        controlCenter.farEvent(dataSource.load([p]), 'personLoaded', this);
+        dataSource.farEvent('load', [p], 'personLoaded', this);
     }
     personLoaded(notification: Notification) {
         this.loadedPerson = notification.info.invocation.result()[0];
