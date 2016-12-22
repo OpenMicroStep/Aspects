@@ -1,12 +1,10 @@
-import {ControlCenter, VersionedObject, DataSource, Conditions, Scope} from '@microstep/aspects';
+import {controlCenter, ControlCenter, VersionedObject, DataSource, Conditions, Scope} from '@microstep/aspects';
 import {ExpressTransport} from '@microstep/aspects.express';
 import {SequelizeDataSource} from '@microstep/aspects.sequelize';
-import {Person, DemoApp, interfaces} from '../shared/index';
+import {Person, DemoApp} from '../shared/index';
 import * as express from 'express';
 require('source-map-support').install();
 
-const controlCenter = new ControlCenter();
-VersionedObject.createManager = controlCenter.managerFactory();
 const router = express.Router();
 const transport = new ExpressTransport(router, (aspect, id) => {
     if (id === demoapp.id())
@@ -28,31 +26,23 @@ class HardCodedDataSource extends DataSource {
     });
     return ret.map(o => o.manager().snapshot()); //  TODO use scope
   }
+  protected _save(objects: VersionedObject[]): VersionedObject[] {
+      return [];
+  }
 }
 
-controlCenter.install(controlCenter.loadAspect(interfaces, "DemoApp", "server"), DemoApp, [{
-    categories: ["public"],
-    server: { aspect: "server", transport: transport },
-    client: { aspect: "client" }
-}]);
-controlCenter.install(controlCenter.loadAspect(interfaces, "Person", "server"), Person, [{
-    categories: ["calculation"],
-    server: { aspect: "server", transport: transport },
-    client: { aspect: "client" }
-}]);
-controlCenter.install(controlCenter.loadAspect(interfaces, "DataSource", "server"), HardCodedDataSource, [{
-    categories: ["protected"],
-    server: { aspect: "server", transport: transport },
-    client: { aspect: "client" }
-}]);
+controlCenter.installAspect("server", DemoApp.definition, DemoApp);
+controlCenter.installAspect("server", Person.definition, Person);
+controlCenter.installAspect("server", DataSource.definition, HardCodedDataSource);
+controlCenter.installBridge({ publicTransport: transport });
 
 //////
 const app = express();
-app.use(express.static('app'));
-app.use('/app', router);
+app.use(express.static(__dirname + "/../../../../logitud.typescript.angular/debug/"));
+app.use('/app/app', router);
 app.listen(8080);
 
-export const demoapp = new DemoApp();
+export const demoapp: DemoApp = new DemoApp();
 demoapp._id = '__root';
 demoapp._version = 0;
 

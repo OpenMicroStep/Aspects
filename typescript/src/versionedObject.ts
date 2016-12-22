@@ -1,4 +1,4 @@
-import {ControlCenter, Identifier, areEquals, Invocation, Invokable} from './core';
+import {controlCenter, ControlCenter, Identifier, areEquals, Invocation, Invokable} from './core';
 import { Flux } from '@microstep/async';
 import {MSTE} from '@microstep/mstools';
 
@@ -173,7 +173,7 @@ export class VersionedObjectManager<VersionedObject> {
 var constructedObjects: VersionedObject[] | null = null;
 
 export class VersionedObject implements MSTE.Decodable {
-  static createManager: <T extends VersionedObject>(object: T) => VersionedObjectManager<T>;
+  static createManager: <T extends VersionedObject>(object: T) => VersionedObjectManager<T> = controlCenter.managerFactory();
 
   static willConstructObjects(constructor: () => void, createManager?: <T extends VersionedObject>(object: T) => VersionedObjectManager<T>) {
     let cm = VersionedObject.createManager;

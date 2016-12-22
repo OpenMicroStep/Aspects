@@ -3,19 +3,19 @@ import {DataSource, Scope, Conditions, VersionedObject, Identifier, ControlCente
 
 export class SequelizeDataSource extends DataSource {
   models: { [s: string]: sequelize.Model<any, any> };
-  implementations = new Map<string, { aspect: ControlCenter.Aspect, implementation: ControlCenter.Implementation }>();
+  implementations = new Map<string, { aspect: ControlCenter.InstalledAspect, implementation: ControlCenter.Implementation }>();
   sequelize: sequelize.Sequelize;
   define(implementation: ControlCenter.Implementation, additions = {}) {
     let aspect = this.manager().controlCenter().aspect(implementation);
-    this.implementations.set(aspect.definition.name, { aspect: aspect, implementation: implementation });
+    this.implementations.set(aspect.name, { aspect: aspect, implementation: implementation });
     let model = {
       _id: { type: sequelize.BIGINT.UNSIGNED, primaryKey: true },
       _version: sequelize.INTEGER.UNSIGNED
     };
-    aspect.definition.attributes.forEach(a => {
+    aspect.attributes.forEach(a => {
       model[a.name]= this.mapTypeToSequelize(a.classifiedType)
     });
-    this.sequelize.define(aspect.definition.name, Object.assign(model, additions));
+    this.sequelize.define(aspect.name, Object.assign(model, additions));
   }
 
   mapTypeToSequelize(type: ControlCenter.PrimaryType | 'entity'): any {
@@ -53,7 +53,7 @@ export class SequelizeDataSource extends DataSource {
   protected _load({objects, scope}: {objects: VersionedObject[], scope?: Scope}): Promise<VersionedObject[]> {
     let byName = new Map<string, VersionedObject[]>();
     objects.forEach((o) => {
-      let name = o.manager().definition().name;
+      let name = o.manager().aspect().name;
       let objects = byName.get(name);
       if (!objects)
         byName.set(name, objects= []);

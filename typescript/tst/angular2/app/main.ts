@@ -1,31 +1,20 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { ControlCenter, VersionedObject, Invocation, DataSource } from '@microstep/aspects';
+import * as aspects from '@microstep/aspects';
 import { XHRTransport } from '@microstep/aspects.xhr';
 import { AppModule } from './app.module';
-import {Person, DemoApp, interfaces} from '../shared/index';
+import {Person, DemoApp} from '../shared/index';
 
-export const controlCenter = new ControlCenter();
-VersionedObject.createManager = controlCenter.managerFactory();
-const transport = new XHRTransport();
-
-controlCenter.install(controlCenter.loadAspect(interfaces, "DemoApp", "client"), DemoApp, [{
-    categories: ["public"],
-    server: { aspect: "server" },
-    client: { aspect: "client", transport: transport }
-}]);
-controlCenter.install(controlCenter.loadAspect(interfaces, "Person", "client"), Person, []);
-controlCenter.install(controlCenter.loadAspect(interfaces, "DataSource", "client"), DataSource, [{
-    categories: ["protected"],
-    server: { aspect: "server" },
-    client: { aspect: "client", transport: transport }
-}]);
-
+export const controlCenter: aspects.ControlCenter = aspects.controlCenter;
+controlCenter.installAspect("client", aspects.DataSource.definition, aspects.DataSource);
+controlCenter.installAspect("client", DemoApp.definition, DemoApp);
+controlCenter.installAspect("client", Person.definition, Person);
+controlCenter.installBridge({ farTransport: new XHRTransport() });
 platformBrowserDynamic().bootstrapModule(AppModule);
 
-export const app = new DemoApp();
+export const app: DemoApp = new DemoApp();
 app._id = '__root';
 app._version = 0;
-export const dataSource = new DataSource();
+export const dataSource: aspects.DataSource = new aspects.DataSource();
 dataSource._id = '__dataSource';
 dataSource._version = 0;
 

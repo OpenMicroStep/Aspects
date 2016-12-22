@@ -29,7 +29,7 @@ export class XHRTransport implements FarTransport {
   }
 
   httpUrl(to: VersionedObject, method: string) {
-      let def = to.manager().definition();
+      let def = to.manager().aspect();
       return `${def.version}/${def.name}/${to.id()}/${method}`;
   }
 

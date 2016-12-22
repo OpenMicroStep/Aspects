@@ -7,7 +7,7 @@ const text_middleware = bodyparser.text({type: () => true });
 
 export class ExpressTransport implements PublicTransport {
   app: Router;
-  findObject: (aspect: ControlCenter.Aspect, id: Identifier) => Promise<VersionedObject>;
+  findObject: (aspect: ControlCenter.InstalledAspect, id: Identifier) => Promise<VersionedObject>;
 
   constructor(app: Router, findObject: (aspect: ControlCenter.InstalledAspect, id: Identifier) => Promise<VersionedObject>) {
     this.app = app;
@@ -15,15 +15,16 @@ export class ExpressTransport implements PublicTransport {
   }
 
   register(controlCenter: ControlCenter, aspect: ControlCenter.InstalledAspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>) {
-    let path = `/${aspect.definition.version}/${aspect.definition.name}/:id/${localMethod.name}`;
-    let isVoid = localMethod.argumentTypes.length === 0;
+    let path = `/${aspect.version}/${aspect.name}/:id/${localMethod.name}`;
+    let isA0Void = localMethod.argumentTypes.length === 0;
+    let isRVoid = localMethod.returnType === "void";
     console.info('GET:', path);
-    if (!isVoid)
+    if (!isA0Void)
       this.app.use(path, text_middleware);
-    this.app[isVoid ? "get" : "post"](path, (req, res) => {
+    this.app[isA0Void ? "get" : "post"](path, (req, res) => {
       let id = req.params.id;
       this.findObject(aspect, /^[0-9]+$/.test(id) ? parseInt(id) : id).then((entity) => {
-        if (!isVoid)
+        if (!isA0Void)
           return localImpl.call(entity, this.decode(req.body));
         else
           return localImpl.call(entity);

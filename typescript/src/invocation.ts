@@ -67,7 +67,7 @@ export class Invocation<O extends VersionedObject, R> {
 
   farCallback(callback: (invocation: Invocation<O, R>) => void) {
     let manager = this._receiver.manager();
-    let m = manager.aspect().farMethods.find(m => m.name === this._method);
+    let m = manager.aspect().farMethods.get(this._method);
     if (!m)
       throw new Error(`method ${this._method} doesn't exists on ${manager.name()}`);
     let method = m;
@@ -88,7 +88,7 @@ export class Invocation<O extends VersionedObject, R> {
 
     if (argValidator && !argValidator(this._argument))
       throw new Error(`argument is invalid`);
-    method.transport.remoteCall(manager.controlCenter(), this._receiver, this._method, [this._argument])
+    method.transport.remoteCall(manager.controlCenter(), this._receiver, this._method, this._argument ? [this._argument]: [])
         .then((ret) => result(null, ret))
         .catch((err) => result(err, null))
   }

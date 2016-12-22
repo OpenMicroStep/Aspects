@@ -1,6 +1,7 @@
-import {ControlCenter, VersionedObject} from '@microstep/aspects';
-import {Person} from './aspects.generated.interfaces';
-
+import {controlCenter, ControlCenter, VersionedObject} from '@microstep/aspects';
+import * as interfaces from '../generated/aspects.interfaces';
+export const Person = interfaces.Person;
+export type Person = interfaces.Person;
 Person.category('core', {
   firstName() : string { return this._firstName; },
   lastName()  : string { return this._lastName; },
