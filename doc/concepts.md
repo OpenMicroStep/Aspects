@@ -88,12 +88,6 @@ Dans l'exemple ci-dessus, on a 4 mots clés qui sont `class`, `attributes`, `cat
 
 Toute méthode doit faire partie d'une catégorie. Chaque catégorie doit être implémentée dans les langages spécifiés pour cette catégorie.
 
-En `ts` on séparera dans l'implémentation les catégories par des lignes de commentaire comme ci dessous:
-
-~~~
-/// category xxx
-~~~
-
 ### Description des types
 
 Le type est soit un type primaire, soit un type décrit.
@@ -107,7 +101,7 @@ Le type est soit un type primaire, soit un type décrit.
 - map
 - identifier
 - object
-- nom d'un classe
+- nom d'une classe
 - any
 
 Si on veut décrire le type plus finement on ajoutera la cardinalité et la constitution éventuelle du type si c'est un tableau ou un dictionnaire.
@@ -120,7 +114,7 @@ Cardinalité:  min:max (`*` si max infini). Exemples:
 - `0:4` de 0 à 4
 - `5:7` de 5 à 7
 
-### signature des méthodes
+### Signature des méthodes
 
 Pour les méthodes des catégories lointaines, on vérifiera les types des arguments et du résultat en fonction de la déclaration de la méthode.
 

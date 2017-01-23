@@ -1,5 +1,26 @@
+## Event
+
+Au lieu d'être simplement une chaine de caractère, un évenement est un symbole qui doit être déclaré pour pouvoir être utilisé.
+
+Cela permet :
+
+ - d'associer des informations liées au typages et donc de faire des vérifications à la compilation sur l'usage de cet évenement
+ - d'empêcher les conflits sur le nommage des évenements
+
+Exemple de déclaration d'évènement:
+
+```ts
+const myAppEvents = {
+    "personSelected": new Event<AppComponent,{ selected: Person }>("personSelected"),
+    "queryResults": new Event<PersonListComponent,{ invocation: Invocation<DataSource, Person[]> }>("personSelected"),
+}
+```
+
+
+
 ## Notification
-En fait, juste un objet javascript avec 3 clés.
+
+Une notification est tout simplement la publication d'un évenement emit par un objet et auquel il est possible d'attache des informations complémentaires.
 
 ### keys
 
