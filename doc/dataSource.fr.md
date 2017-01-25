@@ -118,44 +118,41 @@ La logique autour de la définition des contraintes est basé sur le concept des
 A partir des opérations mathématiques élémentaires sur les ensembles (union, intersection, filtre) il est possible de composer des requêtes très complexes facilement.
 C'est l'implémentation de la datasource qui est chargée d'interpréter ces contraintes pour définir la meilleur façon de parvenir au résultat demandé.
 
-La définition des ensembles reprend le concept des éléments pour définir les relations.
-Un ensemble est donc définit par une clé terminant par `=`.
-De même pour référencer un ensemble on utilise `=` suivi du nom de l'ensemble.
-Comme pour les éléments, l'utilisation de `:` permet d'accéder aux relations et attributs des objets de l'ensemble.
-
-Les contraintes définis entre les ensembles portent sur les objets de ces ensembles de tel façon que 
-l'évaluation d'un ensemble de contrainte permettant de définir un nouvel ensemble ce fera en considérant toute les combinaisons d'objets des ensembles concerner.
-La validation des contraintes doit donc être considérer comme s'appliquant sur les combinaisons et non pas sur l'intersection des ensembles.
-Cette différence permet l'écriture de requête complexe simplement (voir les exemples plus loin).
-
-C'est à dire que les contraintes `dans C, C:_owner = P` qui porte sur la relation owner entre `C` et `P` signifie:
-
-> Soit `c` de `C` et `p` de `P`, on considère l'ensemble des combinaisons de `(c, p)` possible   
-> `c._owner` est contraint à la valeur `p`   
-> Le nouvel ensemble est composé des objets `c` de `C` qui valide la contrainte
-
-Définition d'un ensemble:
-
-  - un tableau d'ensembles dont le résultat sera l'union des ensembles
-  - un dictionnaire dont chaque couple clé, valeur correspond à une contrainte supplémentaire (__AND__).   
-    Pour chaque clé, le contenu peut être:
-    - le chemin à parcourir pour accéder à la valeur
-    - si elle commence pas `$`, c'est un opérateur
-    - si elle commence par `=`, c'est l'ensemble correspondant (définit avec `=` à la fin)
-    - si elle termine par `=`, c'est un ensemble d'objets
-  - si la valeur commence par `=`, c'est l'ensemble correspondant (définit avec `=` à la fin)
-  - directement à la valeur recherché
+TO UPDATE:
+> La définition des ensembles reprend le concept des éléments pour définir les relations.
+> Un ensemble est donc définit par une clé terminant par `=`.
+> De même pour référencer un ensemble on utilise `=` suivi du nom de l'ensemble.
+> Comme pour les éléments, l'utilisation de `:` permet d'accéder aux relations et attributs des objets de l'ensemble.
+> 
+> Les contraintes définis entre les ensembles portent sur les objets de ces ensembles de tel façon que 
+> l'évaluation d'un ensemble de contrainte permettant de définir un nouvel ensemble ce fera en considérant toute les combinaisons d'objets des ensembles concerner.
+> La validation des contraintes doit donc être considérer comme s'appliquant sur les combinaisons et non pas sur l'intersection des ensembles.
+> Cette différence permet l'écriture de requête complexe simplement (voir les exemples plus loin).
+> 
+> C'est à dire que les contraintes `dans C, C:_owner = P` qui porte sur la relation owner entre `C` et `P` signifie:
+> 
+> > Soit `c` de `C` et `p` de `P`, on considère l'ensemble des combinaisons de `(c, p)` possible   
+> > `c._owner` est contraint à la valeur `p`   
+> > Le nouvel ensemble est composé des objets `c` de `C` qui valide la contrainte
+> 
+> Définition d'un ensemble:
+> 
+>   - un tableau d'ensembles dont le résultat sera l'union des ensembles
+>   - un dictionnaire dont chaque couple clé, valeur correspond à une contrainte supplémentaire (__AND__).   
+>     Pour chaque clé, le contenu peut être:
+>     - le chemin à parcourir pour accéder à la valeur
+>     - si elle commence pas `$`, c'est un opérateur
+>     - si elle commence par `=`, c'est l'ensemble correspondant (définit avec `=` à la fin)
+>     - si elle termine par `=`, c'est un ensemble d'objets
+>   - si la valeur commence par `=`, c'est l'ensemble correspondant (définit avec `=` à la fin)
+>   - directement à la valeur recherché
 
 #### Opérateurs sur les ensembles
 
- - ET logique `$and: [<ensemble>, ...]`
- - OU logique `$or: [<ensemble>, ...]`
- - Négation `$not: <ensemble>`
- - Contrainte d'intersection `$eq: <ensemble>`
- - Contrainte de soustraction `$neq: <ensemble>`
- - Est une valeur de l'ensemble `$in: [<ensemble>, ...]`
- - N'est pas une valeur de l'ensemble `$nin: [<ensemble>, ...]`
- - L'ensemble est non vide ou vide `$exists: <YES | NO>`
+ - Union `$union: [<ensemble>, ...] => <ensemble A U B>`
+ - Intersection `$intersection: [<ensemble>, ...] => <ensemble A & B>`
+ - Soustraction `$minus: [<ensemble A>, <ensemble B>] => <ensemble A - B>`
+ - Différence `$diff: [<ensemble A>, <ensemble B>] => <ensemble A / B>`
 
 #### Opérateurs sur les valeurs
 
@@ -167,7 +164,7 @@ Définition d'un ensemble:
  - Plus petit ou égal à `$lte: <nombre | date>`
  - Est une valeur de la liste `$in: [<value>, ...]`
  - N'est pas une valeur de la liste `$nin: [<value>, ...]`
- - Fulltext search `$text: { $search: <string value> }`
+ - Fulltext search `$text: { $search: <string value>, ...options }`
  - Existance `$exists: <YES | NO>`
  - Classe `$class: <définition d'un type>`
 
@@ -195,22 +192,27 @@ Cat.category('db', {
 registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ reporter: Reporter }>, objects: (Cat | Person)[]) {
   dataSource.query({
     "O=": objects,
-    "AC=": { $class: "Cat" },
-    "AP=": { $class: "Person" },
-    "C=" : { $in: "=O", $class: "Cat" },
-    "P=" : { $in: "=O", $class: "Person" },
-    "cats=": { $in: "=AC", "=A:_owner": "=P" },
-    "persons=": { $in: "=AP", "=cats:_owner": "=AP" }
-    result: [{
-      name: "cats",
-      where: ["=C", "=PC"],
-      scope: ["_color", "_owner"]
+    "AC=": { $instanceOf: "Cat" },
+    "AP=": { $instanceOf: "Person" },
+    "C=" : { $intersection: ["=O", "=AC"] },
+    "P=" : { $intersection: ["=O", "=AP"] },
+    "cats=": {
+      "c=": { $elementOf: "=C" },
+      "p=": { $elementOf: "=AP" },
+      "=c._owner": { $eq: "=p" },
+      $out: "=c"
     },
-    {
-      name: "persons",
-      where: "=persons",
-      scope: ["_age"]
-    }
+    "persons=": { $intersection: ["=cats:_owner", "=AP"] }
+    result: [{
+        name: "cats",
+        where: ["=C", "=PC"],
+        scope: ["_color", "_owner"]
+      },
+      {
+        name: "persons",
+        where: "=persons",
+        scope: ["_age"]
+      }]
   }, (invocation) => {
     if (invocation.sucess()) {
       let cats = invocation.result().cats;
@@ -244,61 +246,80 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
 
 ### Requêtes
 
-```ts
+```js
 // Tous les Vincent
-dataSource.query({
+{
   name: "person",
   where: { _firstname: "Vincent" },
   sort: [ '+_firstname', '+_lastname'],
   scope: ['_firstname', '_lastname'],
-})
+}
 
 // Toutes les personnes et leurs chats dans 2 listes séparées
-dataSource.query({
-  "C=": { $class: "Cat" },                             // Soit C l'ensemble des objets "Cat"
-  "persons=": { $class: "Person" },                    // Soit persons l'ensemble des objets "Person"
-  "cats=":    { $in: "=C", "=C:_owner": "=persons" },  // Soit cats tel que pour tout objet de C, _owner est dans l'ensemble persons
-  // or
-  "cats=":    { $in: "=C", "=persons": "=C:_owner" },  // Soit cats tel que pour tout objet de C, _owner est dans l'ensemble persons
+{
+  "C=": { $instanceOf: "Cat" },                             // Soit C l'ensemble des objets "Cat"
+  "persons=": { $instanceOf: "Person" },                    // Soit persons l'ensemble des objets "Person"
+  "cats=": {
+    "c=": { $elementOf: "=C" },
+    "p=": { $elementOf: "=persons" },
+    "=c._owner": { $eq: "=p" },
+    $out: "=c"
+  },
   results: [
     { name: "cats", where: "=cats", scope: ['_firstname', '_lastname', '_cats'] },
     { name: "persons", where: "=persons", scope: ['_owner'] },
   ]
-});
+}
 
 // Toutes les personnes et leurs chats dans une même liste
-dataSource.query({
-  "C=": { $class: "Cat" },                             // Soit C l'ensemble des objets "Cat"
-  "persons=": { $class: "Person" },                    // Soit persons l'ensemble des objets "Person"
-  "cats=":    { $in: "=C", "=C:_owner": "=persons" },  // Soit cats tel que pour tout objet de C, _owner est dans l'ensemble persons
-  where: ["=cats", "=persons"],
+{
+  "C=": { $instanceOf: "Cat" },                             // Soit C l'ensemble des objets "Cat"
+  "persons=": { $instanceOf: "Person" },                    // Soit persons l'ensemble des objets "Person"
+  "cats=": {
+    "c=": { $elementOf: "=C" },
+    "p=": { $elementOf: "=persons" },
+    "=c._owner": { $eq: "=p" },
+    $out: "=c"
+  },
+  where: { $union: ["=cats", "=persons"] }
   scope: ['_firstname', '_lastname', '_owner', '_cats'],
-});
+}
 
 // Toutes les personnes qui ont des chats et leurs chats
-dataSource.query({
+{
     // Soit P l'ensemble des objets "Person"
-    "P=": { $class: "Person" },
+    "P=": { $instanceOf: "Person" },
     // Soit C l'ensemble des objets "Cat"
-    "C=": { $class: "Cat" },
+    "C=": { $instanceOf: "Cat" },
     // Soit persons les objets p de P tel que pour c dans C il existe c._owner = p
-    "persons=": { $in: "=P", "=P": "=C:_owner" },
+    "persons=": { $intersection: ["=P", "=C:_owner"] },
     // Soit cats les objets c de C tel que pour p dans P il existe c._owner = p
-    "cats=":    { $in: "=C", "=P": "=C:_owner" },
+    "cats=":    {
+      "c=": { $elementOf: "=C" },
+      "p=": { $elementOf: "=persons" },
+      "=c._owner": { $eq: "=p" },
+      $out: "=c"
+    },
     results: [
       { name: "cats", where: "=cats", scope: ['_firstname', '_lastname', '_cats'] },
       { name: "persons", where: "=persons", scope: ['_owner'] },
     ]
-});
+}
 
 // Toutes les personnes qui ont des chats rose
 {
     // Soit P l'ensemble des objets "Person"
-    "P=": { $class: "Person" },
+    "P=": { $instanceOf: "Person" },
     // Soit C l'ensemble des objets "Cat" qui sont rose
-    "C=": { $class: "Cat", color: "pink" },
+    "C=": { $instanceOf: "Cat", color: "pink" },
     // Soit persons les objets p de P tel que p est contraint à être le propriétaire d'un chat
-    "persons=": { in: "=P", "=P": "=C:_owner" },
+    "persons=": {
+      "c=": { $elementOf: "=C" },
+      "p=": { $elementOf: "=P" },
+      "=c._owner": { $eq: "=p" },
+      $out: "=p"
+    },
+    "persons=": { $intersection: ["=C:_owner", "=P"] },
     results: [
       { name: "persons", where: "=persons", scope: ['_owner'] },
     ]
@@ -307,27 +328,20 @@ dataSource.query({
 // Toutes les créneaux en conflits (par resource) et leurs resources
 {
     // Soit G l'ensemble des objets "Gap" (ensemble des créneaux)
-    "G=": { $class: "Gap" },
-    // Soit G2 l'ensemble des objets "Gap" (ensemble des créneaux)
-    "G2=": { $class: "Gap" },
+    "G=": { $instanceOf: "Gap" },
     // Soit R l'ensemble des objets "Resource" (ensemble des résources)
-    "R=": { $class: "Resource" },
-    "conflicts=": { 
-      $in: "=G",             // les objets g de G tel que
-      "=G:_resource": "=R",  // g._resource à pour resource r un objet de R
-      "=G2:_resource": "=R", // les objets g2 de G2 tel que g2._resource à pour resource r un objet de R
-      // r est une resource de g et g2
-      "=G:_startingDate": { $gt: "=G2:_endingDate"   }, // la date de fin de g2 est contraint à être avant la date de début de g
-      "=G:_endingDate"  : { $lt: "=G2:_startingDate" }, // la date de début de g2 est contraint à être après la date de fin de g
-      // g2 est en intersection avec g
-    },
-    "resources=": {
-      $in: "=R",                   // les objets r de R tel que
-      "=conflicts:_resource": "=R" // les objets c de conflicts tel que c._resource à pour resource r
+    "R=": { $instanceOf: "Resource" },
+    "conflicts=": {
+      "g1=": { $elementOf: "=G" },
+      "g2=": { $elementOf: "=G" },
+      "=g1._resource"    : { $eq: "=g2._resource" },
+      "=g1._startingDate": { $gt: "=g2._endingDate"   }, // la date de fin de g2 est contraint à être avant la date de début de g
+      "=g1._endingDate"  : { $lt: "=g2._startingDate" }, // la date de début de g2 est contraint à être après la date de fin de g
+      $out: ["=g1"]
     },
     results: [
       { name: "conflicts", where: "=conflicts", scope: ['_startingDate', '_endingDate', '_resource'] },
-      { name: "resources", where: "=resources", scope: [...] },
+      { name: "resources", where: "=conflicts:_resource", scope: [...] },
     ]
 }
 ```
