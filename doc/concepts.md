@@ -97,27 +97,36 @@ Le type est soit un type primaire, soit un type décrit.
 - date
 - localdate
 - string
+- boolean
 - array
+- set
 - map
 - identifier
 - object
 - nom d'une classe
 - any
 
-Si on veut décrire le type plus finement on ajoutera la cardinalité et la constitution éventuelle du type si c'est un tableau ou un dictionnaire.
+Pour un tableau ou un ensemble, si on veut décrire le type plus finement on ajoutera la cardinalité: `min, max` (`*` si max infini).
+On utilisera alors les syntaxes:
 
-Cardinalité:  min:max (`*` si max infini). Exemples:
+ - pour un tableau : `[min, max, type]`
+ - pour un ensemble : `<min, max, type>`
 
-- `0:1` 0 ou 1 (défaut)
-- `1:1` 1 et un seul
-- `0:*` 0 ou plus
-- `0:4` de 0 à 4
-- `5:7` de 5 à 7
+Exemples de cardinalités:
+
+- `0,1` 0 ou 1 (défaut)
+- `1,1` 1 et un seul
+- `0,*` 0 ou plus
+- `0,4` de 0 à 4
+- `5,7` de 5 à 7
+
+Pour un dictionnaire, il est possible de décrire finement sa constitution via la syntaxe: `{ property: type }`.
+Si property vaut `*`, elle représente alors toutes les clés restantes possibles.
+
 
 ### Signature des méthodes
 
 Pour les méthodes des catégories lointaines, on vérifiera les types des arguments et du résultat en fonction de la déclaration de la méthode.
-
 
 ~~~
 ### category calculation [objc]
