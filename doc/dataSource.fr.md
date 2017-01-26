@@ -114,59 +114,76 @@ Pour chaque objet définissant la sortie on a:
 ### Contraintes de recherche
 
 A la manière de __mongodb__ ou encore de __sequelize__, les contraintes de recherches sont définies sous une forme structuré.
-La logique autour de la définition des contraintes est basé sur le concept des ensembles.
-A partir des opérations mathématiques élémentaires sur les ensembles (union, intersection, filtre) il est possible de composer des requêtes très complexes facilement.
-C'est l'implémentation de la datasource qui est chargée d'interpréter ces contraintes pour définir la meilleur façon de parvenir au résultat demandé.
+En plus des requêtes _simples_ possibles via la syntaxe __mongodb__, deux concepts: __ensemble__ et __élément__, sont disponible pour permettre l'écriture de requêtes bien plus puissante.
 
-TO UPDATE:
-> La définition des ensembles reprend le concept des éléments pour définir les relations.
-> Un ensemble est donc définit par une clé terminant par `=`.
-> De même pour référencer un ensemble on utilise `=` suivi du nom de l'ensemble.
-> Comme pour les éléments, l'utilisation de `:` permet d'accéder aux relations et attributs des objets de l'ensemble.
-> 
-> Les contraintes définis entre les ensembles portent sur les objets de ces ensembles de tel façon que 
-> l'évaluation d'un ensemble de contrainte permettant de définir un nouvel ensemble ce fera en considérant toute les combinaisons d'objets des ensembles concerner.
-> La validation des contraintes doit donc être considérer comme s'appliquant sur les combinaisons et non pas sur l'intersection des ensembles.
-> Cette différence permet l'écriture de requête complexe simplement (voir les exemples plus loin).
-> 
-> C'est à dire que les contraintes `dans C, C:_owner = P` qui porte sur la relation owner entre `C` et `P` signifie:
-> 
-> > Soit `c` de `C` et `p` de `P`, on considère l'ensemble des combinaisons de `(c, p)` possible   
-> > `c._owner` est contraint à la valeur `p`   
-> > Le nouvel ensemble est composé des objets `c` de `C` qui valide la contrainte
-> 
-> Définition d'un ensemble:
-> 
->   - un tableau d'ensembles dont le résultat sera l'union des ensembles
->   - un dictionnaire dont chaque couple clé, valeur correspond à une contrainte supplémentaire (__AND__).   
->     Pour chaque clé, le contenu peut être:
->     - le chemin à parcourir pour accéder à la valeur
->     - si elle commence pas `$`, c'est un opérateur
->     - si elle commence par `=`, c'est l'ensemble correspondant (définit avec `=` à la fin)
->     - si elle termine par `=`, c'est un ensemble d'objets
->   - si la valeur commence par `=`, c'est l'ensemble correspondant (définit avec `=` à la fin)
->   - directement à la valeur recherché
+Un __ensemble__ se définit par son nom et les contraintes qui permettent de définir la liste d'objet qu'il représente.
+Par le fait qu'un ensemble est nommé, celui-ci est réutilisable pour définir des contraintes sur d'autres ensembles.
+A chaque fois que l'on définit des contraintes, celles-ci définissent en fait un ensemble.
+Lors de la définition d'un ensemble nommée avec des contraintes sur des éléments, la propriété `$out` doit-être utilisé pour définir la liste des objets qui forment l'ensemble.   
+_Syntaxe_:
+
+  - Pour nommée un _ensemble_, il suffit que la clé associé à sa définition se termine par le caractère `=`. 
+  - De même, pour utiliser un ensemble, il suffit que la valeur commence par le caratère `=` suivi du nom de l'ensemble.
+  - Lorsque l'on référence un ensemble, le nom de celui-ci peut-être suivi de `:` puis du nom d'un attribut présent sur les éléments de cet ensemble.
+    Cela signifie alors toutes les valeurs de cet attribut pour tous les éléments de cet ensemble.
+
+Un __élément__ se définit par son nom et les contraintes qui permettent de définir la liste d'objet qui seront les valeurs successives qu'il représente.
+Par le fait qu'un élément est nommé, celui-ci est réutilisable pour définir des contraintes sur d'autres ensembles.   
+_Syntaxe_:
+
+  - Pour nommée un _élément_, il faut que la clé associé à sa définition se termine par le caractère `=` 
+    et que la définition contienne la clé `$elementOf` qui aura pour valeur un _ensemble_.
+  - De même, pour utiliser un élément, il suffit que la valeur commence par le caratère `=` suivi du nom de l'élément.
+  - Lorsque l'on référence un élément, le nom de celui-ci peut-être suivi de `.` puis du nom d'un attribut présent sur l'élément.
+    Cela signifie alors la valeur de cet attribut pour cet élément.
+
+La différence entre __ensemble__ et __élément__ est qu'un ensemble est une liste d'objet tandis qu'un élément sera chaque valeur d'une liste d'objet, comprendre: _pour chaque élément d'un ensemble_.
+Ainsi, lorsque d'un ensemble est définit par un ou plusieurs éléments: ce sont toutes les combinaisons possibles de ces éléments (par rapport aux ensembles qu'ils représentent) qui valident les contraintes posées sur ces éléments, avec la propriété `$out` qui permet de prendre parmis l'ensemble de ces combinaisons valides, les valeurs d'un des éléments.
+
+__Attention__: Toutes les comparaisons sur les chaînes de caractères (tri, `$eq`, `$neq`, `$lt`, ...) sont insensibles à la casse et suivent la spécification _Unicode Collation Algorithm_.
+Donc `"abc": { $eq: "ABC" }` est vrai.
+
+Définition d'un ensemble:
+
+  - un dictionnaire dont chaque couple clé, valeur correspond à une contrainte supplémentaire (__AND__).   
+    Pour chaque clé, le contenu peut être:
+    - si elle commence pas `$`, c'est un opérateur
+    - si elle commence par `=`, c'est l'ensemble ou l'élément correspondant
+    - si elle termine par `=`, c'est un ensemble d'objets
+    - sinon, c'est le chemin à parcourir pour accéder à la valeur
+  - `=` suivi du nom d'un ensemble ou d'un élément, c'est l'ensemble ou l'élément correspondant
+  - directement à la valeur recherché
 
 #### Opérateurs sur les ensembles
 
- - Union `$union: [<ensemble>, ...] => <ensemble A U B>`
- - Intersection `$intersection: [<ensemble>, ...] => <ensemble A & B>`
- - Soustraction `$minus: [<ensemble A>, <ensemble B>] => <ensemble A - B>`
- - Différence `$diff: [<ensemble A>, <ensemble B>] => <ensemble A / B>`
+Les opérateurs sur les ensembles permettent à partir d'ensembles de définir de nouveaux ensembles.
+
+ - Union `$union: [<ensemble>, ...] => <ensemble A U B>`: l'ensemble des objets des ensembles de la liste;
+ - Intersection `$intersection: [<ensemble>, ...] => <ensemble A & B>`: l'ensemble des objets commun aux ensembles de la liste;
+ - Différence `$diff: [<ensemble A>, <ensemble B>] => <ensemble A / B>`: l'ensemble des objets de l'ensemble A qui ne sont pas présent dans l'ensemble B
 
 #### Opérateurs sur les valeurs
 
+Les opérateurs sur les valeurs permettent de définir des contraintes.
+
+ - Existance `$exists: <YES | NO>`: pour un attribut, c'est l'existance de cette attribut, pour un ensemble c'est le fait que celui-ci soit vide ou non;
+ - Classe `$instanceOf: <type>`: uniquement les objets qui sont une instance de cette classe.
+ - Classe `$memberOf: <type>`: uniquement les objets qui ont pour classe;
+
+
  - Egal à `$eq: <value>`
  - N'est pas égal à `$ne: <value>`
- - Plus grand que `$gt: <nombre | date>`
- - Plus grand ou égal à `$gte: <nombre | date>`
- - Plus petit que `$lt: <nombre | date>`
- - Plus petit ou égal à `$lte: <nombre | date>`
+ - Plus grand que `$gt: <nombre | date | string>`
+ - Plus grand ou égal à `$gte: <nombre | date | string>`
+ - Plus petit que `$lt: <nombre | date | string>`
+ - Plus petit ou égal à `$lte: <nombre | date | string>`
+
+
  - Est une valeur de la liste `$in: [<value>, ...]`
  - N'est pas une valeur de la liste `$nin: [<value>, ...]`
+
+
  - Fulltext search `$text: { $search: <string value>, ...options }`
- - Existance `$exists: <YES | NO>`
- - Classe `$class: <définition d'un type>`
 
 ### Tri du résultat
 
