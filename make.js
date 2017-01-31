@@ -70,7 +70,7 @@ module.exports =  {
       packager: "npm",
       //tsConfig: [{ traceResolution: true }],
       npmPackage: [{
-        "version": "0.1.2",
+        "version": "0.1.3",
         "main": "typescript/src/core.js",
         "typings": "typescript/src/core.d.ts",
         "dependencies": {
@@ -89,12 +89,12 @@ module.exports =  {
     "express=": {
       is: 'target',
       outputName: "@microstep/aspects.express",
-      targets: ["=core"],
+      targets: ["core"],
       components: ["=core"],
       environments: ["=node"],
       files: ["=Files:typescript ? express"],
       npmPackage: [{
-        "version": "0.1.1",
+        "version": "0.1.3",
         "main": "transport.express.js",
         "typings": "transport.express.d.ts"
       }],
@@ -110,12 +110,12 @@ module.exports =  {
     "sequelize=": {
       is: 'target',
       outputName: "@microstep/aspects.sequelize",
-      targets: ["=core"],
+      targets: ["core"],
       components: ["=core"],
       environments: ["=node"],
       files: ["=Files:typescript ? sequelize"],
       npmPackage: [{
-        "version": "0.1.1",
+        "version": "0.1.3",
         "main": "datasource.sequelize.js",
         "typings": "datasource.sequelize.d.ts"
       }],
@@ -129,14 +129,14 @@ module.exports =  {
       packager: "npm",
       outputName: "@microstep/aspects.xhr",
       npmPackage: [{
-        "version": "0.1.1",
+        "version": "0.2.3",
         "main": "transport.xhr.js",
         "typings": "transport.xhr.d.ts"
       }],
       npmInstall: [{
         "@microstep/mstools": "^1.0.2"
       }],
-      targets: ["=core"],
+      targets: ["core"],
       components: ["=core"],
       environments: ["=browser"],
       files: ["=Files:typescript ? client"],

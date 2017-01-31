@@ -1,0 +1,41 @@
+before_script:
+ - npm set registry $NPM_REGISTRY
+
+build:
+  image: node:6-alpine
+  stage: build
+  script:
+   - npm install -q -g @msbuildsystem/cli
+   - msbuildsystem modules install @msbuildsystem/js.typescript
+   - msbuildsystem modules install @msbuildsystem/aspects
+   - msbuildsystem modules install typescript
+   - msbuildsystem build -w dist/
+  artifacts:
+    expire_in: 31d
+    paths:
+     - dist/
+
+test:
+  image: node:6-alpine
+  stage: test
+  dependencies:
+   - build
+  script:
+   - npm install -q -g @microstep/tests
+   - mstests dist/node/debug/node_modules/@msbuildsystem/{shared,core}.tests/index.js
+
+publish:
+  image: node:6-alpine
+  stage: deploy
+  script:
+    - echo -e "$NPM_USER\n$NPM_PASS\n$NPM_EMAIL" | npm login
+    - npm publish dist/node/debug/node_modules/@microstep/aspects
+    - npm publish dist/node/debug/node_modules/@microstep/aspects.express
+    - npm publish dist/node/debug/node_modules/@microstep/aspects.sequelize
+    - npm publish dist/browser/debug/node_modules/@microstep/aspects.xhr
+  dependencies:
+   - build
+  only:
+    - master
+  when: manual
+  environment: production
