@@ -3,7 +3,7 @@ import * as interfaces from '../../generated/aspects.interfaces';
 export * from '../../generated/aspect.server.interfaces';
 export var DataSource = interfaces.DataSource;
 export type DataSource = interfaces.DataSource;
-
+/*
 interfaces.DataSource.category('core', {
   /// category core 
   filter(objects: VersionedObject[], conditions: Conditions): VersionedObject[] {
@@ -22,7 +22,7 @@ interfaces.DataSource.category('db', {
     return this.farPromise("_save", objects).then(i => i.result());
   },
 });
-
+*/
 export namespace DataSourceInternal {
   export class ObjectSet {
     name?: string = undefined;
@@ -95,15 +95,20 @@ export namespace DataSourceInternal {
     $nin?: Instance<ObjectSetDefinition> | (Value[]),
     [s: string]: Value | ConstraintDefinition
   };
-  export interface ObjectSetDefinition {
-    $in?: Instance<ObjectSetDefinition> | (Value[]),
-    $nin?: Instance<ObjectSetDefinition> | (Value[]),
-    $or?: ObjectSetDefinition[],
-    $and?: ObjectSetDefinition[],
-    $union? : Instance<ObjectSetDefinition>[]
-    $intersection? : Instance<ObjectSetDefinition>[]
-    $diff?: [Instance<ObjectSetDefinition>, Instance<ObjectSetDefinition>]
-    $out?: string,
+  export interface ObjectSetDefinitionR {
+    $in: Instance<ObjectSetDefinition> | (Value[]),
+    $nin: Instance<ObjectSetDefinition> | (Value[]),
+    $or: ObjectSetDefinition[],
+    $and: ObjectSetDefinition[],
+    $union : Instance<ObjectSetDefinition>[],
+    $intersection : Instance<ObjectSetDefinition>[],
+    $diff: [Instance<ObjectSetDefinition>, Instance<ObjectSetDefinition>],
+    $instanceOf: string | Function,
+    $memberOf: string | Function,
+    $out: string,
+    $exists: boolean,
+  };
+  export type ObjectSetDefinition = Partial<ObjectSetDefinitionR> & {
     [s: string]: Value | ConstraintDefinition
   };
   export interface Element extends ConstraintDefinition {
@@ -118,8 +123,8 @@ export namespace DataSourceInternal {
   export type Request = Result | { result: (Result& { [s: string]: Instance<ObjectSetDefinition> })[], [s: string]: Instance<ObjectSetDefinition> };
 
   type OperatorBetweenSet = (context: ParseContext, constraint: ConstraintBetweenSet) => void;
-  type OperatorOnSet<K extends keyof ObjectSetDefinition> = (context: ParseContext, set: ObjectSet, elements: Map<string, ObjectSet>, out: string | undefined, value: ObjectSetDefinition[K]) => void;
-  const operatorsOnSet: { [K in keyof ObjectSetDefinition]: OperatorOnSet<K>; } = {
+  type OperatorOnSet<T> = (context: ParseContext, set: ObjectSet, elements: Map<string, ObjectSet>, out: string | undefined, value: T) => void;
+  const operatorsOnSet: { [K in keyof ObjectSetDefinitionR]: OperatorOnSet<ObjectSetDefinitionR[K]>; } = {
     $instanceOf: (context, set, elements, out, value) => {
       if (typeof value !== "string" && typeof value !== "function")
         throw new Error(`instanceOf value must be a string or a class`);
@@ -176,6 +181,9 @@ export namespace DataSourceInternal {
       if (typeof value !== "boolean")
         throw new Error(`$exists value must be a boolean`);
       new ConstraintOnValue(ConstraintType.Exists, set, undefined, value);
+    },
+    $out: (context, set, elements, out, value) => {
+      throw new Error(`$out is managed in ParseContext`);
     },
   }
   
