@@ -20,9 +20,9 @@ Ce format utilise 2 types d'objets:
 
 L'algorithme est récursif avec détection de cycle et ne va manipuler que les ensembles finaux.
 Cela implique d'analyser les contraintes plusieurs fois en cas de réutilisation mais limite le nombre d'allocation nécéssaire.
-Pour ce faire, l'analyse part des objets finaux.
+Pour ce faire, l'analyse part des objets finaux et remonte toutes les dépendances.
+Si la dépendance est déjà résolu alors on utilise ce résultat (ie. un ensemble).
 
-WIP
 
 ## Exemples
 
@@ -36,9 +36,16 @@ Par exemple, la requête:
       "g1=": { $elementOf: "=G" },
       "g2=": { $elementOf: "=G" },
       "=g1._resource"    : { $eq: "=g2._resource" },
+      $or: [
+        { "=g1._startingDate": { $gt: "=g2._endingDate"   } }    
+        { "=g1._endingDate"  : { $lt: "=g2._startingDate" } }
+      ],
+      $and: [
+          
+      ]
       "=g1._startingDate": { $gt: "=g2._endingDate"   }, // la date de fin de g2 est contraint à être avant la date de début de g
       "=g1._endingDate"  : { $lt: "=g2._startingDate" }, // la date de début de g2 est contraint à être après la date de fin de g
-      $out: ["=g1"]
+      $out: "=g1"
     },
     results: [
       { name: "conflicts", where: "=conflicts", scope: ['_startingDate', '_endingDate', '_resource'] },
@@ -61,7 +68,7 @@ r = Ensemble([_id      ], name= "resources", scope: [...])
 Cette forme est facilement utilisable pour transformation en SQL:
 
 ```sql
-SELECT g1._id, g1._version, g1._startingDate, g1_endingDate,
+SELECT g1._id, g1._version, g1._startingDate, g1._endingDate,
        r._id , r._version , ...
 FROM Gap g1, Gap g2, Resource r
 WHERE     g1._resource = g2._resource 
