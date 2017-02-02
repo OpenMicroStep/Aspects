@@ -1,15 +1,14 @@
 import { controlCenter, Identifier, VersionedObject, FarImplementation, areEquals, Invocation, Invokable } from './core';
-import * as interfaces from '../../generated/aspects.interfaces';
-export * from '../../generated/aspect.server.interfaces';
-export var DataSource = interfaces.DataSource;
-export type DataSource = interfaces.DataSource;
-/*
-interfaces.DataSource.category('core', {
+import {DataSource} from '../../generated/aspects.interfaces';
+
+DataSource.category('local', {
   /// category core 
-  filter(objects: VersionedObject[], conditions: Conditions): VersionedObject[] {
-    return objects.filter(o => passConditions(o, conditions));
+  filter(this, objects: VersionedObject[], arg1) {
+    return DataSourceInternal.applyWhere(arg1, objects);
   }
 });
+
+/*
 interfaces.DataSource.category('db', {
   /// far category db
   query(q: {conditions: Conditions, scope?: Scope}): Promise<VersionedObject[]> {
@@ -47,6 +46,32 @@ export namespace DataSourceInternal {
     InstanceOf = 20,
     MemberOf,
     CustomStart = 100 // The first 100 ([0-99]) are reserved
+  }
+
+  function passConstraint(type: ConstraintType, left, right) {
+    switch(type) {
+      case ConstraintType.Equal: return left === right;
+      case ConstraintType.NotEqual: return left !== right;
+      case ConstraintType.GreaterThan: return left > right;
+      case ConstraintType.GreaterThanOrEqual: return left >= right;
+      case ConstraintType.LessThan: return left < right;
+      case ConstraintType.LessThanOrEqual: return left <= right;
+      case ConstraintType.Text: {
+        if (left instanceof VersionedObject && typeof right === "string") {
+          let manager = left.manager();
+          return manager.aspect().attributes.some(a => right.indexOf(`${manager.attributeValue(a.name)}`) !== -1);
+        }
+        return false;
+      }
+      case ConstraintType.In: return Array.isArray(right) && right.indexOf(left) !== -1;
+      case ConstraintType.NotIn: return Array.isArray(right) && right.indexOf(left) === -1;
+      case ConstraintType.Exists: {
+        return right !== undefined && (!Array.isArray(right) || right.length > 0);
+      }
+      case ConstraintType.InstanceOf: return left instanceof right;
+      case ConstraintType.MemberOf: return left.constructor === right.constructor;
+    }
+    return false;
   }
 
   export abstract class Constraint {
@@ -379,6 +404,17 @@ export namespace DataSourceInternal {
       });
     }
     return context.set;
+  }
+
+  export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[]) : VersionedObject[] {
+    let context = new ParseContext([], new ParseStack(where));
+    let set = context.parseSet(where);
+    return objects.filter(o => set.constraints.every(c => {
+      if (!(c instanceof ConstraintOnValue))
+        throw new Error(`where is too complex and can't be proceeded, use query`);
+      let value = c.attribute ? o[c.attribute] : o;
+      return passConstraint(c.type, value, c.value);
+    }));
   }
 
   export function applyRequest(request: Request, objects: VersionedObject[]) {

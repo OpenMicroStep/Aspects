@@ -64,7 +64,7 @@ module.exports =  {
       interfaces: [{ 
         value: ["=Files:typescript ? core.interface"], 
         aspect: "aspects_core",
-        customHeader: "import {controlCenter, VersionedObject, FarImplementation, Invocation} from '../typescript/src/core';"  
+        customHeader: "import {controlCenter, VersionedObject, FarImplementation, Invocation, DataSourceInternal} from '../typescript/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
       }],
       tsMain: "core.ts", 
       packager: "npm",
@@ -94,7 +94,7 @@ module.exports =  {
       environments: ["=node"],
       files: ["=Files:typescript ? express"],
       npmPackage: [{
-        "version": "0.1.3",
+        "version": "0.2.0",
         "main": "transport.express.js",
         "typings": "transport.express.d.ts"
       }],
@@ -115,7 +115,7 @@ module.exports =  {
       environments: ["=node"],
       files: ["=Files:typescript ? sequelize"],
       npmPackage: [{
-        "version": "0.1.3",
+        "version": "0.2.0",
         "main": "datasource.sequelize.js",
         "typings": "datasource.sequelize.d.ts"
       }],
@@ -129,7 +129,7 @@ module.exports =  {
       packager: "npm",
       outputName: "@microstep/aspects.xhr",
       npmPackage: [{
-        "version": "0.2.3",
+        "version": "0.2.0",
         "main": "transport.xhr.js",
         "typings": "transport.xhr.d.ts"
       }],
