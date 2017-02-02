@@ -1,5 +1,7 @@
-import { controlCenter, Identifier, VersionedObject, FarImplementation, areEquals, Invocation, Invokable } from './core';
+import { controlCenter, Identifier, VersionedObject, FarImplementation, areEquals, Invocation, InvocationState, Invokable } from './core';
 import {DataSource} from '../../generated/aspects.interfaces';
+import '../../generated/aspect.server.interfaces';
+import '../../generated/aspect.impl.interfaces';
 
 DataSource.category('local', {
   /// category core 
@@ -8,20 +10,61 @@ DataSource.category('local', {
   }
 });
 
-/*
-interfaces.DataSource.category('db', {
-  /// far category db
-  query(q: {conditions: Conditions, scope?: Scope}): Promise<VersionedObject[]> {
-    return this.farPromise("_query", { conditions: q.conditions, scope: q.scope || [] }).then(i => i.result());
+DataSource.category('client_', {
+  query(this, request: { [k: string]: any }) {
+    // TODO: add some local checks
+    return this.farPromise('distantQuery', request);
   },
-  load(l: {objects: VersionedObject[], scope?: Scope}): Promise<VersionedObject[]> {
-    return this.farPromise("_load", { objects: l.objects, scope: l.scope || [] }).then(i => i.result());
+  load(this, w: {objects: VersionedObject[], scope: string[]}) {
+    // TODO: add some local checks
+    return this.farPromise('distantLoad', w);
   },
-  save(objects: VersionedObject[]): Promise<VersionedObject[]> { 
-    return this.farPromise("_save", objects).then(i => i.result());
-  },
+  save(this, objects: VersionedObject[]) {
+    // TODO: add some local checks
+    return this.farPromise('distantSave', objects);
+  }
 });
-*/
+
+DataSource.category('server_', {
+  distantQuery(this, request: { [k: string]: any }) {
+    // throw "TODO: generate request (request is an id + options)";
+    return this.farPromise('safeQuery', request);
+  },
+  distantLoad(this, w: {objects: VersionedObject[], scope: string[]}) {
+    // TODO: add some local checks
+    return this.farPromise('safeLoad', w);
+  },
+  distantSave(this, objects: VersionedObject[]) {
+    // TODO: add some local checks
+    return this.farPromise('safeSave', objects);
+  }
+});
+
+DataSource.category('safe', {
+  safeQuery(this, request: { [k: string]: any }) {
+    return this.farPromise('rawQuery', request);
+  },
+  safeLoad(this, w: {objects: VersionedObject[], scope: string[]}) {
+    return this.farPromise('rawLoad', w);
+  },
+  safeSave(this, objects: VersionedObject[]) {
+    return this.farPromise('rawSave', objects);
+  }
+});
+
+DataSource.category('raw', {
+  rawQuery(this, request: { [k: string]: any }) {
+    let sets = DataSourceInternal.parseRequest(<any>request);
+    return this.farPromise('implQuery', sets);
+  },
+  rawLoad(this, w: {objects: VersionedObject[], scope: string[]}) {
+    return this.farPromise('implLoad', w);
+  },
+  rawSave(this, objects: VersionedObject[]) {
+    return this.farPromise('implSave', objects);
+  }
+});
+
 export namespace DataSourceInternal {
   export class ObjectSet {
     name?: string = undefined;

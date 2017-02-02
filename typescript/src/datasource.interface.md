@@ -16,7 +16,7 @@ Filtre un ensemble d'objets d'après les conditions données.
 
 Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes implémentent des vérifications locales autour des appels distants (farCategory server_)
 
-#### query(q: dictionary): [0, *, VersionedObject]
+#### query(q: dictionary): { * :[0, *, VersionedObject]}
 
 #### load(l: {objects: [0, *, VersionedObject], scope: [0, *, string]}): [0, *, VersionedObject]
 
@@ -26,7 +26,7 @@ Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes imp
 
 Partie accessible depuis l'exterieur de la DataSource
 
-#### distantQuery(q: dictionary): [0, *, VersionedObject]
+#### distantQuery(q: dictionary): { * :[0, *, VersionedObject]}
 
 #### distantLoad(l: {objects: [0, *, VersionedObject], scope: [0, *, string]}): [0, *, VersionedObject]
 
@@ -36,7 +36,7 @@ Partie accessible depuis l'exterieur de la DataSource
 
 Partie accessible depuis le serveur qui implemente toutes les vérifications relatives à la cohérence et aux droits
 
-#### safeQuery(q: {conditions: dictionary, scope: [0, *, string]}): [0, *, VersionedObject]
+#### safeQuery(q: dictionary): { * :[0, *, VersionedObject]}
 query permet de récupérer des objets en posant une question et de les ramener en spécifiant les attributs à ramener pour chaque classe d'objets.
 Ex: ramener les Person dont le nom commence par A, en ramenant juste le nom.
 

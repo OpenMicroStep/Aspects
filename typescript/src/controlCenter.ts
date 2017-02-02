@@ -17,7 +17,7 @@ function classifiedType(type: ControlCenter.Type): ControlCenter.PrimaryType | '
   return 'object';
 }
 export type Identifier = string | number;
-export type FarImplementation<P, A, R> = ((this: P, arg: A) => R | Promise<R>);
+export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, arg: A) => R | Promise<R | Invocation<P, R>>);
 
 export interface AComponent {
 
