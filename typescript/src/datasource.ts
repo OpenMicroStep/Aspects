@@ -40,6 +40,32 @@ DataSource.category('server_', {
   }
 });
 
+async function validateConsistency(this: DataSource, objects: VersionedObject[]) {
+  // Let N be the number of objects
+  // Let M be the number of classes
+  // Let K be the number of attributes
+  // Let V be the number of validators
+  let ok = true;
+  let classes = new Set();
+  let attributes = new Set();
+  let validators = new Map<any/*Validator*/, any/*VersionnedObject*/[]>();
+  objects.forEach(o => classes.add(o.manager().aspect())); // O(N * log M)
+  classes.forEach(c => (c as any).attributesToLoad('consistency').forEach(a => attributes.add(a))); // O(M * log K)
+  await this.farPromise('rawLoad', { objects: objects, scope: Array.from(attributes) }); // O(K + N * K)
+  objects.forEach(o => (o as any).validateConsistency(/*reporter*/) || (ok = false)); // O(N)
+  objects.forEach(o => {
+    let v = (o as any).validatorsForGraphConsistency();
+    if (v)
+      v.forEach(v => {
+        let l = validators.get(v);
+        if (!l) validators.set(v, l = []);
+        l.push(o);
+      })
+  }); // O(N * V * log V)
+  validators.forEach((l, v) => v(/*reporter,*/ l) || (ok = false)); // O(V)
+  return ok;
+}
+
 DataSource.category('safe', {
   safeQuery(this, request: { [k: string]: any }) {
     return this.farPromise('rawQuery', request);
@@ -47,8 +73,11 @@ DataSource.category('safe', {
   safeLoad(this, w: {objects: VersionedObject[], scope: string[]}) {
     return this.farPromise('rawLoad', w);
   },
-  safeSave(this, objects: VersionedObject[]) {
-    return this.farPromise('rawSave', objects);
+  async safeSave(this, objects: VersionedObject[]) {
+    let ok = validateConsistency.call(this, objects);
+    if (ok)
+      return this.farPromise('rawSave', objects);
+    return Promise.reject(""/* reporter.diagnostics */);
   }
 });
 
