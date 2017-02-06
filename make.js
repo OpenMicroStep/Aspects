@@ -7,7 +7,6 @@ module.exports =  {
         "target": "es6",
         "declaration": true,
         "sourceMap": true,
-        "inlineSources": true,
         "moduleResolution": "node",
         "experimentalDecorators": true,
         "strictNullChecks": true,
@@ -20,8 +19,20 @@ module.exports =  {
   "test=": {
     is: 'component',
     components: ["=ts base"],
+    tsConfig: [{
+      "types": ["chai"]
+    }],
+    npmInstall: [{
+      "@types/chai": "^3.4.29",
+      "@microstep/tests": "^0.1.0"
+    }],
+    npmPackage: [{
+      "dependencies": {
+        "chai": "^3.5.0"
+      }
+    }]
   },
-  "js=": { 
+  "js=": {
     is: 'environment', 
     packager: "npm",
     components: ["=ts base"]
@@ -52,9 +63,14 @@ module.exports =  {
 
   "Files=": { is: 'group', elements: [
       { is: 'group', name: 'core', path: 'typescript/core/', elements: [
-        { is: 'file', name: 'src/core.ts', tags: ['tsc'] },
-        { is: 'file', name: 'src/datasource.interface.md', tags: ['interface'] },
-        { is: 'file', name: 'tst/core.spec.ts', tags: ['tst'] },
+        { is: 'group', name: 'src', path: 'src/', elements: [
+          { is: 'file', name: 'core.ts', tags: ['tsc'] },
+          { is: 'file', name: 'datasource.interface.md', tags: ['interface'] },
+        ]},
+        { is: 'group', name: 'tst', path: 'tst/', elements: [
+          { is: 'file', name: 'core.spec.ts', tags: ['tsc'] },
+          { is: 'file', name: 'resource.interface.md', tags: ['interface'] },
+        ]},
       ]},
       { is: 'group', name: 'transport.express', path: 'typescript/transport.express/src', elements: [
         { is: 'file', name: 'transport.express.ts', tags: ['tsc'] }
@@ -70,20 +86,17 @@ module.exports =  {
     "core=":  {
       is: 'target',
       outputName: "@microstep/aspects",
-      environments: ["=browser", "=node"],
-      files: ["=Files:core ? tsc"],
+      environments: ["=js"],
+      files: ["=Files:core:src ? tsc"],
       interfaces: [{ 
-        value: ["=Files:core ? interface"], 
-        aspect: "aspects_core",
-        customHeader: "import {VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
+        value: ["=Files:core:src ? interface"], 
+        customHeader: "import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
       }],
-      tsMain: "core.ts", 
-      packager: "npm",
       //tsConfig: [{ traceResolution: true }],
       npmPackage: [{
         "version": "0.1.3",
-        "main": "typescript/src/core.js",
-        "typings": "typescript/src/core.d.ts",
+        "main": "typescript/core/src/core.js",
+        "typings": "typescript/core/src/core.d.ts",
         "dependencies": {
           "@microstep/async": "^0.1.0",
           "ajv": "^4.9.0",
@@ -100,10 +113,11 @@ module.exports =  {
     "core.tests=":  {
       is: 'target',
       outputName: "@microstep/aspects.tests",
-      environments: ["=node"],
-      files: ["=Files:core ? tst"],
+      environments: ["=js"],
+      files: ["=Files:core:tst ? tsc"],
       targets: ["core"],
-      components: ["=::core::"],
+      components: ["=test", "=::core::"],
+      interfaces: ["=Files:core:tst ? interface"],
     },
     "express=": {
       is: 'target',

@@ -1,9 +1,9 @@
-import {controlCenter, ControlCenter, Identifier, areEquals, Invocation, Invokable} from './core';
+import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, createAspect} from './core';
 import { Flux } from '@microstep/async';
 import {MSTE} from '@microstep/mstools';
 
 export type VersionedObjectAttributes = Map<string, any>;
-export class VersionedObjectManager<VersionedObject> {
+export class VersionedObjectManager<T extends VersionedObject> {
   static NoVersion = -1;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
   static SafeMode = true;
@@ -13,68 +13,30 @@ export class VersionedObjectManager<VersionedObject> {
   }
 
   _id: Identifier;
-  _object: VersionedObject | null;
   _controlCenter: ControlCenter;
-  _aspect: ControlCenter.InstalledAspect;
   _localAttributes: VersionedObjectAttributes;
   _oldVersion: number;
   _oldVersionAttributes: VersionedObjectAttributes;
   _version: number;
   _versionAttributes: VersionedObjectAttributes;
+  _aspect: Aspect.Installed;
 
-  constructor(controlCenter: ControlCenter, object: VersionedObject) {
+  constructor(controlCenter: ControlCenter, aspect: Aspect.Installed) {
     this._controlCenter = controlCenter;
-    this._aspect = controlCenter.aspect(<ControlCenter.Implementation>object.constructor);
     this._id = `_localid:${++VersionedObjectManager.LocalIdCounter}`;
     this._oldVersion = VersionedObjectManager.NoVersion;
     this._oldVersionAttributes = new Map<string, any>();
     this._version = VersionedObjectManager.NoVersion;
     this._versionAttributes = new Map<string, any>();
     this._localAttributes = new Map<string, any>();
-    this._object = object;
-
-    Object.defineProperty(object, '_id', {
-      enumerable: true,
-      get: () => { return this._id; },
-      set: (value) => {
-        if (VersionedObjectManager.isLocalId(value))
-          throw new Error(`cannot change identifier to a local identifier`);
-        if (!VersionedObjectManager.isLocalId(this._id)) 
-          throw new Error(`cannot real identifier to another identifier`);
-        this._id = value; // local -> real id (ie. object _id attribute got loaded)
-      }
-    });
-    Object.defineProperty(object, '_version', {
-      enumerable: true,
-      get: () => { return this._version; },
-      set: (value) => {
-        if (this._version !== VersionedObjectManager.NoVersion)
-          throw new Error(`Cannot change object version directly`); 
-        this._version = value; 
-      }
-    });
-    for (let attr of this._aspect.attributes) {
-      Object.defineProperty(object, attr.name, {
-        enumerable: true,
-        get: () => {
-          return this.attributeValue(attr.name);
-        },
-        set: (value) => {
-          if (VersionedObjectManager.SafeMode && !attr.validator(value))
-            throw new Error(`attribute value is invalid`);
-          if (ControlCenter.isVersionedObjectType(attr))
-            value = controlCenter.registeredObject(value.id()) || value; // value will be merged later
-          this.setAttributeValue(attr.name, value);
-        }
-      });
-    }
+    this._aspect = aspect;
   }
 
   id()     : Identifier { return this._id; }
   version(): number { return this._localAttributes.size > 0 ? VersionedObjectManager.NextVersion : this._version; }
+  controlCenter() { return this._controlCenter; }
   name() { return this._aspect.name; }
   aspect() { return this._aspect; }
-  controlCenter() { return this._controlCenter; }
 
   initWithMSTEDictionary(d) {
     this._id = d._id;
@@ -85,21 +47,21 @@ export class VersionedObjectManager<VersionedObject> {
       this._versionAttributes.set(k, d._versionAttributes[k]);
   }
 
-  diff() : VersionedObject {
+  diff() : VersionedObjectSnapshot<T> {
     let ret = new VersionedObjectSnapshot(this);
     this._localAttributes.forEach((v, k) => {
       ret._localAttributes[k] = v;
       if (this._versionAttributes.has(k))
         ret._versionAttributes[k] = this._versionAttributes.get(k);
     });
-    return <VersionedObject><any>ret;
+    return ret;
   }
 
-  snapshot() : VersionedObject {
+  snapshot() : VersionedObjectSnapshot<T> {
     let ret = new VersionedObjectSnapshot(this);
     this._versionAttributes.forEach((v, k) => ret._versionAttributes[k] = v);
     this._localAttributes.forEach((v, k) => ret._localAttributes[k] = v);
-    return <VersionedObject><any>ret;
+    return ret;
   }
   
   attributeValue(attribute: string) {
@@ -133,7 +95,7 @@ export class VersionedObjectManager<VersionedObject> {
     this._version = version;
   }
 
-  mergeWithRemote(manager: VersionedObjectManager<VersionedObject>) {
+  mergeWithRemote(manager: VersionedObjectManager<T>) {
     this.mergeWithRemoteAttributes(manager._versionAttributes, manager._version);
   }
 
@@ -170,37 +132,34 @@ export class VersionedObjectManager<VersionedObject> {
   }
 }
 
-var constructedObjects: VersionedObject[] | null = null;
-
 export class VersionedObject implements MSTE.Decodable {
-  static createManager: <T extends VersionedObject>(object: T) => VersionedObjectManager<T> = controlCenter.managerFactory();
-
-  static willConstructObjects(constructor: () => void, createManager?: <T extends VersionedObject>(object: T) => VersionedObjectManager<T>) {
-    let cm = VersionedObject.createManager;
-    let ret = constructedObjects = [];
-    VersionedObject.createManager = createManager || cm;
-    constructor();
-    constructedObjects = null;
-    VersionedObject.createManager = cm;
-    return ret;
-  }
-
-  static extends(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): VersionedObjectConstructor<VersionedObject> {
-    return class extends cstor {
+  static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
+    return <any>class extends cstor {
+      static definition = definition;
       static category(name: string, implementation: any) {
         Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
       }
+      static installAspect(on: ControlCenter, name: string): { new(): VersionedObject } {
+        return createAspect(on, name, this);
+      }
     }
   }
+
+  static definition: Aspect.Definition = {
+    name: "VersionedObject",
+    version: 0,
+    attributes: [],
+    categories: [],
+    farCategories: [],
+    aspects: []
+  };
 
   __manager: VersionedObjectManager<this>;
   _id: Identifier;
   _version: number;
 
-  constructor() {
-    this.__manager = VersionedObject.createManager(this); // this will fill _id and _version attributes
-    if (constructedObjects)
-      constructedObjects.push(this);
+  constructor(manager: VersionedObjectManager<any>) {
+    this.__manager = manager; // this will fill _id and _version attributes
   }
 
   initWithMSTEDictionary(d) {
@@ -234,14 +193,14 @@ export class VersionedObject implements MSTE.Decodable {
   }
 }
 
-class VersionedObjectSnapshot<VersionedObject> {
+export class VersionedObjectSnapshot<T extends VersionedObject> {
   __cls: string;
   _id: Identifier;
   _version: number;
   _localAttributes: { [s: string]: any };
   _versionAttributes: { [s: string]: any };
 
-  constructor(o: VersionedObjectManager<VersionedObject>) {
+  constructor(o: VersionedObjectManager<T>) {
     Object.defineProperty(this, '__cls', {
       enumerable: false, value: o.name()
     });
@@ -256,5 +215,6 @@ class VersionedObjectSnapshot<VersionedObject> {
 }
 
 export interface VersionedObjectConstructor<C extends VersionedObject> {
-    new(): C;
+    new(manager: VersionedObjectManager<C>): C;
+    definition: Aspect.Definition;
 }

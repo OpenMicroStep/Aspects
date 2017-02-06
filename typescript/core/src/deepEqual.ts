@@ -47,7 +47,7 @@ addIsEqualSupport(Date, isEqualDate);
 
 export function addIsEqualSupport<T>(clazz: { new (...args): T }, impl: (this: T, other, level?: number) => boolean) {
   if (!clazz.prototype.isEqual)
-    Object.defineProperty(clazz, 'isEqual', {
+    Object.defineProperty(clazz.prototype, 'isEqual', {
         enumerable: false,
         configurable: true,
         writable: true,
