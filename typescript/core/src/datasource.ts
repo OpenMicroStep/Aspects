@@ -1,16 +1,14 @@
 import { controlCenter, Identifier, VersionedObject, FarImplementation, areEquals, Invocation, InvocationState, Invokable } from './core';
-import {DataSource} from '../../generated/aspects.interfaces';
-import '../../generated/aspect.server.interfaces';
-import '../../generated/aspect.impl.interfaces';
+import {DataSource} from '../../../generated/aspects.interfaces';
 
-DataSource.category('local', {
+DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
   /// category core 
   filter(this, objects: VersionedObject[], arg1) {
     return DataSourceInternal.applyWhere(arg1, objects);
   }
 });
 
-DataSource.category('client_', {
+DataSource.category('client_', <DataSource.ImplCategories.client_<DataSource.Categories.server_>>{
   query(this, request: { [k: string]: any }) {
     // TODO: add some local checks
     return this.farPromise('distantQuery', request);
@@ -25,7 +23,7 @@ DataSource.category('client_', {
   }
 });
 
-DataSource.category('server_', {
+DataSource.category('server_', <DataSource.ImplCategories.server_<DataSource.Categories.safe>>{
   distantQuery(this, request: { [k: string]: any }) {
     // throw "TODO: generate request (request is an id + options)";
     return this.farPromise('safeQuery', request);
@@ -40,11 +38,11 @@ DataSource.category('server_', {
   }
 });
 
-async function validateConsistency(this: DataSource, objects: VersionedObject[]) {
-  // Let N be the number of objects
-  // Let M be the number of classes
+async function validateConsistency(this: DataSource, reporter: any/*Reporter*/, objects: VersionedObject[]) {
+  // Let N be the number of objects (we may want if N = 1000, this method to took less than 100ms)
+  // Let M be the number of classes (M range should be mostly in [1 - 10])
   // Let K be the number of attributes
-  // Let V be the number of validators
+  // Let V be the number of validators (V range should be mostly in [1 - 5])
   let ok = true;
   let classes = new Set();
   let attributes = new Set();
@@ -52,7 +50,7 @@ async function validateConsistency(this: DataSource, objects: VersionedObject[])
   objects.forEach(o => classes.add(o.manager().aspect())); // O(N * log M)
   classes.forEach(c => (c as any).attributesToLoad('consistency').forEach(a => attributes.add(a))); // O(M * log K)
   await this.farPromise('rawLoad', { objects: objects, scope: Array.from(attributes) }); // O(K + N * K)
-  objects.forEach(o => (o as any).validateConsistency(/*reporter*/) || (ok = false)); // O(N)
+  objects.forEach(o => (o as any).validateConsistency(reporter) || (ok = false)); // O(N)
   objects.forEach(o => {
     let v = (o as any).validatorsForGraphConsistency();
     if (v)
@@ -62,11 +60,13 @@ async function validateConsistency(this: DataSource, objects: VersionedObject[])
         l.push(o);
       })
   }); // O(N * V * log V)
-  validators.forEach((l, v) => v(/*reporter,*/ l) || (ok = false)); // O(V)
-  return ok;
+  validators.forEach((l, v) => v(reporter, l) || (ok = false)); // O(V)
+  return ok; 
+  // O(N * (log M + K + V * log V + 1) + M * log K + K + V) this is quite heavy
+  // perfect O= O(N * (K + V)) this is quite heavy
 }
 
-DataSource.category('safe', {
+DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.raw>>{
   safeQuery(this, request: { [k: string]: any }) {
     return this.farPromise('rawQuery', request);
   },
@@ -74,14 +74,14 @@ DataSource.category('safe', {
     return this.farPromise('rawLoad', w);
   },
   async safeSave(this, objects: VersionedObject[]) {
-    let ok = validateConsistency.call(this, objects);
+    let ok = validateConsistency.call(this, null /* reporter*/, objects);
     if (ok)
       return this.farPromise('rawSave', objects);
     return Promise.reject(""/* reporter.diagnostics */);
   }
 });
 
-DataSource.category('raw', {
+DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.implementation>>{
   rawQuery(this, request: { [k: string]: any }) {
     let sets = DataSourceInternal.parseRequest(<any>request);
     return this.farPromise('implQuery', sets);

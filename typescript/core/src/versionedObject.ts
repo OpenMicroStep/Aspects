@@ -185,8 +185,12 @@ export class VersionedObject implements MSTE.Decodable {
     return ret;
   }
 
-  static addCategory<C extends { new(): T }, T extends VersionedObject>(cstor: C, name: string, implementation: { [s: string]: (this: T, ...args: any[]) => any }) {
-    Object.keys(implementation).forEach(k => cstor.prototype[k] = implementation[k]);
+  static extends(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): VersionedObjectConstructor<VersionedObject> {
+    return class extends cstor {
+      static category(name: string, implementation: any) {
+        Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
+      }
+    }
   }
 
   __manager: VersionedObjectManager<this>;
@@ -249,4 +253,8 @@ class VersionedObjectSnapshot<VersionedObject> {
   encodeToMSTE(encoder /*: MSTE.Encoder*/) {
     encoder.encodeDictionary(this, this.__cls);
   }
+}
+
+export interface VersionedObjectConstructor<C extends VersionedObject> {
+    new(): C;
 }

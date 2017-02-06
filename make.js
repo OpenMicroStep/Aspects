@@ -17,12 +17,16 @@ module.exports =  {
         "lib": ["es6"]
     }]
   },
-  "ts=": { 
+  "test=": {
+    is: 'component',
+    components: ["=ts base"],
+  },
+  "js=": { 
     is: 'environment', 
     packager: "npm",
     components: ["=ts base"]
   },
-  "node=": { 
+  "node=": {
     is: 'environment', 
     packager: "npm",
     components: ["=ts base"],
@@ -33,7 +37,7 @@ module.exports =  {
     npmInstall: [{
       "@types/node": "^4.0.30"
     }],
-    compatibleEnvironments: ["ts"],
+    compatibleEnvironments: ["js"],
   },
   "browser=": { 
     is: 'environment', 
@@ -41,18 +45,25 @@ module.exports =  {
     components: ["=ts base"],
     tsConfig: [{
       "module": "commonjs",
-      "lib": ["es6", "dom"]
+      "lib": ["dom"]
     }],
-    compatibleEnvironments: ["ts"],
+    compatibleEnvironments: ["js"],
   },
 
   "Files=": { is: 'group', elements: [
-      { is: 'group', name: 'typescript', path: 'typescript/src/', elements: [
-        { is: 'file', name: 'core.ts', tags: ['core'] },
-        { is: 'file', name: 'datasource.interface.md', tags: ['core.interface'] },
-        { is: 'file', name: 'transport.express.ts', tags: ['express'] },
-        { is: 'file', name: 'transport.xhr.ts', tags: ['client'] },
-        { is: 'file', name: 'datasource.sequelize.ts', tags: ['sequelize'] }
+      { is: 'group', name: 'core', path: 'typescript/core/', elements: [
+        { is: 'file', name: 'src/core.ts', tags: ['tsc'] },
+        { is: 'file', name: 'src/datasource.interface.md', tags: ['interface'] },
+        { is: 'file', name: 'tst/core.spec.ts', tags: ['tst'] },
+      ]},
+      { is: 'group', name: 'transport.express', path: 'typescript/transport.express/src', elements: [
+        { is: 'file', name: 'transport.express.ts', tags: ['tsc'] }
+      ]},
+      { is: 'group', name: 'transport.xhr', path: 'typescript/transport.xhr/src', elements: [
+        { is: 'file', name: 'transport.xhr.ts', tags: ['tsc'] }
+      ]},
+      { is: 'group', name: 'datasource.sequelize', path: 'typescript/datasource.sequelize/src', elements: [
+        { is: 'file', name: 'datasource.sequelize.ts', tags: ['tsc'] }
       ]}
   ]},
   "typescript targets=": { is: 'group',
@@ -60,11 +71,11 @@ module.exports =  {
       is: 'target',
       outputName: "@microstep/aspects",
       environments: ["=browser", "=node"],
-      files: ["=Files:typescript ? core"],
+      files: ["=Files:core ? tsc"],
       interfaces: [{ 
-        value: ["=Files:typescript ? core.interface"], 
+        value: ["=Files:core ? interface"], 
         aspect: "aspects_core",
-        customHeader: "import {controlCenter, VersionedObject, FarImplementation, Invocation, DataSourceInternal} from '../typescript/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
+        customHeader: "import {VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
       }],
       tsMain: "core.ts", 
       packager: "npm",
@@ -86,13 +97,21 @@ module.exports =  {
         "@microstep/mstools": "^1.0.2"
       }]
     },
+    "core.tests=":  {
+      is: 'target',
+      outputName: "@microstep/aspects.tests",
+      environments: ["=node"],
+      files: ["=Files:core ? tst"],
+      targets: ["core"],
+      components: ["=::core::"],
+    },
     "express=": {
       is: 'target',
       outputName: "@microstep/aspects.express",
       targets: ["core"],
-      components: ["=core"],
+      components: ["=::core::"],
       environments: ["=node"],
-      files: ["=Files:typescript ? express"],
+      files: ["=Files:transport.express ? tsc"],
       npmPackage: [{
         "version": "0.2.0",
         "main": "transport.express.js",
@@ -111,9 +130,9 @@ module.exports =  {
       is: 'target',
       outputName: "@microstep/aspects.sequelize",
       targets: ["core"],
-      components: ["=core"],
+      components: ["=::core::"],
       environments: ["=node"],
-      files: ["=Files:typescript ? sequelize"],
+      files: ["=Files:datasource.sequelize ? tsc"],
       npmPackage: [{
         "version": "0.2.0",
         "main": "datasource.sequelize.js",
@@ -137,9 +156,9 @@ module.exports =  {
         "@microstep/mstools": "^1.0.2"
       }],
       targets: ["core"],
-      components: ["=core"],
+      components: ["=::core::"],
       environments: ["=browser"],
-      files: ["=Files:typescript ? client"],
+      files: ["=Files:transport.xhr ? tsc"],
     }
   }
 };
