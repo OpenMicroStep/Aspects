@@ -25,22 +25,10 @@ function classifiedType(type: Aspect.Type): Aspect.PrimaryType | 'entity' {
   return 'object';
 }
 
-interface VersionedObjectConstructorCache extends VersionedObjectConstructor<VersionedObject> {
-   aspect: Aspect.Installed;
-}
-const cachedAspects = new Map<string, VersionedObjectConstructorCache>();
 export function createAspect(on: ControlCenter, name: string, implementation: VersionedObjectConstructor<VersionedObject>) : { new(): VersionedObject } {
-  let key = JSON.stringify([implementation.definition.name, implementation.definition.version, name]);
-  let tmp = cachedAspects.get(key);
-  if (!tmp) {
-    tmp = class extends implementation {
-      static aspect: Aspect.Installed; 
-    };
-    tmp.aspect = installAspect(name, on, tmp, implementation);
-    cachedAspects.set(key, tmp);
-  }
+  let tmp = cachedAspect(name, implementation);
   let aspect = tmp.aspect;
-  return class extends tmp {
+  return class InstalledAspect extends tmp {
     constructor() {
       super(new VersionedObjectManager(on, aspect));
     }
@@ -113,105 +101,144 @@ const localTransport = {
   }
 }
 
-function installAspect(aspect: string, cc: ControlCenter, on: VersionedObjectConstructor<VersionedObject>, from: VersionedObjectConstructor<VersionedObject>) : Aspect.Installed {
-  let definition = from.definition;
-  let aspectEl = from.definition.aspects.find(a => a.name === aspect);
-  let farMethods = new Map<string, Aspect.InstalledFarMethod>();
-  if (!aspectEl)
-    throw new Error(`aspect ${aspect} not found in ${definition.name}`);
-  function assertFound<T>(name: string, c: T | undefined) : T {
-    if (!c)
-      throw new Error(`category ${name} not found in ${definition.name}`);
-    return c;
-  }
+interface VersionedObjectConstructorCache extends VersionedObjectConstructor<VersionedObject> {
+   aspect: Aspect.Installed;
+}
+const installedAttributesOnImpl = new Map<VersionedObjectConstructor<VersionedObject>, Aspect.InstalledAttribute[]>();
+const cachedAspects = new Map<string, VersionedObjectConstructorCache>();
+const cachedCategories = new Map<string, Map<string, Function | Aspect.InstalledFarMethod>>();
 
-  // Install getter/setter forwarding to the manager
-  Object.defineProperty(on.prototype, '_id', {
-    enumerable: true,
-    get(this: VersionedObject) { return this.__manager._id; },
-    set(this: VersionedObject, value) {
-      if (this.__manager._id === value)
-        return;
-      if (VersionedObjectManager.isLocalId(value))
-        throw new Error(`cannot change identifier to a local identifier`);
-      if (!VersionedObjectManager.isLocalId(this.__manager._id)) 
-        throw new Error(`id can't be modified once assigned (not local)`);
-      this.__manager._id = value; // local -> real id (ie. object _id attribute got loaded)
-    }
-  });
-  Object.defineProperty(on.prototype, '_version', {
-    enumerable: true,
-    get(this: VersionedObject) { return this.__manager._version; },
-    set(this: VersionedObject, value) {
-      if (this.__manager._version !== VersionedObjectManager.NoVersion)
-        throw new Error(`Cannot change object version directly`); 
-      this.__manager._version = value; 
-    }
-  });
-  let attributes = definition.attributes.map(attribute => {
-    let isEntity = classifiedType(attribute.type) === "entity";
-    let validator = createValidator(attribute.type);
-    let name = attribute.name;
-    Object.defineProperty(on.prototype, name, {
-      enumerable: true,
-      get(this: VersionedObject) { return this.__manager.attributeValue(name) },
-      set(this: VersionedObject, value) {
-        if (VersionedObjectManager.SafeMode && !validator(value))
-          throw new Error(`attribute value is invalid`);
-        if (isEntity)
-          value = cc.registeredObject(value.id()) || value; // value will be merged later
-        this.__manager.setAttributeValue(name, value);
-      }
-    });
-    return {
-      name: attribute.name,
-      validator: validator,
-      type: attribute.type
+function cachedAspect(name: string, implementation: VersionedObjectConstructor<VersionedObject>) : VersionedObjectConstructorCache {
+  let key = JSON.stringify([implementation.definition.name, implementation.definition.version, name]);
+  let tmp = cachedAspects.get(key);
+  if (!tmp) {
+    tmp = class CachedAspect extends implementation {
+      static aspect: Aspect.Installed = {
+        name: implementation.definition.name,
+        version: implementation.definition.version,
+        aspect: name,
+        attributes: installAttributes(implementation),
+        farMethods: new Map()
+      };
     };
-  });
-  
-  // Install local impl protections
-  aspectEl.categories
-  .map(c => assertFound(c, definition.categories.find(cel => cel.name === c) || definition.farCategories.find(cel => cel.name === c)))
-  .forEach(c => {
-    c.methods.forEach(m => {
-      let ret = Object.assign({}, m, {
-        argumentValidators: m.argumentTypes.map(t => createValidator(t)),
-        returnValidator: createValidator(m.returnType),
-        transport: localTransport
-      });
-      if (c.is === 'farCategory') {
-        farMethods.set(m.name, ret);
-      }
-      else {
-        let localImpl = localImplInPrototype(from.prototype, m);
-        protectLocalImpl(on.prototype, ret, localImpl);
-      }
-    });
-  });
+    installAspect(name, tmp, implementation);
+    cachedAspects.set(key, tmp);
+  }
+  return tmp;
+}
 
-  // Install far impl protections
-  aspectEl.farCategories
-  .map(c => assertFound(`far:${c}`, definition.farCategories.find(cel => cel.name === c)))
-  .forEach(c => {
-    c.methods.forEach(m => {
-      let ret = Object.assign({}, m, {
-        argumentValidators: m.argumentTypes.map(t => createValidator(t)),
-        returnValidator: createValidator(m.returnType),
+function cachedCategory(categoryName: string, from: VersionedObjectConstructor<VersionedObject>) {
+  let key = JSON.stringify([from.definition.name, categoryName]);
+  let tmp = cachedCategories.get(key);
+  if (!tmp) {
+    cachedCategories.set(key, tmp = buildCategoryCache(categoryName, from));
+  }
+  return tmp;
+}
+
+function buildMethodList(categoryName: string, from: VersionedObjectConstructor<VersionedObject>, map = new Map<string, Aspect.Method>()) : ['far' | 'local' | undefined, Map<string, Aspect.Method>] {
+  let r: ['far' | 'local' | undefined, Map<string, Aspect.Method>];
+  r = from.parent ? buildMethodList(categoryName, from.parent, map) : [undefined, map];
+  let definition = from.definition;
+  let category = definition.categories.find(cel => cel.name === categoryName) || definition.farCategories.find(cel => cel.name === categoryName);
+  if (category) {
+    let type = r[0];
+    if (type === undefined)
+      type = category.is === "farCategory" ? 'far' : 'local';
+    else if ((type === 'far') !== (category.is === "farCategory"))
+      throw new Error(`category '${category.name}' is already defined as ${type} by subclasses`);
+    category.methods.forEach(method => { map.set(method.name, method); });
+  }
+  return r;
+}
+function buildCategoryCache(categoryName: string, from: VersionedObjectConstructor<VersionedObject>): Map<string, Function | Aspect.InstalledFarMethod> {
+  let ret = new Map<string, Function | Aspect.InstalledFarMethod>();
+  let list = buildMethodList(categoryName, from);
+  let isFar = list[0] === "far";
+  list[1].forEach(method => {
+    if (isFar) {
+      let farMethod = Object.assign({}, method, {
+        argumentValidators: method.argumentTypes.map(t => createValidator(t)),
+        returnValidator: createValidator(method.returnType),
         transport: farTransportStub
       });
-      farMethods.set(m.name, ret)
-    });
+      ret.set(method.name, farMethod)
+    }
+    else {
+      let argumentValidators = method.argumentTypes.map(t => createValidator(t));
+      let returnValidator = createValidator(method.returnType);
+      let localImpl = from.prototype[method.name];
+      if (typeof localImpl !== "function")
+        throw new Error(`implementation of local method ${method.name} must be a function, got ${typeof localImpl}`);
+      if (localImpl.length !== method.argumentTypes.length && localImpl.name) 
+        throw new Error(`arguments count in implementation of local method ${method.name} doesn't match interface definition: ${localImpl.length} !== ${method.argumentTypes.length}`);
+      ret.set(method.name, localImpl); //protectLocalImpl(localImpl, argumentValidators, returnValidator));
+    }
   });
-
-  return {
-    name: definition.name,
-    version: definition.version,
-    aspect: aspect,
-    attributes: attributes,
-    farMethods: farMethods
-  };
+  return ret;
 }
+function installCategoryCache(cache: Map<string, Function | Aspect.InstalledFarMethod>, on: VersionedObjectConstructorCache, allowLocal: boolean) {
+  cache.forEach((i, m) => {
+    if (typeof i === "function") {
+      if (allowLocal)
+        on.prototype[m] = i;
+      else
+        throw new Error(`method ${m}`)
+    }
+    else
+      on.aspect.farMethods.set(m, i);
+  })
+}
+function installAttributes(from: VersionedObjectConstructor<VersionedObject>): Aspect.InstalledAttribute[] {
+  let attributes = installedAttributesOnImpl.get(from);
+  if (!attributes) {
+    attributes = from.parent ? installAttributes(from.parent).slice(0) : [];
+    from.definition.attributes.forEach(attribute => {
+      let isEntity = classifiedType(attribute.type) === "entity";
+      let validator = createValidator(attribute.type);
+      let name = attribute.name;
+      Object.defineProperty(from.prototype, name, {
+        enumerable: true,
+        get(this: VersionedObject) { return this.__manager.attributeValue(name) },
+        set(this: VersionedObject, value) {
+          if (VersionedObjectManager.SafeMode && !validator(value))
+            throw new Error(`attribute value is invalid`);
+          if (isEntity)
+            value = this.__manager._controlCenter.registeredObject(value.id()) || value; // value will be merged later
+          this.__manager.setAttributeValue(name, value);
+        }
+      });
+      attributes!.push({
+        name: attribute.name,
+        validator: validator,
+        type: attribute.type
+      });
+    });
+    installedAttributesOnImpl.set(from, attributes);
+  }
+  return attributes;
+}
+function installAspect(aspectName: string, on: VersionedObjectConstructorCache, from: VersionedObjectConstructor<VersionedObject>) {
+  function assertFound<T>(what: string, where: string, name: string, c: T | undefined) : T {
+    if (!c)
+      throw new Error(`${what} ${name} not found in ${where}`);
+    return c;
+  }
+  function install(from: VersionedObjectConstructor<VersionedObject>) {
+    if (from.parent)
+      install(from.parent);
+
+    let definition = from.definition;
+    aspect.categories.forEach(c => installCategoryCache(cachedCategory(c, from), on, true));
+    aspect.farCategories.forEach(c => installCategoryCache(cachedCategory(c, from), on, false));
+  }
+
+  let aspect = assertFound('aspect', from.definition.name, aspectName, from.definition.aspects.find(a => a.name === aspectName));
+  let farMethods = on.aspect.farMethods;
+  
+  install(from);
+}
+  
 /*
 function installPublicMethod(cc: ControlCenter, aspect: Aspect.Installed, publicMethod: Aspect.InstalledFarMethod, transport: PublicTransport) {
   let prototype = aspect.implementation.prototype;
@@ -225,19 +252,16 @@ function createValidator(type: Aspect.Type) : Aspect.TypeValidator {
   return <Aspect.TypeValidator>ajv.compile(jsonSchema);
 }
 
-function protectLocalImpl(prototype, localMethod: Aspect.InstalledMethod, localImpl: (...args) => any) {
-  let argumentValidators = localMethod.argumentValidators;
-  let returnValidator = localMethod.returnValidator;
-  let protectedImpl = function protectedLocalImpl(this) {
-      for (var i = 0, len = argumentValidators.length; i < len; i++)
-        if (!argumentValidators[i](arguments[i]))
-          throw new Error(`argument ${i} is invalid`);
-      var ret = localImpl.apply(this, arguments);
-      if (!returnValidator(ret))
-        throw new Error(`return value is invalid`);
-      return ret;
-    }
-  return prototype[localMethod.name] = protectedImpl;
+function protectLocalImpl(localImpl: (...args) => any, argumentValidators: Aspect.TypeValidator[], returnValidator: Aspect.TypeValidator) {
+  return function protectedLocalImpl(this) {
+    for (var i = 0, len = argumentValidators.length; i < len; i++)
+      if (!argumentValidators[i](arguments[i]))
+        throw new Error(`argument ${i} is invalid`);
+    var ret = localImpl.apply(this, arguments);
+    if (!returnValidator(ret))
+      throw new Error(`return value is invalid`);
+    return ret;
+  }
 }
 
 function fastSafeCallMap(ret): Promise<any> {
@@ -292,15 +316,6 @@ function protectPublicImpl(prototype, farMethod: Aspect.InstalledMethod, farImpl
         return (!returnValidator || returnValidator(ret)) ? Promise.resolve(ret) : Promise.reject(`return value is invalid`);
       });
     };
-}
-
-function localImplInPrototype(prototype, localMethod: Aspect.Method) {
-  let localImpl = <(...args) => any>prototype[localMethod.name];
-  if (typeof localImpl !== "function")
-    throw new Error(`implementation of local method ${localMethod.name} must be a function, got ${typeof localImpl}`);
-  if (localImpl.length !== localMethod.argumentTypes.length && localImpl.name) 
-    throw new Error(`arguments count in implementation of local method ${localMethod.name} doesn't match interface definition: ${localImpl.length} !== ${localMethod.argumentTypes.length}`);
-  return localImpl;
 }
 
 function convertTypeToJsonSchema(type: Aspect.Type): any {

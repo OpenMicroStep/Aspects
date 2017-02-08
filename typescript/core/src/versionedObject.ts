@@ -135,15 +135,21 @@ export class VersionedObjectManager<T extends VersionedObject> {
 export class VersionedObject implements MSTE.Decodable {
   static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
     return <any>class extends cstor {
+      static parent = cstor;
       static definition = definition;
-      static category(name: string, implementation: any) {
+      static category(name: string, implementation: any, on?: VersionedObjectConstructor<VersionedObject>) {
+        on = on || this;
         Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
       }
       static installAspect(on: ControlCenter, name: string): { new(): VersionedObject } {
         return createAspect(on, name, this);
       }
+      static __c() {}
+      static __i() {}
     }
   }
+
+  static parent = undefined;
 
   static definition: Aspect.Definition = {
     name: "VersionedObject",
@@ -192,6 +198,28 @@ export class VersionedObject implements MSTE.Decodable {
     };
   }
 }
+Object.defineProperty(VersionedObject.prototype, '_id', {
+    enumerable: true,
+    get(this: VersionedObject) { return this.__manager._id; },
+    set(this: VersionedObject, value) {
+      if (this.__manager._id === value)
+        return;
+      if (VersionedObjectManager.isLocalId(value))
+        throw new Error(`cannot change identifier to a local identifier`);
+      if (!VersionedObjectManager.isLocalId(this.__manager._id)) 
+        throw new Error(`id can't be modified once assigned (not local)`);
+      this.__manager._id = value; // local -> real id (ie. object _id attribute got loaded)
+    }
+  });
+  Object.defineProperty(VersionedObject.prototype, '_version', {
+    enumerable: true,
+    get(this: VersionedObject) { return this.__manager._version; },
+    set(this: VersionedObject, value) {
+      if (this.__manager._version !== VersionedObjectManager.NoVersion)
+        throw new Error(`Cannot change object version directly`); 
+      this.__manager._version = value; 
+    }
+  });
 
 export class VersionedObjectSnapshot<T extends VersionedObject> {
   __cls: string;
@@ -217,4 +245,5 @@ export class VersionedObjectSnapshot<T extends VersionedObject> {
 export interface VersionedObjectConstructor<C extends VersionedObject> {
     new(manager: VersionedObjectManager<C>): C;
     definition: Aspect.Definition;
+    parent?: VersionedObjectConstructor<VersionedObject>;
 }
