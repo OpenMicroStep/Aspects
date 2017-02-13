@@ -99,8 +99,18 @@ export namespace DataSourceInternal {
     name?: string = undefined;
     scope?: string[] = undefined;
     sort?: string[] = undefined;
-    constraints: Constraint[] = [];
-    path?: string[] = undefined;
+    constraintsOnType: ConstraintOnType[] = []; // InstanceOf, MemberOf, ElementOf, Union, In
+    constraintsOnValue: ConstraintOnValue[] = [];
+    constraintsBetweenSet: ConstraintBetweenSet[] = [];
+
+    filter(objects: VersionedObject[]): VersionedObject[] {
+      return objects.filter(o => this.pass(o));
+    }
+    
+    pass(object: VersionedObject): boolean {
+      return this.constraintsOnType.every(c => c.pass(object)) &&
+             this.constraintsOnValue.every(c => c.pass(c.attribute ? object[c.attribute] : object, c.value));
+    }
   }
 
   export enum ConstraintType {
@@ -111,39 +121,14 @@ export namespace DataSourceInternal {
     LessThan,
     LessThanOrEqual,
     Text,
-    In = 10,
     NotIn,
-    Union,
     Exists,
-    InstanceOf = 20,
+    In = 20,
+    Union,
+    InstanceOf,
     MemberOf,
+    ElementOf,
     CustomStart = 100 // The first 100 ([0-99]) are reserved
-  }
-
-  function passConstraint(type: ConstraintType, left, right) {
-    switch(type) {
-      case ConstraintType.Equal: return left === right;
-      case ConstraintType.NotEqual: return left !== right;
-      case ConstraintType.GreaterThan: return left > right;
-      case ConstraintType.GreaterThanOrEqual: return left >= right;
-      case ConstraintType.LessThan: return left < right;
-      case ConstraintType.LessThanOrEqual: return left <= right;
-      case ConstraintType.Text: {
-        if (left instanceof VersionedObject && typeof right === "string") {
-          let manager = left.manager();
-          return manager.aspect().attributes.some(a => right.indexOf(`${manager.attributeValue(a.name)}`) !== -1);
-        }
-        return false;
-      }
-      case ConstraintType.In: return Array.isArray(right) && right.indexOf(left) !== -1;
-      case ConstraintType.NotIn: return Array.isArray(right) && right.indexOf(left) === -1;
-      case ConstraintType.Exists: {
-        return right !== undefined && (!Array.isArray(right) || right.length > 0);
-      }
-      case ConstraintType.InstanceOf: return left instanceof right;
-      case ConstraintType.MemberOf: return left.constructor === right.constructor;
-    }
-    return false;
   }
 
   export abstract class Constraint {
@@ -152,15 +137,58 @@ export namespace DataSourceInternal {
     constructor(type: ConstraintType, set: ObjectSet, attribute: string | undefined) {
       this.type = type;
       this.attribute = attribute;
-      set.constraints.push(this);
     }
   }
-
   export class ConstraintOnValue extends Constraint {
     value: any;
     constructor(type: ConstraintType, set: ObjectSet, attribute: string | undefined, value: any) {
       super(type, set, attribute);
       this.value = value;
+      set.constraintsOnValue.push(this);
+    }
+    pass(left, right) {
+      switch(this.type) {
+        case ConstraintType.Equal: return left === right;
+        case ConstraintType.NotEqual: return left !== right;
+        case ConstraintType.GreaterThan: return left > right;
+        case ConstraintType.GreaterThanOrEqual: return left >= right;
+        case ConstraintType.LessThan: return left < right;
+        case ConstraintType.LessThanOrEqual: return left <= right;
+        case ConstraintType.Text: {
+          if (left instanceof VersionedObject && typeof right === "string") {
+            let manager = left.manager();
+            return manager.aspect().attributes.some(a => right.indexOf(`${manager.attributeValue(a.name)}`) !== -1);
+          }
+          return false;
+        }
+        case ConstraintType.In: return Array.isArray(right) && right.indexOf(left) !== -1;
+        case ConstraintType.NotIn: return Array.isArray(right) && right.indexOf(left) === -1;
+        case ConstraintType.Exists: {
+          return right !== undefined && (!Array.isArray(right) || right.length > 0);
+        }
+      }
+      throw new Error(`Unsupported on value constraint ${ConstraintType[this.type]}`);
+    }
+  }
+  export class ConstraintOnType extends Constraint {
+    value: ObjectSet | ObjectSet[] | string | Function;
+    constructor(type: ConstraintType.In | ConstraintType.ElementOf, set: ObjectSet, value: ObjectSet);
+    constructor(type: ConstraintType.Union, set: ObjectSet, value: ObjectSet[]);
+    constructor(type: ConstraintType.InstanceOf | ConstraintType.MemberOf, set: ObjectSet, value: Function);
+    constructor(type: ConstraintType, set: ObjectSet, value: ObjectSet | ObjectSet[] | Function) {
+      super(type, set, undefined);
+      this.value = value;
+      set.constraintsOnType.push(this);
+    }
+    pass(object: VersionedObject) {
+      switch(this.type) {
+        case ConstraintType.In: return (this.value as ObjectSet).pass(object);
+        case ConstraintType.Union: return (this.value as ObjectSet[]).some(set => set.pass(object));
+        case ConstraintType.InstanceOf: return object instanceof (this.value as Function);
+        case ConstraintType.MemberOf: return object.constructor === (this.value as Function);
+        case ConstraintType.ElementOf: return (this.value as ObjectSet).pass(object);
+      }
+      throw new Error(`Unsupported on type constraint ${ConstraintType[this.type]}`);
     }
   }
 
@@ -173,7 +201,8 @@ export namespace DataSourceInternal {
       this.set = set;
       this.otherSet = otherSet;
       this.otherAttribute = otherAttribute;
-      otherSet.constraints.push(this);
+      set.constraintsBetweenSet.push(this);
+      otherSet.constraintsBetweenSet.push(this);
     }
   }
 
@@ -208,7 +237,7 @@ export namespace DataSourceInternal {
   export type ObjectSetDefinition = Partial<ObjectSetDefinitionR> & {
     [s: string]: Value | ConstraintDefinition
   };
-  export interface Element extends ConstraintDefinition {
+  export interface Element extends ObjectSetDefinitionR {
     $elementOf: Instance<ObjectSetDefinition>
   };
   export type Result = {
@@ -217,53 +246,56 @@ export namespace DataSourceInternal {
     sort?: string[];
     scope?: string[];
   }
-  export type Request = Result | { result: (Result& { [s: string]: Instance<ObjectSetDefinition> })[], [s: string]: Instance<ObjectSetDefinition> };
+  export type Request = Result | { results: (Result& { [s: string]: Instance<ObjectSetDefinition> })[], [s: string]: Instance<ObjectSetDefinition> };
 
   type OperatorBetweenSet = (context: ParseContext, constraint: ConstraintBetweenSet) => void;
   type OperatorOnSet<T> = (context: ParseContext, set: ObjectSet, elements: Map<string, ObjectSet>, out: string | undefined, value: T) => void;
-  const operatorsOnSet: { [K in keyof ObjectSetDefinitionR]: OperatorOnSet<ObjectSetDefinitionR[K]>; } = {
+  const operatorsOnSet: { [K in keyof Element]: OperatorOnSet<Element[K]>; } = {
+    $elementOf: (context, set, elements, out, value) => {
+      new ConstraintOnType(ConstraintType.ElementOf, set, context.parseSet(value));
+    },
     $instanceOf: (context, set, elements, out, value) => {
-      if (typeof value !== "string" && typeof value !== "function")
+      if (typeof value !== "function")
         throw new Error(`instanceOf value must be a string or a class`);
-      new ConstraintOnValue(ConstraintType.InstanceOf, set, undefined, value);
+      new ConstraintOnType(ConstraintType.InstanceOf, set, value);
     },
     $memberOf: (context, set, elements, out, value) => {
-      if (typeof value !== "string" && typeof value !== "function")
+      if (typeof value !== "function")
         throw new Error(`memberOf value must be a string or a class`);
-      new ConstraintOnValue(ConstraintType.MemberOf, set, undefined, value);
+      new ConstraintOnType(ConstraintType.MemberOf, set, value);
     },
     $union: (context, set, elements, out, value) => {
       if (!Array.isArray(value))
         throw new Error(`union value must be an array of object set`);
-      new ConstraintOnValue(ConstraintType.Union, set, undefined, value.map(v => context.parseSet(v)));
+      new ConstraintOnType(ConstraintType.Union, set, value.map(v => context.parseSet(v)));
     },
     $intersection: (context, set, elements, out, value) => {
       if (!Array.isArray(value))
         throw new Error(`intersection value must be an array of object set`);
-      value.forEach(v => new ConstraintOnValue(ConstraintType.In, set, undefined, context.parseSet(v)));
+      value.forEach(v => new ConstraintOnType(ConstraintType.In, set, context.parseSet(v)));
     },
     $diff: (context, set, elements, out, value) => {
       if (!Array.isArray(value) || value.length !== 2)
         throw new Error(`diff value must be an array of 2 object set`);
-      new ConstraintOnValue(ConstraintType.In, set, undefined, context.parseSet(value[0]));
-      new ConstraintOnValue(ConstraintType.NotIn, set, undefined, context.parseSet(value[1]));
+      new ConstraintOnType(ConstraintType.In, set, context.parseSet(value[0]));
+      new ConstraintBetweenSet(ConstraintType.NotIn, set, undefined, context.parseSet(value[1]), undefined);
     },
     $in: (context, set, elements, out, value) => {
       if (Array.isArray(value))
         new ConstraintOnValue(ConstraintType.In, set, undefined, value);
       else
-        new ConstraintOnValue(ConstraintType.In, set, undefined, context.parseSet(value));
+        new ConstraintOnType(ConstraintType.In, set, context.parseSet(value));
     },
     $nin: (context, set, elements, out, value) => {
       if (Array.isArray(value))
         new ConstraintOnValue(ConstraintType.NotIn, set, undefined, value);
       else
-        new ConstraintOnValue(ConstraintType.NotIn, set, undefined, context.parseSet(value));
+        new ConstraintBetweenSet(ConstraintType.NotIn, set, undefined, context.parseSet(value), undefined);
     },
     $or: (context, set, elements, out, value) => {
       if (!Array.isArray(value))
         throw new Error(`$or value must be an array of object set`);
-      new ConstraintOnValue(ConstraintType.Union, set, undefined, value.map(v => context.parseSet(v, set, elements, out)));
+      new ConstraintOnType(ConstraintType.Union, set, value.map(v => context.parseSet(v, set, elements, out)));
     },
     $and: (context, set, elements, out, value) => {
       if (!Array.isArray(value))
@@ -271,7 +303,7 @@ export namespace DataSourceInternal {
       value.forEach(v => {
         let s = context.parseSet(v, set, elements, out);
         if (s !== set)
-          new ConstraintOnValue(ConstraintType.In, set, undefined, s);
+          new ConstraintOnType(ConstraintType.In, set, s);
       });
     },
     $exists: (context, set, elements, out, value) => {
@@ -325,55 +357,65 @@ export namespace DataSourceInternal {
         throw new Error(`cannot pop stack`);
       this.head = this.head.parent;
     }
-    resolve(reference: string) : ObjectSet {
+    resolve(reference: string, deep = Number.MAX_SAFE_INTEGER) : ObjectSet {
       let key = `${reference}=`;
       let v: ObjectSet | undefined, s: ParseStack | undefined = this.head;
-      for (;!v && s; s = s.parent) {
-        v = s.resolved.get(key);
-        if (!v) {
-          let o = s.original[key];
-          let c = s == this.head ? this : new ParseContext(this.set, s);
-          v = c.parseSet(o);
-          s.resolved.set(key, v);
+      for (;deep > 0 && !v && s; s = s.parent) {
+        let o = s.original[key];
+        if (o) {
+          v = s.resolved.get(key);
+          if (!v) {
+            let c = s == this.head ? this : new ParseContext(this.set, s);
+            v = c.parseSet(o);
+            s.resolved.set(key, v);
+          }
         }
+        deep--;
       }
       if (!v)
         throw new Error(`no object set with the name ${key} found`);
       return v;
     }
 
+    createSet(): ObjectSet {
+      let set = new ObjectSet();
+      this.set.push(set);
+      return set;
+    }
+
     resolveSet(reference: string) : ObjectSet {
       let parts = reference.split(':');
       let set = this.resolve(parts[0]);
       if (parts.length > 1) {
-        let subset = new ObjectSet();
-        // TODO
+        for (let i = 1; i < parts.length; i++) {
+          let subset = this.createSet();
+          new DataSourceInternal.ConstraintBetweenSet(ConstraintType.Equal, subset, undefined, set, parts[i]);
+          set = subset;
+        }
       }
       return set;
     }
 
-    resolveElement(reference: string, elements: Map<string, ObjectSet>) : [ObjectSet, string] {
+    resolveElement(reference: string, elements: Map<string, ObjectSet>) : [ObjectSet, string | undefined] {
       let parts = reference.split('.');
       let k = parts[0];
       let set = this.resolve(k);
-      return this.resolveAttribute(set, elements, parts);
+      return this.resolveAttribute(set, elements, parts, k, 1);
     }
 
-    resolveAttribute(set: ObjectSet, elements: Map<string, ObjectSet>, parts: string[]) : [ObjectSet, string] {
-      let k = parts[0];
-      if (parts.length === 1)
-        throw new Error(`an attribute was expected while defining constraint with ${parts.join('.')}`);
-      for (let i = 1, len = parts.length - 1; i < len; i++) {
+    resolveAttribute(set: ObjectSet, elements: Map<string, ObjectSet>, parts: string[], k: string, start: number) : [ObjectSet, string | undefined] {
+      let i = start, last = parts.length - 1;
+      for (; i < last; i++) {
         k += `.${parts[i]}`;
         let s = elements.get(k);
         if (!s) {
-          s = new ObjectSet();
+          s = this.createSet();
           new ConstraintBetweenSet(ConstraintType.Equal, s, "_id", set, parts[i]);
           elements.set(k, s);
         }
         set = s;
       }
-      return [set, parts[parts.length - 1]];
+      return [set, start <= last ? parts[last] : undefined];
     }
 
     parseSet(v: Instance<ObjectSetDefinition>, set?: ObjectSet, elements?: Map<string, ObjectSet>, out?: string) : ObjectSet {
@@ -386,15 +428,16 @@ export namespace DataSourceInternal {
 
       let nout = v["$out"];
       if (nout) {
-        if (!nout.startsWith("="))
-          throw new Error(`an object set definition was expected`);
-        set = new ObjectSet();
+        if (!nout.startsWith("=") && nout.indexOf(".") !== -1)
+          throw new Error(`an element was expected`);
         out = nout;
+        nout = nout.substring(1);
         elements = new Map<string, ObjectSet>();
-        elements.set(out.substring(1), set);
+        set = this.resolve(nout, 1);
+        elements.set(nout, set);
       }
       else {
-        set = set || new ObjectSet();
+        set = set || this.createSet();
         elements = elements || new Map<string, ObjectSet>();
       }
 
@@ -422,14 +465,12 @@ export namespace DataSourceInternal {
       else if (!key.endsWith('=')) {
         // key is an attribute path
         let path = key.split('.');
-        if (out)
-          path[0] = `${out}.${path[0]}`;
-        let [aset, attr] = this.resolveAttribute(set, elements, path);
+        let [aset, attr] = this.resolveAttribute(set, elements, path, out || "", 0);
         this.parseConditions(aset, elements, attr, <Value | ConstraintDefinition>value);
       }
     }
 
-    parseConditions(set: ObjectSet, elements: Map<string, ObjectSet>, attribute: string, conditions: Value | ConstraintDefinition) {
+    parseConditions(set: ObjectSet, elements: Map<string, ObjectSet>, attribute: string | undefined, conditions: Value | ConstraintDefinition) {
       if (typeof conditions === "object") {
         this.push(conditions);
         for(var key in conditions) {
@@ -439,7 +480,7 @@ export namespace DataSourceInternal {
           if (typeof v === "string" && v.startsWith('=')) {
             let [otherSet, otherAttr] = this.resolveElement(v.substring(1), elements);
             let o = operatorsBetweenSet[key];
-            if (!o) 
+            if (o === undefined) 
               throw new Error(`operator between two set '${key}' not found`);
             new ConstraintBetweenSet(o, set, attribute, otherSet, otherAttr);
           }
@@ -471,7 +512,7 @@ export namespace DataSourceInternal {
     if (isResult(request))
       parseResult(context, request);
     else {
-      request.result.forEach((result) => {
+      request.results.forEach((result) => {
         parseResult(context, result); 
       });
     }
@@ -481,12 +522,7 @@ export namespace DataSourceInternal {
   export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[]) : VersionedObject[] {
     let context = new ParseContext([], new ParseStack(where));
     let set = context.parseSet(where);
-    return objects.filter(o => set.constraints.every(c => {
-      if (!(c instanceof ConstraintOnValue))
-        throw new Error(`where is too complex and can't be proceeded, use query`);
-      let value = c.attribute ? o[c.attribute] : o;
-      return passConstraint(c.type, value, c.value);
-    }));
+    return set.filter(objects);
   }
 
   export function applyRequest(request: Request, objects: VersionedObject[]) {
@@ -494,6 +530,11 @@ export namespace DataSourceInternal {
   }
 
   export function applySet(sets: ObjectSet[], objects: VersionedObject[]): { [s: string]: VersionedObject[] } {
-    return { TODO: [] };
+    let ret = {};
+    sets.forEach(set => {
+      if (set.name)
+        ret[set.name] = set.filter(objects);
+    })
+    return ret;
   }
 }

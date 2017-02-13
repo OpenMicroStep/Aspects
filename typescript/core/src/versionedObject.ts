@@ -5,6 +5,7 @@ import {MSTE} from '@microstep/mstools';
 export type VersionedObjectAttributes = Map<string, any>;
 export class VersionedObjectManager<T extends VersionedObject> {
   static NoVersion = -1;
+  static DeletedVersion = -2;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
   static SafeMode = true;
   static LocalIdCounter = 0;
@@ -45,6 +46,10 @@ export class VersionedObjectManager<T extends VersionedObject> {
       this._localAttributes.set(k, d._localAttributes[k]);
     for (var k in d._versionAttributes)
       this._versionAttributes.set(k, d._versionAttributes[k]);
+  }
+
+  hasChanges() {
+    return this._localAttributes.size > 0;
   }
 
   diff() : VersionedObjectSnapshot<T> {
@@ -134,7 +139,7 @@ export class VersionedObjectManager<T extends VersionedObject> {
 
 export class VersionedObject implements MSTE.Decodable {
   static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
-    return <any>class extends cstor {
+    return <any>class VersionedObjectExtended extends cstor {
       static parent = cstor;
       static definition = definition;
       static category(name: string, implementation: any, on?: VersionedObjectConstructor<VersionedObject>) {
@@ -161,8 +166,8 @@ export class VersionedObject implements MSTE.Decodable {
   };
 
   __manager: VersionedObjectManager<this>;
-  _id: Identifier;
-  _version: number;
+  _id: Identifier;  // virtual attribute handled by the manager
+  _version: number; // virtual attribute handled by the manager
 
   constructor(manager: VersionedObjectManager<any>) {
     this.__manager = manager; // this will fill _id and _version attributes
@@ -178,8 +183,8 @@ export class VersionedObject implements MSTE.Decodable {
     encoder.encodeDictionary({ _id: this._id, _version: this._version }, this.manager().name());
   }
 
-  id()     : Identifier { return this._id; }
-  version(): number { return this._version; }
+  id()     : Identifier { return this.__manager._id; }
+  version(): number { return this.__manager._version; }
   manager(): VersionedObjectManager<this> { return this.__manager; }
 
   farCallback<O extends VersionedObject, R>(this: O, method: string, argument: any, callback: (envelop: Invocation<O, R>) => void) {
@@ -199,27 +204,27 @@ export class VersionedObject implements MSTE.Decodable {
   }
 }
 Object.defineProperty(VersionedObject.prototype, '_id', {
-    enumerable: true,
-    get(this: VersionedObject) { return this.__manager._id; },
-    set(this: VersionedObject, value) {
-      if (this.__manager._id === value)
-        return;
-      if (VersionedObjectManager.isLocalId(value))
-        throw new Error(`cannot change identifier to a local identifier`);
-      if (!VersionedObjectManager.isLocalId(this.__manager._id)) 
-        throw new Error(`id can't be modified once assigned (not local)`);
-      this.__manager._id = value; // local -> real id (ie. object _id attribute got loaded)
-    }
-  });
-  Object.defineProperty(VersionedObject.prototype, '_version', {
-    enumerable: true,
-    get(this: VersionedObject) { return this.__manager._version; },
-    set(this: VersionedObject, value) {
-      if (this.__manager._version !== VersionedObjectManager.NoVersion)
-        throw new Error(`Cannot change object version directly`); 
-      this.__manager._version = value; 
-    }
-  });
+  enumerable: true,
+  get(this: VersionedObject) { return this.__manager._id; },
+  set(this: VersionedObject, value) {
+    if (this.__manager._id === value)
+      return;
+    if (VersionedObjectManager.isLocalId(value))
+      throw new Error(`cannot change identifier to a local identifier`);
+    if (!VersionedObjectManager.isLocalId(this.__manager._id)) 
+      throw new Error(`id can't be modified once assigned (not local)`);
+    this.__manager._id = value; // local -> real id (ie. object _id attribute got loaded)
+  }
+});
+Object.defineProperty(VersionedObject.prototype, '_version', {
+  enumerable: true,
+  get(this: VersionedObject) { return this.__manager._version; },
+  set(this: VersionedObject, value) {
+    if (this.__manager._version !== VersionedObjectManager.NoVersion)
+      throw new Error(`Cannot change object version directly`); 
+    this.__manager._version = value; 
+  }
+});
 
 export class VersionedObjectSnapshot<T extends VersionedObject> {
   __cls: string;

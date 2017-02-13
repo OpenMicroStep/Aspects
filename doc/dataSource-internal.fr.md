@@ -8,13 +8,18 @@ Afin de simplifier l'implémentation des différentes dataSource, un format inte
 
 Ce format utilise 2 types d'objets:
 
- - ensemble
+ - ensemble (`ObjectSet`)
+  - des contraintes de type (instanceOf, memberOf, in, union, elementOf)
   - une liste de contraintes
   - si nommé, c'est un ensemble qui sera dans le dictionnaire de sortie
   - si nommé, un ordre de recherche peut être définit
   - si nommé, un ensemble d'attributs sortant
- - contrainte
-
+ - contrainte (`Constraint`)
+  - operateur
+  - entre la valeur d'un attribut ou l'objet
+  - et une autre valeur
+    - fixe (`ConstraintOnValue`)
+    - définit dans un autre ensemble (`ConstraintBetweenSet`)
 
 ## Algorithme
 
@@ -55,15 +60,19 @@ Par exemple, la requête:
 ```
 
 
-Sera transformé en 3 ensembles et 5 contraintes:
+Sera transformé en 4 ensembles et 7 contraintes (TX et CX):
 
 ```ts
-g2= Ensemble([_resource, _startingDate, _endingDate  , instanceOf Gap])
-              C1 ==      C2   >         C3   <         C4
-g1= Ensemble([_resource, _endingDate  , _startingDate, instanceOf Gap], name= "conflicts", scope: ['_startingDate', '_endingDate', '_resource'])
-              C5 ==
-r = Ensemble([_id      ], name= "resources", scope: [...])
+G=  Ensemble([instanceOf Gap     ], [])
+
+g2= Ensemble([elementOf G (T1)   ], [_resource, _startingDate, _endingDate  ])
+                                     C1 ==      C2   >         C3   <        
+g1= Ensemble([elementOf G (T2)   ], [_resource, _endingDate  , _startingDate], name= "conflicts", scope: ['_startingDate', '_endingDate', '_resource'])
+                                     C5 ==
+r = Ensemble([instanceOf Resource], [_id      ], name= "resources", scope: [...])
 ```
+
+Des méthodes de simplification seront mises à disposition des datasources pour simplier les ensembles en fonction de profils d'optimisations.
 
 Cette forme est facilement utilisable pour transformation en SQL:
 
@@ -75,22 +84,4 @@ WHERE     g1._resource = g2._resource
   AND g1._startingDate > g2._endingDate
   AND   g1._endingDate < g2._startingDate
   AND     g1._resource = r._id
-```
-
-Pas à pas cela donne:
-
-``` 
-Analyse de results[0]
-Soit e1 l'ensemble { name: "conflicts", where: ..., scope: ['_startingDate', '_endingDate', '_resource'] } 
-  Analyse de conflicts=
-  Soit g1=e1 après lecture la propriété $out
-    Analyse de G= (g1 of =G)
-      Ajout de la contrainte (instanceOf Gap) sur e1
-    Analyse de G= (g2 of =G)
-      Soit e2 l'ensemble {[instanceOf Gap]}
-    Ajout de la contrainte (g1._resource = g2._resource )
-    Ajout de la contrainte (g1._startingDate > g2._endingDate)
-    Ajout de la contrainte (g1._endingDate < g2._startingDate)
-Soit e2 l'ensemble { name: "resources", where: "=conflicts:_resource", scope: [...] }
-    Ajout de la contrainte (g1._resource = e2._id)
 ```
