@@ -51,7 +51,7 @@ export class ControlCenter {
     });
   }
 
-  registerObjects(component: AComponent, objects: VersionedObject[], method: string | null = null, events: string[] | null = null) {
+  registerObjects(component: AComponent, objects: VersionedObject[], method?: string, events?: string[]) {
     if (!this._components.has(component))
       throw new Error(`you must register the component with 'addComponent' before registering objects`);
     const notificationCenter = this.notificationCenter();
@@ -60,7 +60,7 @@ export class ControlCenter {
       let i = this._objects;
       let d = i.get(id);
       if (method)
-        (<(string | null)[]>(events || [null])).forEach(event => notificationCenter.addObserver(component, method, event, o));
+        (<(string | undefined)[]>(events || [undefined])).forEach(event => notificationCenter.addObserver(component, method, event, o));
       if (!d)
         i.set(id, d = { object: o, components: new Set() });
       d.components.add(component);

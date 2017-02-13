@@ -7,23 +7,23 @@ export interface Notification {
 
 export class NotificationCenter {
   // TODO: move to a more efficient way to store/use observers
-  _observers: { observer: Object, method: string, event: string | null, onObject: Object | null }[] = [];
-  addObserver(observer: Object, method: string, event: string | null, onObject: Object | null) {
+  _observers: { observer: Object, method: string, event: string | undefined, onObject: Object | undefined }[] = [];
+  addObserver(observer: Object, method: string, event: string | undefined, onObject: Object | undefined) {
     this._observers.push({ observer: observer, method: method, event: event, onObject: onObject });
   }
 
-  removeObserver(observer: Object, event: string | null = null, onObject: Object | null = null) {
+  removeObserver(observer: Object, event: string | undefined = undefined, onObject: Object | undefined = undefined) {
     this._observers = this._observers.filter(o => !(
       o.observer === observer &&
-      (event === null || o.event === event) &&
-      (onObject === null || o.onObject === onObject)
+      (event === undefined || o.event === event) &&
+      (onObject === undefined || o.onObject === onObject)
     ));
   }
 
   postNotification(notification: Notification) {
     this._observers.filter(o => (
-      (o.event === null || o.event === notification.name) &&
-      (o.onObject === null || o.onObject === notification.object)
+      (o.event === undefined || o.event === notification.name) &&
+      (o.onObject === undefined || o.onObject === notification.object)
     )).forEach(o => o.observer[o.method](notification));
   }
 }
