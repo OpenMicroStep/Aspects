@@ -1,4 +1,4 @@
-import {FarTransport, PublicTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Invocation, InvocationState, DataSource} from './core';
+import {FarTransport, PublicTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Invocation, InvocationState, DataSource, Aspect} from './core';
 
 export type Identifier = string | number;
 export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, arg: A) => R | Promise<R | Invocation<P, R>>);
@@ -15,6 +15,7 @@ export class ControlCenter {
   _notificationCenter = new NotificationCenter();
   _objects = new Map<Identifier, { object: VersionedObject, components: Set<AComponent> }>();
   _components = new Set<AComponent>();
+  _aspects = new Map<string, Aspect.Constructor>();
 
   constructor() {}
   /// events
@@ -80,6 +81,10 @@ export class ControlCenter {
   }
 
   /// category VersionedObject
+  aspect(name: string) {
+    return this._aspects.get(name);
+  }
+
   mergeObject(object: VersionedObject) {
     let m = object.manager();
     let o = this.registeredObject(object.id());

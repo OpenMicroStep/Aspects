@@ -25,14 +25,17 @@ function classifiedType(type: Aspect.Type): Aspect.PrimaryType | 'entity' {
   return 'object';
 }
 
-export function createAspect(on: ControlCenter, name: string, implementation: VersionedObjectConstructor<VersionedObject>) : { new(): VersionedObject } {
+export function createAspect(on: ControlCenter, name: string, implementation: VersionedObjectConstructor<VersionedObject>) : Aspect.Constructor {
   let tmp = cachedAspect(name, implementation);
   let aspect = tmp.aspect;
-  return class InstalledAspect extends tmp {
+  let cstor = class InstalledAspect extends tmp {
     constructor() {
       super(new VersionedObjectManager(on, aspect));
     }
+    static aspect = aspect;
   };
+  on._aspects.set(aspect.name, cstor);
+  return cstor;
 }
 
 export interface Aspect {
@@ -88,6 +91,10 @@ export namespace Aspect {
     attributes: InstalledAttribute[];
     farMethods: Map<string, InstalledFarMethod>;
   };
+  export interface Constructor {
+    new(): VersionedObject;
+    aspect: Aspect.Installed;
+  }
 }
 
 const farTransportStub = {
