@@ -130,6 +130,25 @@ export namespace DataSourceInternal {
     ElementOf,
     CustomStart = 100 // The first 100 ([0-99]) are reserved
   }
+  export type ConstraintBetweenSetTypes = 
+    ConstraintType.Equal |
+    ConstraintType.NotEqual |
+    ConstraintType.GreaterThan |
+    ConstraintType.GreaterThanOrEqual |
+    ConstraintType.LessThan |
+    ConstraintType.LessThanOrEqual |
+    ConstraintType.Text |
+    ConstraintType.In |
+    ConstraintType.NotIn;
+  export type ConstraintOnValueTypes = 
+    ConstraintBetweenSetTypes |
+    ConstraintType.Exists;
+  export type ConstraintOnTypeTypes = 
+    ConstraintType.In | 
+    ConstraintType.ElementOf |
+    ConstraintType.InstanceOf |
+    ConstraintType.MemberOf |
+    ConstraintType.Union;
 
   export abstract class Constraint {
     type: ConstraintType;
@@ -140,8 +159,9 @@ export namespace DataSourceInternal {
     }
   }
   export class ConstraintOnValue extends Constraint {
+    type: ConstraintOnValueTypes;
     value: any;
-    constructor(type: ConstraintType, set: ObjectSet, attribute: string | undefined, value: any) {
+    constructor(type: ConstraintOnValueTypes, set: ObjectSet, attribute: string | undefined, value: any) {
       super(type, set, attribute);
       this.value = value;
       set.constraintsOnValue.push(this);
@@ -167,19 +187,21 @@ export namespace DataSourceInternal {
           return right !== undefined && (!Array.isArray(right) || right.length > 0);
         }
       }
-      throw new Error(`Unsupported on value constraint ${ConstraintType[this.type]}`);
+      throw new Error(`Unsupported on value constraint ${ConstraintType[this.type as any]}`);
     }
   }
   export class ConstraintOnType extends Constraint {
+    type: ConstraintOnTypeTypes;
     value: ObjectSet | ObjectSet[] | string | Function;
     constructor(type: ConstraintType.In | ConstraintType.ElementOf, set: ObjectSet, value: ObjectSet);
     constructor(type: ConstraintType.Union, set: ObjectSet, value: ObjectSet[]);
     constructor(type: ConstraintType.InstanceOf | ConstraintType.MemberOf, set: ObjectSet, value: Function);
-    constructor(type: ConstraintType, set: ObjectSet, value: ObjectSet | ObjectSet[] | Function) {
+    constructor(type: ConstraintOnTypeTypes, set: ObjectSet, value: ObjectSet | ObjectSet[] | Function) {
       super(type, set, undefined);
       this.value = value;
       set.constraintsOnType.push(this);
     }
+    
     pass(object: VersionedObject) {
       switch(this.type) {
         case ConstraintType.In: return (this.value as ObjectSet).pass(object);
@@ -188,21 +210,40 @@ export namespace DataSourceInternal {
         case ConstraintType.MemberOf: return object.constructor === (this.value as Function);
         case ConstraintType.ElementOf: return (this.value as ObjectSet).pass(object);
       }
-      throw new Error(`Unsupported on type constraint ${ConstraintType[this.type]}`);
+      throw new Error(`Unsupported on type constraint ${ConstraintType[this.type as any]}`);
     }
   }
 
   export class ConstraintBetweenSet extends Constraint {
+    type: ConstraintBetweenSetTypes;
     set: ObjectSet;
     otherSet: ObjectSet;
     otherAttribute?: string;
-    constructor(type: ConstraintType, set: ObjectSet, attribute: string | undefined, otherSet: ObjectSet, otherAttribute: string | undefined) {
+    constructor(type: ConstraintBetweenSetTypes, set: ObjectSet, attribute: string | undefined, otherSet: ObjectSet, otherAttribute: string | undefined) {
       super(type, set, attribute);
       this.set = set;
       this.otherSet = otherSet;
       this.otherAttribute = otherAttribute;
       set.constraintsBetweenSet.push(this);
       otherSet.constraintsBetweenSet.push(this);
+    }
+
+    myView(set: ObjectSet) {
+      let my = this.set === set;
+      return {
+        attribute: my ? this.attribute : this.otherAttribute,
+        otherSet: my ? this.otherSet : this.set,
+        otherAttribute: my ? this.otherAttribute : this.attribute,
+      };
+    }
+    myAttribute(set: ObjectSet) {
+      return this.set === set? this.attribute : this.otherAttribute;
+    }
+    oppositeSet(set: ObjectSet) {
+      return this.set === set ? this.otherSet : this.set;
+    }
+    oppositeAttribute(set: ObjectSet) {
+      return this.set === set? this.otherAttribute : this.attribute;
     }
   }
 
@@ -316,7 +357,7 @@ export namespace DataSourceInternal {
     },
   }
   
-  const operatorsBetweenSet: { [s: string]: ConstraintType; } = {
+  const operatorsBetweenSet: { [s: string]: ConstraintBetweenSetTypes; } = {
     $eq: ConstraintType.Equal,
     $neq: ConstraintType.NotEqual,
     $gt: ConstraintType.GreaterThan,
@@ -324,7 +365,7 @@ export namespace DataSourceInternal {
     $lt: ConstraintType.LessThan,
     $lte: ConstraintType.LessThanOrEqual,
   };
-  const operatorsOnValue: { [s: string]: ConstraintType; } = {
+  const operatorsOnValue: { [s: string]: ConstraintOnValueTypes; } = {
     $eq: ConstraintType.Equal,
     $neq: ConstraintType.NotEqual,
     $gt: ConstraintType.GreaterThan,
