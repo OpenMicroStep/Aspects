@@ -69,7 +69,4 @@ Méthodes à implémenter par les dataSources.
 #### farCategories: server_
 
 ### aspect server
-#### categories: local server_ safe raw
-
-### aspect impl
-#### categories: implementation
+#### categories: local server_ safe raw implementation

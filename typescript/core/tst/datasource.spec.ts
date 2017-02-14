@@ -2,6 +2,7 @@ import {ControlCenter, DataSource, DataSourceInternal, VersionedObject} from '@m
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
+import {tests as tests_memory} from './datasource.memory.spec';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
 function resources_sets(): DataSourceInternal.ObjectSet[] {
@@ -220,5 +221,8 @@ export const tests = { name: 'DataSource', tests: [
   persons_with_cars_and_their_cars,
   applyWhere,
   applyRequest,
-  persons_with_cars_and_their_cars_1k
+  { name: "perfs", tests: [
+    persons_with_cars_and_their_cars_1k,
+  ]},
+  tests_memory,
 ]};
