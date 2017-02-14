@@ -48,7 +48,6 @@ module.exports =  {
     npmInstall: [{
       "@types/node": "^4.0.30"
     }],
-    compatibleEnvironments: ["js"],
   },
   "browser=": { 
     is: 'environment', 
@@ -72,21 +71,27 @@ module.exports =  {
           { is: 'file', name: 'resource.interface.md', tags: ['interface'] },
         ]},
       ]},
+      { is: 'group', name: 'datasource.sequelize', path: 'typescript/datasource.sequelize/', elements: [
+        { is: 'group', name: 'src', path: 'src/', elements: [
+          { is: 'file', name: 'datasource.sequelize.ts', tags: ['tsc'] },
+        ]},
+        { is: 'group', name: 'tst', path: 'tst/', elements: [
+          { is: 'file', name: 'datasource.sequelize.spec.ts', tags: ['tsc'] },
+          { is: 'file', name: 'resource.interface.md', tags: ['interface'] },
+        ]},
+      ]},
       { is: 'group', name: 'transport.express', path: 'typescript/transport.express/src', elements: [
         { is: 'file', name: 'transport.express.ts', tags: ['tsc'] }
       ]},
       { is: 'group', name: 'transport.xhr', path: 'typescript/transport.xhr/src', elements: [
         { is: 'file', name: 'transport.xhr.ts', tags: ['tsc'] }
       ]},
-      { is: 'group', name: 'datasource.sequelize', path: 'typescript/datasource.sequelize/src', elements: [
-        { is: 'file', name: 'datasource.sequelize.ts', tags: ['tsc'] }
-      ]}
   ]},
   "typescript targets=": { is: 'group',
     "core=":  {
       is: 'target',
       outputName: "@microstep/aspects",
-      environments: ["=js"],
+      environments: ["=js", "=node"],
       files: ["=Files:core:src ? tsc"],
       interfaces: [{ 
         value: ["=Files:core:src ? interface"], 
@@ -146,7 +151,7 @@ module.exports =  {
       targets: ["core"],
       components: ["=::core::"],
       environments: ["=node"],
-      files: ["=Files:datasource.sequelize ? tsc"],
+      files: ["=Files:datasource.sequelize:src ? tsc"],
       npmPackage: [{
         "version": "0.2.0",
         "main": "datasource.sequelize.js",
@@ -155,6 +160,20 @@ module.exports =  {
       npmInstall: [{
         "sequelize": "^3.27.0",
         "@types/sequelize": "^4.0.39"
+      }]
+    },
+    "sequelize.tests=": {
+      is: 'target',
+      outputName: "@microstep/aspects.sequelize.tests",
+      targets: ["core", "sequelize"],
+      components: ["=test", "=::core::", "=::sequelize::"],
+      environments: ["=node"],
+      files: ["=Files:datasource.sequelize:tst ? tsc"],
+      interfaces: ["=Files:datasource.sequelize:tst ? interface"],
+      npmInstall: [{
+        "sequelize": "^3.27.0",
+        "@types/sequelize": "^4.0.39",
+        "sqlite3": "^3.1.8"
       }]
     },
     "client=": {
