@@ -73,6 +73,12 @@ export class Invocation<O extends VersionedObject, R> {
     let method = m;
     let argValidator = method.argumentValidators[0];
     let result = (err, ret) => {
+      if (!err && ret instanceof Invocation) {
+        if (ret.state() === InvocationState.Aborted)
+          err = ret.error();
+        else if (ret.state() === InvocationState.Terminated)
+          ret = ret.result();
+      }
       if (!err && method.returnValidator && !method.returnValidator(ret))
         err = { is: 'error', reasons: method.returnValidator.errors };
       if (err) {

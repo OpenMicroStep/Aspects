@@ -153,6 +153,15 @@ export class VersionedObject implements MSTE.Decodable {
       static __i() {}
     }
   }
+  static cluster<P extends VersionedObjectConstructor<VersionedObject>>(cstor: { new(manager: VersionedObjectManager<VersionedObject>): VersionedObject }, parent: P): P {
+    let c = cstor as any;
+    c.parent = parent;
+    c.definition = Object.assign({}, parent.definition, { name: cstor.name });
+    c.installAspect = function(this: VersionedObjectConstructor<VersionedObject>, on: ControlCenter, name: string) : { new(): VersionedObject } {
+      return createAspect(on, name, this);
+    };
+    return cstor as P;
+  }
 
   static parent = undefined;
 
