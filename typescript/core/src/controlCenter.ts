@@ -85,6 +85,14 @@ export class ControlCenter {
     return this._aspects.get(name);
   }
 
+  changeObjectId(oldId: Identifier, newId: Identifier) {
+    let o = this._objects.get(oldId);
+    if (o !== undefined) {
+      this._objects.delete(oldId);
+      this._objects.set(newId, o);
+    }
+  }
+
   mergeObject(object: VersionedObject) {
     let m = object.manager();
     let o = this.registeredObject(object.id());

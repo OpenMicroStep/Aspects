@@ -70,11 +70,11 @@ function basics() {
   assert.equal(v1.version(), v1._version);
   assert.equal(v2.version(), v2._version);
 
-  assert.doesNotThrow(() => { v1._id = v1._id });
-  assert.throw(() => { v1._id = v2._id }, `cannot change identifier to a local identifier`);
-  v1._id = 2;
+  assert.doesNotThrow(() => { v1.manager().setId(v1._id) });
+  assert.throw(() => { v1.manager().setId(v2._id) }, `cannot change identifier to a local identifier`);
+  v1.manager().setId(2);
   assert.equal(v1.id(), 2);
-  assert.throw(() => { v1._id = 3 }, `id can't be modified once assigned (not local)`);
+  assert.throw(() => { v1.manager().setId(3) }, `id can't be modified once assigned (not local)`);
 
   assert.throw(() => { v1.name(); });
   v1._name = "Resource Name";

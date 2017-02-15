@@ -15,21 +15,22 @@ export class VersionedObjectManager<T extends VersionedObject> {
 
   _id: Identifier;
   _controlCenter: ControlCenter;
+  _aspect: Aspect.Installed;
+
   _localAttributes: VersionedObjectAttributes;
-  _oldVersion: number;
-  _oldVersionAttributes: VersionedObjectAttributes;
   _version: number;
   _versionAttributes: VersionedObjectAttributes;
-  _aspect: Aspect.Installed;
+  _oldVersion: number;
+  _oldVersionAttributes: VersionedObjectAttributes;
 
   constructor(controlCenter: ControlCenter, aspect: Aspect.Installed) {
     this._controlCenter = controlCenter;
     this._id = `_localid:${++VersionedObjectManager.LocalIdCounter}`;
-    this._oldVersion = VersionedObjectManager.NoVersion;
-    this._oldVersionAttributes = new Map<string, any>();
+    this._localAttributes = new Map<string, any>();
     this._version = VersionedObjectManager.NoVersion;
     this._versionAttributes = new Map<string, any>();
-    this._localAttributes = new Map<string, any>();
+    this._oldVersion = VersionedObjectManager.NoVersion;
+    this._oldVersionAttributes = new Map<string, any>();
     this._aspect = aspect;
   }
 
@@ -38,6 +39,23 @@ export class VersionedObjectManager<T extends VersionedObject> {
   controlCenter() { return this._controlCenter; }
   name() { return this._aspect.name; }
   aspect() { return this._aspect; }
+
+  setId(id: Identifier) {
+    if (this._id === id)
+      return;
+    if (VersionedObjectManager.isLocalId(id))
+      throw new Error(`cannot change identifier to a local identifier`);
+    if (!VersionedObjectManager.isLocalId(this._id)) 
+      throw new Error(`id can't be modified once assigned (not local)`);
+    this._controlCenter.changeObjectId(this._id, id);
+    this._id = id; // local -> real id (ie. object _id attribute got loaded)
+  }
+
+  setVersion(version: number) {
+    this._localAttributes.forEach((v, k) => this._versionAttributes.set(k, v));
+    this._localAttributes.clear();
+    this._version = version;
+  }
 
   initWithMSTEDictionary(d) {
     this._id = d._id;
@@ -94,16 +112,9 @@ export class VersionedObjectManager<T extends VersionedObject> {
     }
   }
 
-  setVersion(version: number) {
-    this._localAttributes.forEach((v, k) => this._versionAttributes.set(k, v));
-    this._localAttributes.clear();
-    this._version = version;
-  }
-
   mergeWithRemote(manager: VersionedObjectManager<T>) {
     this.mergeWithRemoteAttributes(manager._versionAttributes, manager._version);
   }
-
   mergeWithRemoteAttributes(attributes: Map<string, any>, version: number) {
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     if (version === this._version) {
@@ -112,9 +123,10 @@ export class VersionedObjectManager<T extends VersionedObject> {
           if (this._versionAttributes.has(k) && !areEquals(this._versionAttributes.get(k), attributes.get(k)))
             ret.conflicts.push(k);
       }
-      Object.assign(this._versionAttributes, attributes);
+      attributes.forEach((v, k) => this._versionAttributes.set(k, v));
     }
-    else {
+    else if (version > this._version) {
+      this._version = version;
       this._oldVersion = this._version;
       this._oldVersionAttributes = this._versionAttributes;
       this._versionAttributes = attributes;
@@ -175,8 +187,8 @@ export class VersionedObject implements MSTE.Decodable {
   };
 
   __manager: VersionedObjectManager<this>;
-  _id: Identifier;  // virtual attribute handled by the manager
-  _version: number; // virtual attribute handled by the manager
+  readonly _id: Identifier;  // virtual attribute handled by the manager
+  readonly _version: number; // virtual attribute handled by the manager
 
   constructor(manager: VersionedObjectManager<any>) {
     this.__manager = manager; // this will fill _id and _version attributes
@@ -215,24 +227,10 @@ export class VersionedObject implements MSTE.Decodable {
 Object.defineProperty(VersionedObject.prototype, '_id', {
   enumerable: true,
   get(this: VersionedObject) { return this.__manager._id; },
-  set(this: VersionedObject, value) {
-    if (this.__manager._id === value)
-      return;
-    if (VersionedObjectManager.isLocalId(value))
-      throw new Error(`cannot change identifier to a local identifier`);
-    if (!VersionedObjectManager.isLocalId(this.__manager._id)) 
-      throw new Error(`id can't be modified once assigned (not local)`);
-    this.__manager._id = value; // local -> real id (ie. object _id attribute got loaded)
-  }
 });
 Object.defineProperty(VersionedObject.prototype, '_version', {
   enumerable: true,
   get(this: VersionedObject) { return this.__manager._version; },
-  set(this: VersionedObject, value) {
-    if (this.__manager._version !== VersionedObjectManager.NoVersion)
-      throw new Error(`Cannot change object version directly`); 
-    this.__manager._version = value; 
-  }
 });
 
 export class VersionedObjectSnapshot<T extends VersionedObject> {

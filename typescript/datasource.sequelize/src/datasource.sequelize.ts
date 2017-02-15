@@ -12,9 +12,9 @@ class SqlAttribute {
 }
 
 class SequelizeQuery {
-  cstor?: Aspect.Constructor = undefined;
-  model?: sequelize.Model<any, any> = undefined;
+  model?: string = undefined;
   where?: sequelize.WhereOptions = undefined;
+  attributes?: string[] = undefined;
   dependencies: SequelizeQuery[] = [];
   values: VersionedObject[] = [];
   requiredBy: SequelizeQuery[] = [];
@@ -27,19 +27,23 @@ class SequelizeQuery {
       let deps = this.dependencies.map(d => d.execute());
       this.promise = Promise.all(deps).then(() => {
         return new Promise<VersionedObject[]>((resolve, reject) => {
-          if (!this.model)
+          let type = this.model && this.db.models.get(this.model);
+          if (!type)
             throw new Error(`no model`);
+          let cc = this.db.manager().controlCenter();
+          let cstor = type.cstor;
           let include: sequelize.IncludeOptions[] = [];
           this.sharedQueries.forEach(query => {
             if (query !== this) {
-              include.push(query);
+              include.push(query.toInclude());
             };
           });
-          this.model!.findAll({
+          type.model.findAll({
             where: this.where,
-            include: include
+            include: include,
+            attributes: this.attributes
           }).then((objects) => {
-            objects.forEach(o => this.loadObject(o));
+            objects.forEach(o => this.loadObject(o, cstor, cc));
             resolve(this.values);
           }).catch(reject);
         });
@@ -48,13 +52,28 @@ class SequelizeQuery {
     return this.promise;
   }
 
-  loadObject(o: Object) {
-    if (!this.cstor)
-      throw new Error(`no cstor`);
-    let vo = new this.cstor();
-    for (let k in o) {
-      vo[k] = o[k];
+  toInclude() : sequelize.IncludeOptions {
+    let type = this.model && this.db.models.get(this.model);
+    if (!type)
+      throw new Error(`no model`);
+    return {
+      model: type.model,
+      where: this.where
     }
+  }
+
+  loadObject(o, cstor: Aspect.Constructor, cc: ControlCenter) {
+    let id = o._id;
+    let version = o._version;
+    let attributes = new Map<string, any>();
+    for (let k in o) {
+      if (k !== '_id' && k !== '_version')
+        attributes.set(k, o[k]);
+    }
+    let vo = cc.registeredObject(id) || new cstor();
+    let manager = vo.manager();
+    manager.setId(id);
+    manager.mergeWithRemoteAttributes(attributes, version);
     this.values.push(vo);
   }
 
@@ -85,10 +104,15 @@ class SequelizeQuery {
     this.sharedQueries.set(set, ret);
     set.constraintsOnValue.forEach(constraint => ret.addConstraintOnValue(set, constraint));
     set.constraintsBetweenSet.forEach(constraint => ret.addConstraintBetweenSet(set, constraint));
+    if (set.name) {
+      this.attributes = ['_id', '_version'];
+      if (set.scope)
+        this.attributes.push(...set.scope);
+    }
     return ret;
   }
 
-  setModel(on: SequelizeQuery, model?: sequelize.Model<any, any>) : SequelizeQuery {
+  setModel(on: SequelizeQuery, model?: string) : SequelizeQuery {
     if (on.model && on.model !== model) {
       if (this === on)
         throw new Error(`constraints on type collides`);
@@ -97,6 +121,7 @@ class SequelizeQuery {
     on.model = model;
     return on;
   }
+
   addConstraintOnType(set: ObjectSet, constraint: DataSourceInternal.ConstraintOnType) : SequelizeQuery {
     let ret: SequelizeQuery = this;
     switch(constraint.type) {
@@ -130,7 +155,7 @@ class SequelizeQuery {
       }
       case ConstraintType.MemberOf:
       case ConstraintType.InstanceOf:
-        ret = ret.setModel(ret, this.db.models.get((constraint.value as Aspect.Constructor).aspect.name));
+        ret = ret.setModel(ret, (constraint.value as Aspect.Constructor).aspect.name);
         break;
     }
     return ret;
@@ -188,7 +213,7 @@ class SequelizeQuery {
 
 export class SequelizeDataSourceImpl extends DataSource {
   sequelize: sequelize.Sequelize;
-  models = new Map<string, sequelize.Model<any, any>>();
+  models = new Map<string, { model: sequelize.Model<any, any>, cstor: Aspect.Constructor }>();
 
   execute(set: ObjectSet): Promise<VersionedObject[]> {
     let query = new SequelizeQuery(this);
@@ -197,29 +222,28 @@ export class SequelizeDataSourceImpl extends DataSource {
   }
 
   save(transaction: sequelize.Transaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
-    let model = this.models.get(object.manager().aspect().name);
-    if (!model)
+    let type = this.models.get(object.manager().aspect().name);
+    if (!type)
       return Promise.reject('model not found');
     let manager = object.manager();
-    let nextVersion = manager.version() + 1;
-    let o: any = { _version: nextVersion };
+    let o: any = {};
     manager._localAttributes.forEach((v, k) => {
       // TODO: map key/values
       o[k] = v;
     });
     if (object.version() === VersionedObjectManager.NoVersion) {
-      return model.build(o).save({transaction: transaction}).then(o => Promise.resolve({ _id: o._id, _version: o._version }));
+      o._version = 0;
+      return type.model.build(o).save({transaction: transaction}).then(o => Promise.resolve({ _id: o._id, _version: o._version }));
     }
     else {
-      return model.update([
-        {}
-      ], { where: { _id: object.id(), _version: object.version() },  transaction: transaction }).then(r => {
+      o._version = object.version() + 1;
+      return type.model.update(o, { where: { _id: object.id(), _version: object.version() },  transaction: transaction }).then(r => {
         let [affectedCount] = r;
         if (affectedCount < 1)
           return Promise.reject('cannot update object not found');
         if (affectedCount > 1)
           return Promise.reject('cannot update database is corrupted');
-        return Promise.resolve({ _id: object.id(), _version: nextVersion });
+        return Promise.resolve({ _id: object.id(), _version: o._version });
       }) as any;
     }
   }
@@ -241,13 +265,13 @@ export class SequelizeDataSourceImpl extends DataSource {
 
   implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
     return new Promise<VersionedObject[]>((resolve, reject) => {
-      let versions: { _id: Identifier, _version: number }[];
-      this.sequelize.transaction((transaction) => Promise.all(objects.map(object => this.save(transaction, object))).then(v => versions = v) as any)
-      .then(() => {
+      this.sequelize.transaction((transaction) => Promise.all(objects.map(object => this.save(transaction, object))) as any)
+      .then((versions: { _id: Identifier, _version: number }[]) => {
         // update objects
         versions.forEach((v, i) => {
-          objects[i]._id = v._id;
-          objects[i].manager().setVersion(v._version);
+          let manager = objects[i].manager();
+          manager.setId(v._id);
+          manager.setVersion(v._version);
         });
         resolve(objects);
       })

@@ -4,17 +4,18 @@ import {createTests} from './datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
 export const tests = { name: 'InMemoryDataSource', tests: 
-  createTests(function createControlCenter() {
+  createTests(function createControlCenter(flux) {
     let cc = new ControlCenter();
     let C = Car.installAspect(cc, 'test1');
     let P = People.installAspect(cc, 'test1');
     let DB = InMemoryDataSource.installAspect(cc, "server");
     let db = new DB();
-
-    return {
+    Object.assign(flux.context, {
       Car: C,
       People: P,
-      db: db
-    }
+      db: db,
+      cc: cc
+    });
+    flux.continue();
   })
 };
