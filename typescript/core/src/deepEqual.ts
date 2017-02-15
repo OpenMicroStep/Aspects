@@ -56,5 +56,5 @@ export function addIsEqualSupport<T>(clazz: { new (...args): T }, impl: (this: T
 }
 
 export function areEquals(a: Object, b: Object) {
-  return !a || !b ? a === b : a.isEqual(b);
+  return a === b || (!a || !b ? false : a.isEqual(b));
 }
