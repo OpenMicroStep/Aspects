@@ -22,9 +22,9 @@ export class ControlCenter {
   notificationCenter() { return this._notificationCenter; }
 
   /// category component
-  registeredObject(id: Identifier) : VersionedObject | null {
+  registeredObject(id: Identifier) : VersionedObject | undefined {
     let o = this._objects.get(id);
-    return o ? o.object : null;
+    return o ? o.object : undefined;
   }
   
   registeredObjects(component: AComponent) : VersionedObject[] {
