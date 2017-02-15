@@ -90,7 +90,8 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
     return this.farPromise('implLoad', w);
   },
   rawSave(this, objects: VersionedObject[]) {
-    return this.farPromise('implSave', objects);
+    let changed = objects.filter(o => o.manager().hasChanges());
+    return this.farPromise('implSave', changed).then(() => objects);
   }
 });
 

@@ -56,13 +56,24 @@ A utiliser le plus rarement possible, jamais si possible.
 #### rawLoad(l: { objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
 #### rawSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 
+Enregistre la liste d'objets fournis et renvoie les objets modifiés (nouvelle version courante ou conflits).
+
+Appelle `implSave` pour réaliser effectivement l'enregistrement sur la liste filtré d'objets qui ont effectivement des modifications.
+
 ### farCategory implementation
 
 Méthodes à implémenter par les dataSources.
 
 #### implQuery(sets: [0, *, ObjectSet]): { * :[0, *, VersionedObject]}
 #### implLoad(l: { objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
+
 #### implSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
+
+Enregistre la liste d'objets fournis et retourne la forme en base des objets.
+
+Tous les objets sans modification ont déjà été filtré par `rawSave`.
+Les valeurs locales en attente d'enregistrement sont passé en valeurs version courante que si tous les objets sont sauvés avec succès.
+En cas de conflits, rien n'est sauvé et les informations sur les conflits sont passés aux objets.
 
 ### aspect client
 #### categories: local client_

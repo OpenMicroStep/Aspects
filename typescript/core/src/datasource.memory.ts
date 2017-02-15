@@ -32,8 +32,7 @@ export const InMemoryDataSource = VersionedObject.cluster(class InMemoryDataSour
         this.objects.delete(object);
       else {
         let manager = object.manager();
-        if (manager.hasChanges())
-          manager.setVersion(version + 1);
+        manager.setVersion(version + 1);
         this.objects.add(object);
       }
     });
