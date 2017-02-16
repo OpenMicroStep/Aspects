@@ -1,2 +1,3 @@
-export * from './person';
-export * from './demoapp';
+export * from '../generated/aspects.interfaces';
+import './person';
+import './demoapp';

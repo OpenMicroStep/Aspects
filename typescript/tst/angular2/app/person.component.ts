@@ -18,7 +18,7 @@ import {Invocation, DataSource, Notification} from '@microstep/aspects';
 `
 })
 export class PersonComponent implements AfterViewInit, OnDestroy {
-    loadedPerson: Person;
+    loadedPerson: Person.Aspects.client;
 
     ngAfterViewInit() {
         controlCenter.registerComponent(this);
@@ -30,9 +30,9 @@ export class PersonComponent implements AfterViewInit, OnDestroy {
         controlCenter.unregisterComponent(this);
     }
 
-    setPerson(p: Person) {
+    setPerson(p: Person.Aspects.client) {
         controlCenter.registerObjects(this, [p]);
-        dataSource.farEvent('load', { objects: [p], scope: [] }, 'personLoaded', this);
+        dataSource.farEvent('load', { objects: [p], scope: ['_firstName', '_lastName', '_birthDate'] }, 'personLoaded', this);
     }
     personLoaded(notification: Notification) {
         this.loadedPerson = notification.info.invocation.result()[0];

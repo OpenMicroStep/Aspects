@@ -23,7 +23,7 @@ import {Notification, Invocation, DataSource} from '@microstep/aspects';
 `
 })
 export class PersonListComponent implements AfterViewInit, OnDestroy {
-    persons: Person[] = [];
+    persons: Person.Aspects.client[] = [];
     _query: string = "";
 
     get query() {
@@ -31,10 +31,7 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
     }
     set query(value) {
         this._query = value;
-        dataSource.farEvent('query', { 
-            conditions:{ /*$class: 'Person', */$text: { $search: value } }, 
-            scope: ['_firstName', '_lastName']
-        }, 'queryResults', this);
+        dataSource.farEvent('query', { id: "allpersons", text: value }, 'queryResults', this);
     }
     
     ngAfterViewInit() {
@@ -46,7 +43,7 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         controlCenter.notificationCenter().removeObserver(this);
         controlCenter.unregisterComponent(this);
     }
-    selected(p: Person) {
+    selected(p: Person.Aspects.client) {
         controlCenter.notificationCenter().postNotification({
             name: "select",
             object: this,
@@ -54,7 +51,7 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         });
     }
     queryResults(notification: Notification) {
-        let persons = notification.info.invocation.result();
+        let persons = notification.info.invocation.result().persons;
         controlCenter.unregisterObjects(this, this.persons);
         this.persons = persons;
         controlCenter.registerObjects(this, this.persons);

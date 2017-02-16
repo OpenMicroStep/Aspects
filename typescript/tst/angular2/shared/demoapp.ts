@@ -1,13 +1,10 @@
-import {controlCenter, ControlCenter, VersionedObject, DataSource} from '@microstep/aspects';
-import * as interfaces from '../generated/aspects.interfaces';
-import {Person} from './person';
+import {ControlCenter, VersionedObject, DataSource} from '@microstep/aspects';
+import {Person, DemoApp} from './index';
 
-export const DemoApp = interfaces.DemoApp;
-export type DemoApp = interfaces.DemoApp;
 DemoApp.category('core', {
    dataSource() { return this._dataSource; }
 });
-DemoApp.category('public', {
+DemoApp.category('far', <DemoApp.ImplCategories.far<DemoApp>>{
     giveMeANumber(): number {
         return Math.random();
     },
@@ -15,16 +12,16 @@ DemoApp.category('public', {
         return value;
     },
     p0(): Person {
-        let p0 = new Person();
-        p0._id = 0;
+        let p0 = this.controlCenter().create<Person.Categories.core>(Person, ['core']);
+        p0.manager().setId(0);
         p0._firstName = "Linus";
         p0._lastName = "git";
         p0.manager().setVersion(0);
-        return p0.manager().snapshot();
+        return p0;
     },
     arr_p0_1(): Person[] {
-        let p0 = new Person();
-        p0._id = 0;
+        let p0 = this.controlCenter().create<Person.Categories.core>(Person, ['core']);
+        p0.manager().setId(0);
         p0._firstName = "Linus";
         p0._lastName = "Torvalds";
         p0.manager().setVersion(1);

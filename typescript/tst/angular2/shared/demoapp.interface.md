@@ -9,15 +9,15 @@ Description de la classe
 ### category core [ts]
 #### dataSource() : DataSource;
 
-### farCategory public [ts]
+### farCategory far [ts]
 #### giveMeANumber(): decimal
 #### pass(arg0: any): any
 #### p0(): Person
 #### arr_p0_1():  [0, *, Person]
 
 ### aspect server
-#### categories: core, public
+#### categories: core, far
 
 ### aspect client
 #### categories: core
-#### farCategories: public
+#### farCategories: far

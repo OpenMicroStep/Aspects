@@ -1,89 +1,61 @@
-import {controlCenter, ControlCenter, VersionedObject, DataSource, Conditions, Scope} from '@microstep/aspects';
-import {ExpressTransport} from '@microstep/aspects.express';
+import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, installPublicTransport, registerQuery, InvocationState} from '@microstep/aspects';
 import {SequelizeDataSource} from '@microstep/aspects.sequelize';
+import {ExpressTransport} from '@microstep/aspects.express';
 import {Person, DemoApp} from '../shared/index';
 import * as express from 'express';
+import * as Sequelize from 'sequelize';
 require('source-map-support').install();
 
-const router = express.Router();
-const transport = new ExpressTransport(router, (aspect, id) => {
-    if (id === demoapp.id())
-        return Promise.resolve(demoapp);
-    if (id === dataSource.id())
-        return Promise.resolve(dataSource);
-    return Promise.reject('not found');
+registerQuery("allpersons", (query) => {
+  return {
+    name: 'persons',
+    where: { $instanceOf: Person }, 
+    scope: ['_firstName', '_lastName']
+  }
 });
 
-class HardCodedDataSource extends DataSource {
-  protected _query({conditions, scope}: {conditions: Conditions, scope?: Scope}): VersionedObject[] {
-    console.info("query", conditions, scope);
-    return this.filter(allObjects, conditions).map(o => o.manager().snapshot()); //  TODO use scope
-  }
-  protected _load({objects, scope}: {objects: VersionedObject[], scope?: Scope}): VersionedObject[] {
-    let ret = <VersionedObject[]>[];
-    objects.forEach((o) => {
-      ret.push(...allObjects.filter(dbo => dbo._id === o._id));
+const router = express.Router();
+const transport = new ExpressTransport(router, (cstor, id) => {
+  const controlCenter = new ControlCenter();
+  const DemoAppServer = DemoApp.installAspect(controlCenter, "server");
+  const PersonServer = Person.installAspect(controlCenter, "server");
+  const dataSource = new (SequelizeDataSource.installAspect(controlCenter, "server"))();
+  const demoapp: DemoApp = new DemoAppServer();
+  let sequelize = new Sequelize("sqlite://test.sqlite", {});
+  let sPerson = sequelize.define('Person', {
+    _id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true, allowNull: false },
+    _version: Sequelize.INTEGER,
+    _firstName: Sequelize.STRING,
+    _lastName: Sequelize.STRING,
+    _birthDate: Sequelize.DATE
+  });
+  sequelize.sync({ })/*.then(() => {
+    sPerson.create({ _firstName: "Henri", _lastName: "King of the north", _birthDate: new Date() });
+  });*/
+  let mdb = dataSource as any;
+  mdb.models.set("Person", { model: sPerson, cstor: PersonServer });
+  mdb.sequelize = sequelize;
+
+  demoapp.manager().setId('__root');
+  dataSource.manager().setId('__dataSource');
+  if (id === demoapp.id())
+      return Promise.resolve(demoapp);
+  if (id === dataSource.id())
+      return Promise.resolve(dataSource);
+  let [name, dbid] = id.toString().split(':');
+  return dataSource.farPromise('safeQuery', { name: "q", where: { _id: dbid, $instanceof: mdb.models.get("name").cstor } })
+    .then((envelop) => {
+      if (envelop.state() === InvocationState.Terminated)
+        return Promise.resolve(envelop.result()["q"][0]);
+      return Promise.reject('not found')
     });
-    return ret.map(o => o.manager().snapshot()); //  TODO use scope
-  }
-  protected _save(objects: VersionedObject[]): VersionedObject[] {
-      return [];
-  }
-}
+});
 
-controlCenter.installAspect("server", DemoApp.definition, DemoApp);
-controlCenter.installAspect("server", Person.definition, Person);
-controlCenter.installAspect("server", DataSource.definition, HardCodedDataSource);
-controlCenter.installBridge({ publicTransport: transport });
+installPublicTransport(transport, DataSource, ["server_"]);
+installPublicTransport(transport, DemoApp, ["far"]);
+installPublicTransport(transport, Person, ["calculation"]);
 
-//////
 const app = express();
 app.use(express.static(__dirname + "/../../../../logitud.typescript.angular/debug/"));
 app.use('/app/app', router);
 app.listen(8080);
-
-export const demoapp: DemoApp = new DemoApp();
-demoapp._id = '__root';
-demoapp._version = 0;
-
-var allObjects = <VersionedObject[]>[];
-const dataSource = new HardCodedDataSource();
-dataSource._id = '__dataSource';
-dataSource._version = 0;
-
-allObjects.push((() => {
-    let p = new Person();
-    p._id = 'person:1';
-    p._version = 0;
-    p._firstName = 'Vincent';
-    p._lastName = 'Rouillé';
-    p._birthDate = new Date(1991, 8, 29, 7, 30, 0, 0);
-    return p;
-})());
-allObjects.push((() => {
-    let p = new Person();
-    p._id = 'person:2';
-    p._version = 0;
-    p._firstName = 'Eric';
-    p._lastName = 'Baradat';
-    p._birthDate = new Date(1978, 5, 6, 7, 30, 0, 0);
-    return p;
-})());
-allObjects.push((() => {
-    let p = new Person();
-    p._id = 'person:3';
-    p._version = 0;
-    p._firstName = 'Paul';
-    p._lastName = 'Dupond';
-    p._birthDate = new Date(1980, 6, 6, 7, 30, 0, 0);
-    return p;
-})());
-allObjects.push((() => {
-    let p = new Person();
-    p._id = 'person:4';
-    p._version = 0;
-    p._firstName = 'Pierre';
-    p._lastName = 'Paul Jacques';
-    p._birthDate = new Date(1982, 6, 6, 7, 30, 0, 0);
-    return p;
-})());

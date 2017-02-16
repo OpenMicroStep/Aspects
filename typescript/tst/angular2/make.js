@@ -32,7 +32,13 @@ module.exports =  {
       is: 'target',
       environments: ["=::logitud.typescript.node::"],
       files: ["=files:server", "=files:shared ? tsc"],
-      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'server', header: `import {DataSource} from '@microstep/aspects';` }]
+      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'server', header: `import {DataSource} from '@microstep/aspects';` }],
+      npmInstall: [{
+        "sequelize": "^3.27.0",
+        "@types/sequelize": "^4.0.39",
+        "sqlite3": "^3.1.8",
+        "source-map-support": "^0.4.11",
+      }],
     }
   }
 };
