@@ -32,7 +32,7 @@ export class ExpressTransport implements PublicTransport {
         if (envelop.state() === InvocationState.Terminated)
           res.status(200).send(this.encode(envelop.result()));
         else
-          res.status(400).send(envelop.error());
+          res.status(400).send(JSON.stringify(envelop.error()));
       }).catch((error) => {
         console.info(error);
         res.status(501).send(error);

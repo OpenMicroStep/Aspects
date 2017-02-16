@@ -167,9 +167,11 @@ class SequelizeQuery {
         break;
       }
       case ConstraintType.MemberOf:
-      case ConstraintType.InstanceOf:
-        ret = ret.setModel(ret, (constraint.value as Aspect.Constructor).aspect.name);
+      case ConstraintType.InstanceOf: {
+        let v: any = constraint.value;
+        ret = ret.setModel(ret, v.aspect ? v.aspect.name : v.definition.name);
         break;
+      }
     }
     return ret;
   }
