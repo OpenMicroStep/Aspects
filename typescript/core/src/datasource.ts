@@ -8,9 +8,14 @@ DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
   }
 });
 
+const queries = new Map<string, (query) => any>();
+export function registerQuery(id: string, creator: (query) => any) {
+  queries.set(id, creator);
+}
+
 DataSource.category('client_', <DataSource.ImplCategories.client_<DataSource.Categories.server_>>{
   query(this, request: { [k: string]: any }) {
-    // TODO: add some local checks
+    request = queries.get(request['id'])!(request);
     return this.farPromise('distantQuery', request);
   },
   load(this, w: {objects: VersionedObject[], scope: string[]}) {
