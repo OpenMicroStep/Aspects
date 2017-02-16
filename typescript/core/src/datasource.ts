@@ -120,7 +120,9 @@ export namespace DataSourceInternal {
     
     pass(object: VersionedObject): boolean {
       return this.constraintsOnType.every(c => c.pass(object)) &&
-             this.constraintsOnValue.every(c => c.pass(c.attribute ? object[c.attribute] : object, c.value));
+             this.constraintsOnValue.every(c => 
+               c.pass(c.attribute && object.manager().hasAttributeValue(c.attribute as keyof VersionedObject) ? object[c.attribute] : object, c.value)
+             );
     }
   }
 
@@ -528,7 +530,7 @@ export namespace DataSourceInternal {
     parseConditions(set: ObjectSet, elements: Map<string, ObjectSet>, attribute: string | undefined, conditions: Value | ConstraintDefinition) {
       if (typeof conditions === "object") {
         if (conditions instanceof VersionedObject) {
-          new ConstraintOnValue(ConstraintType.Equal, set, undefined, conditions);
+          new ConstraintOnValue(ConstraintType.Equal, set, attribute, conditions);
         }
         else {
           this.push(conditions);

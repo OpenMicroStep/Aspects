@@ -92,6 +92,10 @@ export class VersionedObjectManager<T extends VersionedObject> {
     this._localAttributes.forEach((v, k) => ret._localAttributes[k] = v);
     return ret;
   }
+
+  hasAttributeValue<K extends keyof T>(attribute: K) : boolean {
+    return this._localAttributes.has(attribute) || this._versionAttributes.has(attribute);
+  }
   
   attributeValue<K extends keyof T>(attribute: K) : T[K] {
     if (this._localAttributes.has(attribute))

@@ -112,7 +112,7 @@ function relationsWithCC(flux) {
     },
     f => {
       cc.unregisterObjects(component, [c0]);
-      db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _owner: c0 }, scope: ['_name', '_owner', '_model'] }).then((envelop) => {
+      db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _owner: p0 }, scope: ['_name', '_owner', '_model'] }).then((envelop) => {
         let res = envelop.result()['cars'];
         assert.equal(res.length, 1);
         let lc0 = res[0] as typeof c0;
