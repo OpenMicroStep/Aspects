@@ -63,6 +63,8 @@ export class ControlCenter {
         (<(string | undefined)[]>(events || [undefined])).forEach(event => notificationCenter.addObserver(component, method, event, o));
       if (!d)
         i.set(id, d = { object: o, components: new Set() });
+      if (d.object !== o)
+        throw new Error(`a different object with the same id (${id}) is already registered`);
       d.components.add(component);
     });
   }
@@ -89,6 +91,8 @@ export class ControlCenter {
     let o = this._objects.get(oldId);
     if (o !== undefined) {
       this._objects.delete(oldId);
+      if (this._objects.has(newId))
+        throw new Error(`a different object with the same id (${newId}) is already registered`);
       this._objects.set(newId, o);
     }
   }
