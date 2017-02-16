@@ -211,7 +211,7 @@ export class VersionedObject implements MSTE.Decodable {
   encodeToMSTE(encoder: MSTE.Encoder) {
     // unless specified, only _id and _version are encoded
     // see manager().snapshot() and manager().diff() for variants
-    encoder.encodeDictionary({ _id: this._id, _version: this._version }, this.manager().name());
+    this.manager().snapshot().encodeToMSTE(encoder); // TODO: remove this implementation with the correct one as soon as possible
   }
 
   id()     : Identifier { return this.__manager._id; }
