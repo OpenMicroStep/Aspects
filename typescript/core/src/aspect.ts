@@ -6,6 +6,10 @@ export interface FarTransport {
   remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T>;
 }
 
+export interface PublicTransport {
+  installMethod(cstor: VersionedObjectConstructor<VersionedObject>, method: Aspect.InstalledFarMethod);
+}
+
 const ajv = new Ajv();
 const classifiedTypes = new Set(['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object']);
 function classifiedType(type: Aspect.Type): Aspect.PrimaryType | 'entity' {
@@ -34,9 +38,15 @@ export function createAspect(on: ControlCenter, name: string, implementation: Ve
   return cstor;
 }
 
-export function farMethodList(on: VersionedObjectConstructor<VersionedObject>, categoryName: string): Map<string, Aspect.Method> | undefined {
-  let [type, list] = buildMethodList(categoryName, on);
-  return type === 'far' ? list : undefined;
+
+export function installPublicTransport(transport: PublicTransport, on: VersionedObjectConstructor<VersionedObject>, categories: string[]) {
+  for (let categoryName of categories) {
+    buildCategoryCache(categoryName, on).forEach(method => {
+      if (method.transport) { // far method
+        transport.installMethod(on, method as Aspect.InstalledFarMethod);
+      }
+    });
+  }
 }
 
 export interface Aspect {
