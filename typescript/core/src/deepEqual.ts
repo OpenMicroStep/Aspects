@@ -58,3 +58,46 @@ export function addIsEqualSupport<T>(clazz: { new (...args): T }, impl: (this: T
 export function areEquals(a, b) {
   return a === b || (!a || !b ? false : a.isEqual(b));
 }
+
+
+declare global {
+  interface Object {
+    replaceInGraph(replacer: (object) => any, done: Set<any>);
+  }
+}
+
+function Object_replaceInGraph(this: Object, replacer: (object) => any, done: Set<any>) {
+  if (typeof this === "object") {
+    let thisKeys = Object.keys(this);
+    for (let key of thisKeys) {
+        this[key] = replaceInGraph(this[key], replacer, done);
+    }
+  }
+}
+function Array_replaceInGraph<T>(this: Array<T>, replacer: (object) => any, done: Set<any>) { 
+  for (var i = 0, l = this.length; i < l; i++) {
+    this[i] = replaceInGraph(this[i], replacer, done);
+  }
+}
+
+
+export function addReplaceInGraphSupport<T>(clazz: { new (...args): T }, impl: (replacer: (object) => any, done: Set<any>) => void) {
+  if (!clazz.prototype.replaceInGraph)
+    Object.defineProperty(clazz.prototype, 'replaceInGraph', {
+        enumerable: false,
+        configurable: true,
+        writable: true,
+        value: impl
+    });
+}
+
+addReplaceInGraphSupport(Object, Object_replaceInGraph);
+addReplaceInGraphSupport(Array, Array_replaceInGraph);
+
+export function replaceInGraph(value, replacer: (object) => any, done: Set<any>): any {
+    if (done.has(value)) return;
+    done.add(value);
+    value = replacer(value);
+    value.replaceInGraph(replacer, done);
+    return value;
+}

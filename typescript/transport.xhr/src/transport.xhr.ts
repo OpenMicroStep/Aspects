@@ -1,4 +1,4 @@
-import {FarTransport, VersionedObject, ControlCenter} from '@microstep/aspects';
+import {FarTransport, VersionedObject, ControlCenter, replaceInGraph} from '@microstep/aspects';
 import { MSTE } from '@microstep/mstools';
 
 export class XHRTransport implements FarTransport {
@@ -55,61 +55,4 @@ export class XHRTransport implements FarTransport {
     }
     return replaceInGraph(ret, replacer, new Set());
   }
-}
-
-declare global {
-  interface Object {
-    replaceInGraph(replacer: (object) => any, done: Set<any>);
-  }
-}
-
-function VersionedObject_replaceInGraph(this: VersionedObject, replacer: (object) => any, done: Set<any>) {
-  let manager = this.manager();
-  manager._localAttributes.forEach((v,k) => {
-    let v2 = v.replaceInGraph(replacer, done);
-    if (v2 !== v)
-        manager._localAttributes.set(k, v2);
-  });
-  manager._versionAttributes.forEach((v,k) => {
-    let v2 = v.replaceInGraph(replacer, done);
-    if (v2 !== v)
-        manager._versionAttributes.set(k, v2);
-  });
-}
-
-function Object_replaceInGraph(this: Object, replacer: (object) => any, done: Set<any>) {
-  if (typeof this === "object") {
-    let thisKeys = Object.keys(this);
-    for (let key of thisKeys) {
-        this[key] = replaceInGraph(this[key], replacer, done);
-    }
-  }
-}
-function Array_replaceInGraph<T>(this: Array<T>, replacer: (object) => any, done: Set<any>) { 
-  for (var i = 0, l = this.length; i < l; i++) {
-    this[i] = replaceInGraph(this[i], replacer, done);
-  }
-}
-
-
-export function addReplaceInGraphSupport<T>(clazz: { new (...args): T }, impl: (replacer: (object) => any, done: Set<any>) => void) {
-  if (!clazz.prototype.isEqual)
-    Object.defineProperty(clazz.prototype, 'replaceInGraph', {
-        enumerable: false,
-        configurable: true,
-        writable: true,
-        value: impl
-    });
-}
-
-addReplaceInGraphSupport(Object, Object_replaceInGraph);
-addReplaceInGraphSupport(Array, Array_replaceInGraph);
-addReplaceInGraphSupport(VersionedObject, VersionedObject_replaceInGraph);
-
-export function replaceInGraph(value, replacer: (object) => any, done: Set<any>): any {
-    if (done.has(value)) return;
-    done.add(value);
-    value = replacer(value);
-    value.replaceInGraph(replacer, done);
-    return value;
 }

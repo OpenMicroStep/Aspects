@@ -1,4 +1,4 @@
-import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, InvocationState } from '@microstep/aspects';
+import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, InvocationState, replaceInGraph } from '@microstep/aspects';
 import { Router } from 'express';
 import * as bodyparser from 'body-parser';
 import { MSTE } from '@microstep/mstools';
@@ -25,7 +25,7 @@ export class ExpressTransport implements PublicTransport {
       let id = req.params.id;
       this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id).then((entity) => {
         if (!isA0Void)
-          return entity.farPromise(method.name, this.decode(req.body));
+          return entity.farPromise(method.name, this.decode(req.body, entity.controlCenter()));
         else
           return entity.farPromise(method.name, undefined);
       }).then((envelop) => {
@@ -44,7 +44,22 @@ export class ExpressTransport implements PublicTransport {
     return MSTE.stringify(value);
   }
 
-  decode(value): any {
-    return MSTE.parse(value);
+  decode(value, controlCenter: ControlCenter): any {
+    let classes = {}
+    controlCenter._aspects.forEach((a, n) => classes[n] = a);
+    let ret = MSTE.parse(value, { classes: classes });
+    let objects = new Map<VersionedObject, VersionedObject>();
+    let replacer = (object) => {
+        if (object instanceof VersionedObject) {
+            let found = objects.get(object);
+            if (!found) {
+                found = controlCenter.mergeObject(object);
+                objects.set(object, found);
+            }
+            return found;
+        }
+        return object;
+    }
+    return replaceInGraph(ret, replacer, new Set());
   }
 }

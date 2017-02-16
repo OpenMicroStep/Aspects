@@ -1,4 +1,4 @@
-import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, createAspect, addIsEqualSupport} from './core';
+import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, createAspect, addIsEqualSupport, addReplaceInGraphSupport} from './core';
 import { Flux } from '@microstep/async';
 import {MSTE} from '@microstep/mstools';
 
@@ -265,6 +265,21 @@ function isEqualVersionedObject(this: VersionedObject, other, level?: number) {
   return other === this;
 }
 addIsEqualSupport(VersionedObject, isEqualVersionedObject);
+
+function VersionedObject_replaceInGraph(this: VersionedObject, replacer: (object) => any, done: Set<any>) {
+  let manager = this.manager();
+  manager._localAttributes.forEach((v,k) => {
+    let v2 = v.replaceInGraph(replacer, done);
+    if (v2 !== v)
+        manager._localAttributes.set(k, v2);
+  });
+  manager._versionAttributes.forEach((v,k) => {
+    let v2 = v.replaceInGraph(replacer, done);
+    if (v2 !== v)
+        manager._versionAttributes.set(k, v2);
+  });
+}
+addReplaceInGraphSupport(VersionedObject, VersionedObject_replaceInGraph);
 
 export interface VersionedObjectConstructor<C extends VersionedObject> {
     new(manager: VersionedObjectManager<C>): C;
