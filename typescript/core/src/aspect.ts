@@ -3,11 +3,7 @@ import {Async, Flux} from '@microstep/async';
 import * as Ajv from 'ajv';
 
 export interface FarTransport {
-  remoteCall<T>(controlCenter: ControlCenter, to: VersionedObject, method: string, args: any[]): Promise<T>;
-}
-
-export interface PublicTransport {
-  register(controlCenter: ControlCenter, aspect: Aspect.Installed, localMethod: Aspect.Method, localImpl: (...args) => Promise<any>);
+  remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T>;
 }
 
 const ajv = new Ajv();
@@ -38,6 +34,11 @@ export function createAspect(on: ControlCenter, name: string, implementation: Ve
   return cstor;
 }
 
+export function farMethodList(on: VersionedObjectConstructor<VersionedObject>, categoryName: string): Map<string, Aspect.Method> | undefined {
+  let [type, list] = buildMethodList(categoryName, on);
+  return type === 'far' ? list : undefined;
+}
+
 export interface Aspect {
   is: string;
   name: string;
@@ -45,6 +46,17 @@ export interface Aspect {
   farCategories: string[];
 };
 export namespace Aspect {
+  export const farTransportStub = {
+    remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
+      return Promise.reject(`transport not installed`);
+    }
+  }
+  export const localTransport = {
+    remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
+      return fastSafeCall(to[method], to, args[0]);
+    }
+  }
+
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object';
   export type Type = PrimaryType | string | any[] | {[s: string]: any};
   export type TypeValidator = ((value) => boolean) & { errors: any[] };
@@ -97,17 +109,6 @@ export namespace Aspect {
   export interface Constructor {
     new(): VersionedObject;
     aspect: Aspect.Installed;
-  }
-}
-
-const farTransportStub = {
-  remoteCall<T>(controlCenter: ControlCenter, to: VersionedObject, method: string, args: any[]): Promise<T> {
-    return Promise.reject(`transport not installed`);
-  }
-}
-const localTransport = {
-  remoteCall<T>(controlCenter: ControlCenter, to: VersionedObject, method: string, args: any[]): Promise<T> {
-    return fastSafeCall(to[method], to, args[0]);
   }
 }
 
@@ -170,7 +171,7 @@ function buildCategoryCache(categoryName: string, from: VersionedObjectConstruct
     let farMethod = Object.assign({}, method, {
       argumentValidators: method.argumentTypes.map(t => createValidator(t)),
       returnValidator: createValidator(method.returnType),
-      transport: isFar ? farTransportStub : undefined
+      transport: isFar ? Aspect.farTransportStub : undefined
     });
     ret.set(method.name, farMethod);
   });
@@ -180,7 +181,7 @@ function installCategoryCache(cache: Map<string, Aspect.InstalledMethod>, on: Ve
   cache.forEach((i, m) => {
     if (local) {
       if (i.transport) {
-        on.aspect.farMethods.set(m, Object.assign({}, i, { transport: localTransport }));
+        on.aspect.farMethods.set(m, Object.assign({}, i, { transport: Aspect.localTransport }));
       }
       else {
         let localImpl = from.prototype[i.name];

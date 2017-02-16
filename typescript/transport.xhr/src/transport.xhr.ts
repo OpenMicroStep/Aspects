@@ -2,7 +2,7 @@ import {FarTransport, VersionedObject, ControlCenter} from '@microstep/aspects';
 import { MSTE } from '@microstep/mstools';
 
 export class XHRTransport implements FarTransport {
-  remoteCall<T>(controlCenter: ControlCenter, to: VersionedObject, method: string, args: any[]): Promise<T> {
+  remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
     return new Promise((resolve, reject) => {
         var isVoid = args.length === 0;
         var xhr = new XMLHttpRequest();
@@ -10,9 +10,9 @@ export class XHRTransport implements FarTransport {
         xhr.onreadystatechange = () => {
             if (xhr.readyState == 4) {
                 if (xhr.status >= 200 && xhr.status < 300) 
-                    resolve(this.decode(controlCenter, xhr.responseText));
+                    resolve(this.decode(to.controlCenter(), xhr.responseText));
                 else
-                    reject(this.decode(controlCenter, xhr.responseText));
+                    reject(this.decode(to.controlCenter(), xhr.responseText));
             }
         }
         if (!isVoid) {

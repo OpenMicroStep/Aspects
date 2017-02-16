@@ -96,7 +96,7 @@ export class Invocation<O extends VersionedObject, R> {
 
     if (argValidator && !argValidator(this._argument))
       throw new Error(`argument is invalid`);
-    method.transport.remoteCall(manager.controlCenter(), this._receiver, this._method, this._argument ? [this._argument]: [])
+    method.transport.remoteCall(this._receiver, this._method, this._argument ? [this._argument]: [])
         .then((ret) => result(null, ret))
         .catch((err) => result(err, null))
   }

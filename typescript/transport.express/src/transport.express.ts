@@ -1,11 +1,11 @@
-import { PublicTransport, ControlCenter, VersionedObject, Identifier, Aspect } from '@microstep/aspects';
+import { ControlCenter, VersionedObject, Identifier, Aspect } from '@microstep/aspects';
 import { Router } from 'express';
 import * as bodyparser from 'body-parser';
 import { MSTE } from '@microstep/mstools';
 
 const text_middleware = bodyparser.text({type: () => true });
 
-export class ExpressTransport implements PublicTransport {
+export class ExpressTransport {
   app: Router;
   findObject: (aspect: Aspect.Installed, id: Identifier) => Promise<VersionedObject>;
 
