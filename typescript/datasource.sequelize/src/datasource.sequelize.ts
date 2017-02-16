@@ -280,13 +280,28 @@ export class SequelizeDataSourceImpl extends DataSource {
     ).then(() => ret);
   }
   implLoad({objects, scope} : {
-      objects?: VersionedObject[];
+      objects: VersionedObject[];
       scope?: string[];
   }): Promise<VersionedObject[]> {
-    let set = new ObjectSet();
-    set.scope = scope;
-    new DataSourceInternal.ConstraintOnValue(ConstraintType.In, set, undefined, objects);
-    return this.execute(set);
+    let types = new Map<Function, VersionedObject[]>();
+    for (let object of objects) {
+      let aspect = object.constructor;
+      let list = types.get(aspect);
+      if (!list)
+        types.set(aspect, list = []);
+      list.push(object);
+    }
+    let sets = <ObjectSet[]>[];
+    types.forEach((list, aspect) => {
+      let set = new ObjectSet();
+      set.scope = scope;
+      new DataSourceInternal.ConstraintOnType(ConstraintType.InstanceOf, set, aspect);
+      new DataSourceInternal.ConstraintOnValue(ConstraintType.In, set, undefined, list);
+      sets.push(set);
+    });
+    return Promise.all(sets.map(s => this.execute(s))).then((results) => {
+      return ([] as VersionedObject[]).concat(...results);
+    });
   }
 
   implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
