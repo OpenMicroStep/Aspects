@@ -46,7 +46,7 @@ addIsEqualSupport(Array, isEqualArray);
 addIsEqualSupport(Date, isEqualDate);
 
 export function addIsEqualSupport<T>(clazz: { new (...args): T }, impl: (this: T, other, level?: number) => boolean) {
-  if (!clazz.prototype.isEqual)
+  if (!clazz.prototype.hasOwnProperty('isEqual'))
     Object.defineProperty(clazz.prototype, 'isEqual', {
         enumerable: false,
         configurable: true,
@@ -82,7 +82,7 @@ function Array_replaceInGraph<T>(this: Array<T>, replacer: (object) => any, done
 
 
 export function addReplaceInGraphSupport<T>(clazz: { new (...args): T }, impl: (replacer: (object) => any, done: Set<any>) => void) {
-  if (!clazz.prototype.replaceInGraph)
+  if (!clazz.prototype.hasOwnProperty('replaceInGraph'))
     Object.defineProperty(clazz.prototype, 'replaceInGraph', {
         enumerable: false,
         configurable: true,
@@ -95,9 +95,11 @@ addReplaceInGraphSupport(Object, Object_replaceInGraph);
 addReplaceInGraphSupport(Array, Array_replaceInGraph);
 
 export function replaceInGraph(value, replacer: (object) => any, done: Set<any>): any {
+  if (typeof value === "object") {
     if (done.has(value)) return;
     done.add(value);
     value = replacer(value);
     value.replaceInGraph(replacer, done);
-    return value;
+  }
+  return value;
 }

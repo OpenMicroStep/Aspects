@@ -3,7 +3,7 @@ module.exports =  {
   name: "Aspects",
   "ts base=": { is: 'component', type: "javascript", compiler: "aspects",
       npmPackage: [{
-        "version": "0.2.5",
+        "version": "0.2.6",
       }],
       tsConfig: [{
         "module": "commonjs",
