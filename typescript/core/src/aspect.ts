@@ -90,6 +90,7 @@ export namespace Aspect {
     name: string;
     aspect: string;
     version: number;
+    categories: Set<string>;
     attributes: Map<string, InstalledAttribute>;
     farMethods: Map<string, InstalledFarMethod>;
   };
@@ -126,6 +127,7 @@ function cachedAspect(name: string, implementation: VersionedObjectConstructor<V
         name: implementation.definition.name,
         version: implementation.definition.version,
         aspect: name,
+        categories: new Set(),
         attributes: installAttributes(implementation),
         farMethods: new Map()
       };
@@ -236,8 +238,9 @@ function installAspect(aspectName: string, on: VersionedObjectConstructorCache, 
 
   let aspect = assertFound('aspect', from.definition.name, aspectName, from.definition.aspects.find(a => a.name === aspectName));
   let farMethods = on.aspect.farMethods;
-  aspect.categories.forEach(c => installCategoryCache(cachedCategory(c, from), on, from, true));
-  aspect.farCategories.forEach(c => installCategoryCache(cachedCategory(c, from), on, from, false));
+  let categories = on.aspect.categories;
+  aspect.categories.forEach(c => { categories.add(c); installCategoryCache(cachedCategory(c, from), on, from, true); });
+  aspect.farCategories.forEach(c => { categories.add(c); installCategoryCache(cachedCategory(c, from), on, from, false); });
 }
   
 /*

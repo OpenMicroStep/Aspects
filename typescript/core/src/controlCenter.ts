@@ -87,6 +87,16 @@ export class ControlCenter {
     return this._aspects.get(name);
   }
 
+  create<T extends VersionedObject>(cstor: VersionedObjectConstructor<VersionedObject>, categories: string[]) : T {
+    let aspectCstor = this.aspect(cstor.definition.name);
+    if (!aspectCstor)
+      throw new Error(`cannot create ${cstor.definition.name}: no aspect found`);
+    for (let category of categories)
+      if (!aspectCstor.aspect.categories.has(category))
+        throw new Error(`cannot create ${cstor.definition.name}: category ${category} is missing in aspect ${aspectCstor.aspect.aspect}`);
+    return new aspectCstor() as T;
+  }
+
   changeObjectId(oldId: Identifier, newId: Identifier) {
     let o = this._objects.get(oldId);
     if (o !== undefined) {

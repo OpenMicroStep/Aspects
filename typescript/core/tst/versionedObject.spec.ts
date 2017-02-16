@@ -118,7 +118,19 @@ function basics() {
   });
 }
 
+function shared() {
+  let cc = new ControlCenter();
+  let R = Resource.installAspect(cc, 'test1');
+  let C = Car.installAspect(cc, 'test1');
+  let P = People.installAspect(cc, 'test1');
+
+  let c0 = new C();
+  let c1 = c0.controlCenter().create<Car.Categories.local>(Car, ['local']);
+  assert.instanceOf(c1, C);
+  assert.instanceOf(c1, Car);
+}
 export const tests = { name: 'VersionedObject', tests: [
   basics,
+  shared,
   tests_perfs
 ]};
