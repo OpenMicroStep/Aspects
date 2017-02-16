@@ -5,6 +5,7 @@ import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
 type Context = { Car: { new(): Car.Aspects.test1 }, People: { new(): People.Aspects.test1 }, db: DataSource.Aspects.server, cc: ControlCenter };
+
 function basicsWithCC(flux) {
   let {Car, People, db, cc} = flux.context as Context;
   let objects: VersionedObject[] = [];
@@ -64,6 +65,62 @@ function basicsWithCC(flux) {
         assert.deepEqual(envelop.result(), {
           peoples: []
         });
+        f.continue();
+      });
+    },
+    f => {
+      cc.unregisterObjects(component, [c0, c1, c2, p0, p1]);
+      cc.unregisterComponent(component);
+      f.continue();
+    }
+  ]);
+  flux.continue();
+}
+
+function relationsWithCC(flux) {
+  let {Car, People, db, cc} = flux.context as Context;
+  let objects: VersionedObject[] = [];
+  let component = {};
+  let c0 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 3" });
+  let c1 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 2" });
+  let c2 = Object.assign(new Car(), { _name: "Peugeot", _model: "3008 DKR" });
+  let p0 = Object.assign(new People(), { _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons" });
+  let p1 = Object.assign(new People(), { _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons" });
+  flux.setFirstElements([
+    f => {
+      cc.registerComponent(component);
+      cc.registerObjects(component, [c0, c1, c2, p0, p1]);
+      f.continue();
+    },
+    f => {
+      db.farPromise('rawSave', [c0, c1, c2, p0, p1]).then(envelop => { 
+        assert.sameMembers(envelop.result(), [c0, c1, c2, p0, p1]);
+        f.continue(); 
+      });
+    },
+    f => {
+      assert.equal(c0.manager().hasChanges(), false);
+      c0._owner = p0;
+      assert.equal(c0.manager().hasChanges(), true);
+      db.farPromise('rawSave', [c0]).then((envelop) => {
+        assert.sameMembers(envelop.result(), [c0]);
+        assert.equal(c0.version(), 1);
+        assert.equal(c0.manager().hasChanges(), false);
+        assert.equal(c0._owner, p0);
+        f.continue();
+      });
+    },
+    f => {
+      cc.unregisterObjects(component, [c0]);
+      db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _owner: c0 }, scope: ['_name', '_owner', '_model'] }).then((envelop) => {
+        let res = envelop.result()['cars'];
+        assert.equal(res.length, 1);
+        let lc0 = res[0] as typeof c0;
+        assert.equal(lc0._name, c0._name);
+        assert.equal(lc0._owner, c0._owner);
+        assert.equal(lc0._model, c0._model);
+        c0 = lc0;
+        cc.registerObjects(component, [c0]);
         f.continue();
       });
     },
@@ -154,6 +211,7 @@ export function createTests(createControlCenter: (flux) => void) {
   function insert1k(flux) { runWithNewCC(flux, f => insertWithCC(f, 1000)); }
   function insert1k_1by1Seq(flux) { runWithNewCC(flux, f => insert1by1SeqWithCC(f, 2)); }
   function insert1k_1by1Par(flux) { runWithNewCC(flux, f => insert1by1ParWithCC(f, 2)); }
-  return [basics, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
+  function relations(flux) { runWithNewCC(flux, relationsWithCC); }
+  return [basics, relations]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
 }
 

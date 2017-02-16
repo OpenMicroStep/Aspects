@@ -91,7 +91,12 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
   },
   rawSave(this, objects: VersionedObject[]) {
     let changed = objects.filter(o => o.manager().hasChanges());
-    return this.farPromise('implSave', changed).then(() => objects);
+    return this.farPromise('implSave', changed).then<VersionedObject[]>((envelop) => {
+      if (envelop.state() === InvocationState.Terminated)
+        return objects;
+      else
+        return Promise.reject(envelop.error());
+    });
   }
 });
 
@@ -178,7 +183,10 @@ export namespace DataSourceInternal {
         case ConstraintType.Text: {
           if (left instanceof VersionedObject && typeof right === "string") {
             let manager = left.manager();
-            return manager.aspect().attributes.some(a => right.indexOf(`${manager.attributeValue(a.name)}`) !== -1);
+            for (let a of manager.aspect().attributes.values())
+              if (right.indexOf(`${manager.attributeValue(a.name as keyof VersionedObject)}`) !== -1)
+                return true;
+            return false;
           }
           return false;
         }
@@ -514,26 +522,31 @@ export namespace DataSourceInternal {
 
     parseConditions(set: ObjectSet, elements: Map<string, ObjectSet>, attribute: string | undefined, conditions: Value | ConstraintDefinition) {
       if (typeof conditions === "object") {
-        this.push(conditions);
-        for(var key in conditions) {
-          if (!key.startsWith(`$`))
-            throw new Error(`an operator was expected`);
-          let v = conditions[key];
-          if (typeof v === "string" && v.startsWith('=')) {
-            let [otherSet, otherAttr] = this.resolveElement(v.substring(1), elements);
-            let o = operatorsBetweenSet[key];
-            if (o === undefined) 
-              throw new Error(`operator between two set '${key}' not found`);
-            new ConstraintBetweenSet(o, set, attribute, otherSet, otherAttr);
-          }
-          else {
-            let o = operatorsOnValue[key];
-            if (!o) 
-              throw new Error(`operator '${key}' not found`);
-            new ConstraintOnValue(o, set, attribute, v);
-          }
+        if (conditions instanceof VersionedObject) {
+          new ConstraintOnValue(ConstraintType.Equal, set, undefined, conditions);
         }
-        this.pop();
+        else {
+          this.push(conditions);
+          for(var key in conditions) {
+            if (!key.startsWith(`$`))
+              throw new Error(`an operator was expected`);
+            let v = conditions[key];
+            if (typeof v === "string" && v.startsWith('=')) {
+              let [otherSet, otherAttr] = this.resolveElement(v.substring(1), elements);
+              let o = operatorsBetweenSet[key];
+              if (o === undefined) 
+                throw new Error(`operator between two set '${key}' not found`);
+              new ConstraintBetweenSet(o, set, attribute, otherSet, otherAttr);
+            }
+            else {
+              let o = operatorsOnValue[key];
+              if (!o) 
+                throw new Error(`operator '${key}' not found`);
+              new ConstraintOnValue(o, set, attribute, v);
+            }
+          }
+          this.pop();
+        }
       }
       else {
         new ConstraintOnValue(ConstraintType.Equal, set, attribute, conditions);

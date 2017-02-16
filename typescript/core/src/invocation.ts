@@ -37,6 +37,8 @@ export class Invocation<O extends VersionedObject, R> {
   result() {
     if (this._state === InvocationState.Terminated)
       return this._result;
+    if (this._state === InvocationState.Aborted)
+      throw new Error(`cannot get result of invocation, state is Aborted: ${this.error()}`);
     throw new Error(`cannot get result of invocation, state is not Terminated`);
   }
 

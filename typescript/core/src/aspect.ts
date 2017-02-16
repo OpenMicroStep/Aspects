@@ -83,13 +83,14 @@ export namespace Aspect {
   export interface InstalledAttribute {
     name: string;
     type: Type;
+    versionedObject: string | undefined,
     validator: TypeValidator;
   };
   export interface Installed {
     name: string;
     aspect: string;
     version: number;
-    attributes: InstalledAttribute[];
+    attributes: Map<string, InstalledAttribute>;
     farMethods: Map<string, InstalledFarMethod>;
   };
   export interface Constructor {
@@ -112,7 +113,7 @@ const localTransport = {
 interface VersionedObjectConstructorCache extends VersionedObjectConstructor<VersionedObject> {
    aspect: Aspect.Installed;
 }
-const installedAttributesOnImpl = new Map<VersionedObjectConstructor<VersionedObject>, Aspect.InstalledAttribute[]>();
+const installedAttributesOnImpl = new Map<VersionedObjectConstructor<VersionedObject>, Map<string, Aspect.InstalledAttribute>>();
 const cachedAspects = new Map<string, VersionedObjectConstructorCache>();
 const cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
 
@@ -196,28 +197,29 @@ function installCategoryCache(cache: Map<string, Aspect.InstalledMethod>, on: Ve
     }
   });
 }
-function installAttributes(from: VersionedObjectConstructor<VersionedObject>): Aspect.InstalledAttribute[] {
+function installAttributes(from: VersionedObjectConstructor<VersionedObject>): Map<string, Aspect.InstalledAttribute> {
   let attributes = installedAttributesOnImpl.get(from);
   if (!attributes) {
-    attributes = from.parent ? installAttributes(from.parent).slice(0) : [];
+    attributes = from.parent ? new Map(installAttributes(from.parent)) : new Map();
     from.definition.attributes.forEach(attribute => {
-      let isEntity = classifiedType(attribute.type) === "entity";
+      let isVersionedObject = classifiedType(attribute.type) === "entity";
       let validator = createValidator(attribute.type);
       let name = attribute.name;
       Object.defineProperty(from.prototype, name, {
         enumerable: true,
-        get(this: VersionedObject) { return this.__manager.attributeValue(name) },
+        get(this: VersionedObject) { return this.__manager.attributeValue(name as keyof VersionedObject) },
         set(this: VersionedObject, value) {
           if (VersionedObjectManager.SafeMode && !validator(value))
             throw new Error(`attribute value is invalid`);
-          if (isEntity)
+          if (isVersionedObject)
             value = this.__manager._controlCenter.registeredObject(value.id()) || value; // value will be merged later
-          this.__manager.setAttributeValue(name, value);
+          this.__manager.setAttributeValue(name as keyof VersionedObject, value);
         }
       });
-      attributes!.push({
+      attributes!.set(name, {
         name: attribute.name,
         validator: validator,
+        versionedObject: isVersionedObject ? attribute.type as string : undefined,
         type: attribute.type
       });
     });

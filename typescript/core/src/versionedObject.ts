@@ -1,8 +1,8 @@
-import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, createAspect} from './core';
+import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, createAspect, addIsEqualSupport} from './core';
 import { Flux } from '@microstep/async';
 import {MSTE} from '@microstep/mstools';
 
-export type VersionedObjectAttributes = Map<string, any>;
+export type VersionedObjectAttributes<T extends VersionedObject> = Map<keyof T, any>;
 export class VersionedObjectManager<T extends VersionedObject> {
   static NoVersion = -1;
   static DeletedVersion = -2;
@@ -17,20 +17,20 @@ export class VersionedObjectManager<T extends VersionedObject> {
   _controlCenter: ControlCenter;
   _aspect: Aspect.Installed;
 
-  _localAttributes: VersionedObjectAttributes;
+  _localAttributes: VersionedObjectAttributes<T>;
   _version: number;
-  _versionAttributes: VersionedObjectAttributes;
+  _versionAttributes: VersionedObjectAttributes<T>;
   _oldVersion: number;
-  _oldVersionAttributes: VersionedObjectAttributes;
+  _oldVersionAttributes: VersionedObjectAttributes<T>;
 
   constructor(controlCenter: ControlCenter, aspect: Aspect.Installed) {
     this._controlCenter = controlCenter;
     this._id = `_localid:${++VersionedObjectManager.LocalIdCounter}`;
-    this._localAttributes = new Map<string, any>();
+    this._localAttributes = new Map();
     this._version = VersionedObjectManager.NoVersion;
-    this._versionAttributes = new Map<string, any>();
+    this._versionAttributes = new Map();
     this._oldVersion = VersionedObjectManager.NoVersion;
-    this._oldVersionAttributes = new Map<string, any>();
+    this._oldVersionAttributes = new Map();
     this._aspect = aspect;
   }
 
@@ -57,13 +57,19 @@ export class VersionedObjectManager<T extends VersionedObject> {
     this._version = version;
   }
 
+  private assertHasAttribute(attribute: string): keyof T {
+    if (VersionedObjectManager.SafeMode && !this._aspect.attributes.get(attribute))
+      throw new Error(`attribute ${attribute} doesn't exitst in ${this.name()}`);
+    return attribute as keyof T;
+  }
+
   initWithMSTEDictionary(d) {
     this._id = d._id;
     this._version = d._version;
     for (var k in d._localAttributes)
-      this._localAttributes.set(k, d._localAttributes[k]);
+      this._localAttributes.set(this.assertHasAttribute(k), d._localAttributes[k]);
     for (var k in d._versionAttributes)
-      this._versionAttributes.set(k, d._versionAttributes[k]);
+      this._versionAttributes.set(this.assertHasAttribute(k), d._versionAttributes[k]);
   }
 
   hasChanges() {
@@ -87,7 +93,7 @@ export class VersionedObjectManager<T extends VersionedObject> {
     return ret;
   }
   
-  attributeValue(attribute: string) {
+  attributeValue<K extends keyof T>(attribute: K) : T[K] {
     if (this._localAttributes.has(attribute))
       return this._localAttributes.get(attribute);
     if (this._versionAttributes.has(attribute))
@@ -97,13 +103,7 @@ export class VersionedObjectManager<T extends VersionedObject> {
     throw new Error(`attribute '${attribute}' is unaccessible and never was`);
   }
 
-  versionAttributeValue(attribute: string) {
-    if (this._versionAttributes.has(attribute))
-      return this._versionAttributes.get(attribute);
-    throw new Error(`attribute '${attribute}' is unaccessible and never was`);
-  }
-
-  setAttributeValue(attribute: string, value) {
+  setAttributeValue<K extends keyof T>(attribute: K, value: T[K]) {
     if (areEquals(this._versionAttributes.get(attribute), value)) {
       this._localAttributes.delete(attribute);
     }
@@ -112,14 +112,20 @@ export class VersionedObjectManager<T extends VersionedObject> {
     }
   }
 
+  versionAttributeValue<K extends keyof T>(attribute: K) : T[K] {
+    if (this._versionAttributes.has(attribute))
+      return this._versionAttributes.get(attribute);
+    throw new Error(`attribute '${attribute}' is unaccessible and never was`);
+  }
+
   mergeWithRemote(manager: VersionedObjectManager<T>) {
     this.mergeWithRemoteAttributes(manager._versionAttributes, manager._version);
   }
-  mergeWithRemoteAttributes(attributes: Map<string, any>, version: number) {
+  mergeWithRemoteAttributes(attributes: Map<keyof T, any>, version: number) {
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     if (version === this._version) {
       if (VersionedObjectManager.SafeMode) {
-        for (var k of attributes.keys())
+        for (let k of attributes.keys())
           if (this._versionAttributes.has(k) && !areEquals(this._versionAttributes.get(k), attributes.get(k)))
             ret.conflicts.push(k);
       }
@@ -130,7 +136,7 @@ export class VersionedObjectManager<T extends VersionedObject> {
       this._oldVersion = this._version;
       this._oldVersionAttributes = this._versionAttributes;
       this._versionAttributes = attributes;
-      for (var k of this._versionAttributes.keys()) {
+      for (let k of this._versionAttributes.keys()) {
         if (!this._oldVersionAttributes.has(k) || !areEquals(this._oldVersionAttributes.get(k), attributes.get(k)))
           ret.changes.push(k);
         if (this._localAttributes.has(k)) {
@@ -140,7 +146,7 @@ export class VersionedObjectManager<T extends VersionedObject> {
             ret.conflicts.push(k);
         }
       }
-      for (var k of this._oldVersionAttributes.keys()) {
+      for (let k of this._oldVersionAttributes.keys()) {
         if (!this._versionAttributes.has(k))
           ret.missings.push(k);
       }
@@ -253,6 +259,11 @@ export class VersionedObjectSnapshot<T extends VersionedObject> {
     encoder.encodeDictionary(this, this.__cls);
   }
 }
+
+function isEqualVersionedObject(this: VersionedObject, other, level?: number) {
+  return other === this;
+}
+addIsEqualSupport(VersionedObject, isEqualVersionedObject);
 
 export interface VersionedObjectConstructor<C extends VersionedObject> {
     new(manager: VersionedObjectManager<C>): C;

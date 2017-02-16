@@ -3,14 +3,6 @@ import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObj
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 
-class SqlTable {
-  attributes = new Map<string, SqlAttribute>();
-}
-
-class SqlAttribute {
-
-}
-
 class SequelizeQuery {
   model?: string = undefined;
   where?: sequelize.WhereOptions = undefined;
@@ -32,7 +24,17 @@ class SequelizeQuery {
             throw new Error(`no model`);
           let cc = this.db.manager().controlCenter();
           let cstor = type.cstor;
+          let validAttributes = cstor.aspect.attributes;
+          let attributes = ['_id', '_version']; // TODO: map them
+          let loadAttributes: Aspect.InstalledAttribute[] = [];
           let include: sequelize.IncludeOptions[] = [];
+          this.attributes && this.attributes.forEach(attr => {
+            let a = validAttributes.get(attr);
+            if (a) {
+              loadAttributes.push(a); 
+              attributes.push(attr);
+            }
+          });
           this.sharedQueries.forEach(query => {
             if (query !== this) {
               include.push(query.toInclude());
@@ -41,9 +43,9 @@ class SequelizeQuery {
           type.model.findAll({
             where: this.where,
             include: include,
-            attributes: this.attributes
+            attributes: attributes
           }).then((objects) => {
-            objects.forEach(o => this.loadObject(o, cstor, cc));
+            objects.forEach(o => this.loadObject(o, cstor, cc, loadAttributes));
             resolve(this.values);
           }).catch(reject);
         });
@@ -62,18 +64,31 @@ class SequelizeQuery {
     }
   }
 
-  loadObject(o, cstor: Aspect.Constructor, cc: ControlCenter) {
-    let id = o._id;
+  loadObject(o, cstor: Aspect.Constructor, cc: ControlCenter, loadAttributes: Aspect.InstalledAttribute[]) {
+    let id = this.db.fromDbId(o._id, cstor.aspect);
     let version = o._version;
     let attributes = new Map<string, any>();
-    for (let k in o) {
-      if (k !== '_id' && k !== '_version')
-        attributes.set(k, o[k]);
+    for (let attr of loadAttributes) {
+      // TODO: map key/value
+      let value = o[attr.name];
+      let versionedObjectName = attr.versionedObject;
+      if (versionedObjectName) {
+        let cstor = cc.aspect(versionedObjectName);
+        if (!cstor)
+          throw new Error(`cannot find aspect for ${versionedObjectName}`);
+        let id = this.db.fromDbId(value, cstor.aspect);
+        value = cc.registeredObject(id);
+        if (!value) {
+          value = new cstor();
+          value.manager().setId(id);
+        }
+      }
+      attributes.set(attr.name, value);
     }
     let vo = cc.registeredObject(id) || new cstor();
     let manager = vo.manager();
     manager.setId(id);
-    manager.mergeWithRemoteAttributes(attributes, version);
+    manager.mergeWithRemoteAttributes(attributes as Map<keyof VersionedObject, any>, version);
     this.values.push(vo);
   }
 
@@ -86,8 +101,10 @@ class SequelizeQuery {
     let where = this.where = this.where || {};
     attribute = attribute || "_id";
     // TODO: map attribute && values
-    if (value instanceof VersionedObject)
-      value = value.id();
+    if (Array.isArray(value))
+      value = value.map(v => v instanceof VersionedObject ? this.db.toDbId(v.id(), v.manager().aspect()) : v);
+    else if (value instanceof VersionedObject)
+      value = this.db.toDbId(value.id(), value.manager().aspect());
     where = where[attribute] = (where[attribute] || {}) as sequelize.WhereOptions;
     this.addKeyValue(where, operator, value);
   }
@@ -104,11 +121,7 @@ class SequelizeQuery {
     this.sharedQueries.set(set, ret);
     set.constraintsOnValue.forEach(constraint => ret.addConstraintOnValue(set, constraint));
     set.constraintsBetweenSet.forEach(constraint => ret.addConstraintBetweenSet(set, constraint));
-    if (set.name) {
-      this.attributes = ['_id', '_version'];
-      if (set.scope)
-        this.attributes.push(...set.scope);
-    }
+    this.attributes = set.scope;
     return ret;
   }
 
@@ -221,23 +234,31 @@ export class SequelizeDataSourceImpl extends DataSource {
     return query.execute();
   }
 
+  toDbId(id: Identifier, aspect: Aspect.Installed): number {
+    return parseInt(id.toString().substring(aspect.name.length + 1));
+  }
+  fromDbId(id: number, aspect: Aspect.Installed): string {
+    return `${aspect.name}:${id}`;
+  }
+
   save(transaction: sequelize.Transaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
-    let type = this.models.get(object.manager().aspect().name);
+    let aspect = object.manager().aspect();
+    let type = this.models.get(aspect.name);
     if (!type)
       return Promise.reject('model not found');
     let manager = object.manager();
     let o: any = {};
     manager._localAttributes.forEach((v, k) => {
       // TODO: map key/values
-      o[k] = v;
+      o[k] = v instanceof VersionedObject ? this.toDbId(v.id(), v.manager().aspect()) : v;
     });
     if (object.version() === VersionedObjectManager.NoVersion) {
       o._version = 0;
-      return type.model.build(o).save({transaction: transaction}).then(o => Promise.resolve({ _id: o._id, _version: o._version }));
+      return type.model.build(o).save({transaction: transaction}).then(o => Promise.resolve({ _id: this.fromDbId(o._id, aspect), _version: o._version }));
     }
     else {
       o._version = object.version() + 1;
-      return type.model.update(o, { where: { _id: object.id(), _version: object.version() },  transaction: transaction }).then(r => {
+      return type.model.update(o, { where: { _id: this.toDbId(object.id(), aspect), _version: object.version() },  transaction: transaction }).then(r => {
         let [affectedCount] = r;
         if (affectedCount < 1)
           return Promise.reject('cannot update object not found');
@@ -260,7 +281,10 @@ export class SequelizeDataSourceImpl extends DataSource {
       objects?: VersionedObject[];
       scope?: string[];
   }): Promise<VersionedObject[]> {
-    return Promise.reject("not implemented");
+    let set = new ObjectSet();
+    set.scope = scope;
+    new DataSourceInternal.ConstraintOnValue(ConstraintType.In, set, undefined, objects);
+    return this.execute(set);
   }
 
   implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {

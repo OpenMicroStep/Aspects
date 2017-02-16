@@ -32,6 +32,7 @@ export const tests =
       _name: Sequelize.STRING,
       _model: Sequelize.STRING
     });
+    sCar.belongsTo(sPeople, { foreignKey: '_owner' });
     let mdb = db as any;
     mdb.models.set("Car", { model: sCar, cstor: C });
     mdb.models.set("People", { model: sPeople, cstor: P });

@@ -33,7 +33,7 @@ function isEqualArray<T>(this: Array<T>, other, level?: number) {
   return true;
 }
 
-function isEqualDate<T>(this: Date, other, level?: number) {
+function isEqualDate(this: Date, other, level?: number) {
   return other instanceof Date && this.getTime() === other.getTime();
 }
 
@@ -55,6 +55,6 @@ export function addIsEqualSupport<T>(clazz: { new (...args): T }, impl: (this: T
     });
 }
 
-export function areEquals(a: Object, b: Object) {
+export function areEquals(a, b) {
   return a === b || (!a || !b ? false : a.isEqual(b));
 }
