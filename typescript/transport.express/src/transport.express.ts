@@ -1,4 +1,4 @@
-import { PublicTransport, ControlCenter, VersionedObject, Identifier } from '@microstep/aspects';
+import { PublicTransport, ControlCenter, VersionedObject, Identifier, Aspect } from '@microstep/aspects';
 import { Router } from 'express';
 import * as bodyparser from 'body-parser';
 import { MSTE } from '@microstep/mstools';
@@ -7,14 +7,14 @@ const text_middleware = bodyparser.text({type: () => true });
 
 export class ExpressTransport implements PublicTransport {
   app: Router;
-  findObject: (aspect: ControlCenter.InstalledAspect, id: Identifier) => Promise<VersionedObject>;
+  findObject: (aspect: Aspect.Installed, id: Identifier) => Promise<VersionedObject>;
 
-  constructor(app: Router, findObject: (aspect: ControlCenter.InstalledAspect, id: Identifier) => Promise<VersionedObject>) {
+  constructor(app: Router, findObject: (aspect: Aspect.Installed, id: Identifier) => Promise<VersionedObject>) {
     this.app = app;
     this.findObject = findObject;
   }
 
-  register(controlCenter: ControlCenter, aspect: ControlCenter.InstalledAspect, localMethod: ControlCenter.Method, localImpl: (...args) => Promise<any>) {
+  register(controlCenter: ControlCenter, aspect: Aspect.Installed, localMethod: Aspect.Method, localImpl: (...args) => Promise<any>) {
     let path = `/${aspect.version}/${aspect.name}/:id/${localMethod.name}`;
     let isA0Void = localMethod.argumentTypes.length === 0;
     let isRVoid = localMethod.returnType === "void";

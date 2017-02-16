@@ -6,7 +6,6 @@ import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import * as Sequelize from 'sequelize';
 export const name = "SequelizeDataSource";
 let sequelize;
-process.on('unhandledRejection', (reason, promise) => { throw reason });
 export const tests = 
 [
   { name: "sqlite", tests: createTests(function createSqliteControlCenter(flux) {

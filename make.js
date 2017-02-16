@@ -2,6 +2,9 @@ module.exports =  {
   is: "project",
   name: "Aspects",
   "ts base=": { is: 'component', type: "javascript", compiler: "aspects",
+      npmPackage: [{
+        "version": "0.2.0",
+      }],
       tsConfig: [{
         "module": "commonjs",
         "target": "es6",
@@ -38,9 +41,7 @@ module.exports =  {
     components: ["=ts base"]
   },
   "node=": {
-    is: 'environment', 
-    packager: "npm",
-    components: ["=ts base"],
+    is: 'component', 
     tsConfig: [{
       "module": "commonjs",
       "types": ["node"]
@@ -50,14 +51,11 @@ module.exports =  {
     }],
   },
   "browser=": { 
-    is: 'environment', 
-    //packager: "browserify",
-    components: ["=ts base"],
+    is: 'component', 
     tsConfig: [{
       "module": "commonjs",
       "lib": ["dom"]
     }],
-    compatibleEnvironments: ["js"],
   },
 
   "Files=": { is: 'group', elements: [
@@ -91,7 +89,7 @@ module.exports =  {
     "core=":  {
       is: 'target',
       outputName: "@microstep/aspects",
-      environments: ["=js", "=node"],
+      environments: ["=js"],
       files: ["=Files:core:src ? tsc"],
       interfaces: [{ 
         value: ["=Files:core:src ? interface"], 
@@ -99,7 +97,6 @@ module.exports =  {
       }],
       //tsConfig: [{ traceResolution: true }],
       npmPackage: [{
-        "version": "0.1.3",
         "main": "typescript/core/src/core.js",
         "typings": "typescript/core/src/core.d.ts",
         "dependencies": {
@@ -121,18 +118,17 @@ module.exports =  {
       environments: ["=js"],
       files: ["=Files:core:tst ? tsc"],
       targets: ["core"],
-      components: ["=test", "=::core::"],
+      components: ["=test", "=::core::", "=node"],
       interfaces: ["=Files:core:tst ? interface"],
     },
     "express=": {
       is: 'target',
       outputName: "@microstep/aspects.express",
       targets: ["core"],
-      components: ["=::core::"],
-      environments: ["=node"],
+      components: ["=::core::", "=node"],
+      environments: ["=js"],
       files: ["=Files:transport.express ? tsc"],
       npmPackage: [{
-        "version": "0.2.0",
         "main": "transport.express.js",
         "typings": "transport.express.d.ts"
       }],
@@ -149,11 +145,10 @@ module.exports =  {
       is: 'target',
       outputName: "@microstep/aspects.sequelize",
       targets: ["core"],
-      components: ["=::core::"],
-      environments: ["=node"],
+      components: ["=::core::", "=node"],
+      environments: ["=js"],
       files: ["=Files:datasource.sequelize:src ? tsc"],
       npmPackage: [{
-        "version": "0.2.0",
         "main": "datasource.sequelize.js",
         "typings": "datasource.sequelize.d.ts"
       }],
@@ -166,8 +161,8 @@ module.exports =  {
       is: 'target',
       outputName: "@microstep/aspects.sequelize.tests",
       targets: ["core", "sequelize"],
-      components: ["=test", "=::core::", "=::sequelize::"],
-      environments: ["=node"],
+      components: ["=test", "=::core::", "=::sequelize::", "=node"],
+      environments: ["=js"],
       files: ["=Files:datasource.sequelize:tst ? tsc"],
       interfaces: ["=Files:datasource.sequelize:tst ? interface"],
       npmInstall: [{
@@ -181,7 +176,6 @@ module.exports =  {
       packager: "npm",
       outputName: "@microstep/aspects.xhr",
       npmPackage: [{
-        "version": "0.2.0",
         "main": "transport.xhr.js",
         "typings": "transport.xhr.d.ts"
       }],
@@ -189,8 +183,8 @@ module.exports =  {
         "@microstep/mstools": "^1.0.2"
       }],
       targets: ["core"],
-      components: ["=::core::"],
-      environments: ["=browser"],
+      components: ["=::core::", "=browser"],
+      environments: ["=js"],
       files: ["=Files:transport.xhr ? tsc"],
     }
   }
