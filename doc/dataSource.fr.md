@@ -277,10 +277,11 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
   "C=": { $instanceOf: "Cat" },                             // Soit C l'ensemble des objets "Cat"
   "persons=": { $instanceOf: "Person" },                    // Soit persons l'ensemble des objets "Person"
   "cats=": {
+    // L'ensemble des chats c qui ont un propriétaire: {c ∈ C | ∃ p ∈ P tq c.owner=p}
+    $out: "=c"
     "c=": { $elementOf: "=C" },
     "p=": { $elementOf: "=persons" },
     "=c._owner": { $eq: "=p" },
-    $out: "=c"
   },
   results: [
     { name: "cats", where: "=cats", scope: ['_firstname', '_lastname', '_cats'] },
@@ -330,6 +331,7 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
     // Soit C l'ensemble des objets "Cat" qui sont rose
     "C=": { $instanceOf: "Cat", color: "pink" },
     // Soit persons les objets p de P tel que p est contraint à être le propriétaire d'un chat
+    // A REVOIR. 
     "persons=": {
       "c=": { $elementOf: "=C" },
       "p=": { $elementOf: "=P" },
@@ -343,18 +345,27 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
 }
 
 // Toutes les créneaux en conflits (par resource) et leurs resources
+// On suppose ici qu'un gap n'a qu'une ressource.
+// Sinon, il faudrait tester g1._resources ∩ g2._resources ≠ ∅
 {
     // Soit G l'ensemble des objets "Gap" (ensemble des créneaux)
     "G=": { $instanceOf: "Gap" },
     // Soit R l'ensemble des objets "Resource" (ensemble des résources)
     "R=": { $instanceOf: "Resource" },
     "conflicts=": {
+      // L'ensemble des conflits:
+      // {g1 ∈ G | ∃ g2 ∈ G tq
+      //    g1 ≠ g2 et
+      //    g1._resource=g2._resource et
+      //    g1._startingDate < g2._endingDate et
+      //    g2._startingDate < g1._endingDate }
+      $out: ["=g1"]
       "g1=": { $elementOf: "=G" },
       "g2=": { $elementOf: "=G" },
+      "=g1": { $ne: "=g2" },
       "=g1._resource"    : { $eq: "=g2._resource" },
-      "=g1._startingDate": { $gt: "=g2._endingDate"   }, // la date de fin de g2 est contraint à être avant la date de début de g
-      "=g1._endingDate"  : { $lt: "=g2._startingDate" }, // la date de début de g2 est contraint à être après la date de fin de g
-      $out: ["=g1"]
+      "=g1._startingDate": { $lt: "=g2._endingDate"},
+      "=g2._startingDate": { $lt: "=g1._endingDate"},
     },
     results: [
       { name: "conflicts", where: "=conflicts", scope: ['_startingDate', '_endingDate', '_resource'] },
