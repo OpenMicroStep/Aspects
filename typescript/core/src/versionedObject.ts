@@ -94,7 +94,7 @@ export class VersionedObjectManager<T extends VersionedObject> {
   }
 
   hasAttributeValue<K extends keyof T>(attribute: K) : boolean {
-    return this._localAttributes.has(attribute) || this._versionAttributes.has(attribute);
+    return attribute === '_id' || attribute === '_version' || this._localAttributes.has(attribute) || this._versionAttributes.has(attribute);
   }
   
   attributeValue<K extends keyof T>(attribute: K) : T[K] {
@@ -164,6 +164,7 @@ export class VersionedObject implements MSTE.Decodable {
     return <any>class VersionedObjectExtended extends cstor {
       static parent = cstor;
       static definition = definition;
+      static displayName = `base ${definition.name}`;
       static category(name: string, implementation: any, on?: VersionedObjectConstructor<VersionedObject>) {
         on = on || this;
         Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);

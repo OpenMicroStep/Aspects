@@ -99,6 +99,8 @@ class SequelizeQuery {
 
   addOperator(attribute: string | undefined, operator: string, value) {
     let where = this.where = this.where || {};
+    if (attribute === '_id' && typeof value === 'string')
+      value = this.db.toDbId(value);
     attribute = attribute || "_id";
     // TODO: map attribute && values
     if (Array.isArray(value))
@@ -236,8 +238,10 @@ export class SequelizeDataSourceImpl extends DataSource {
     return query.execute();
   }
 
-  toDbId(id: Identifier, aspect: Aspect.Installed): number {
-    return parseInt(id.toString().substring(aspect.name.length + 1));
+  toDbId(id: Identifier, aspect?: Aspect.Installed): number {
+    if (aspect)
+      return parseInt(id.toString().substring(aspect.name.length + 1));
+    return parseInt(id.toString().split(':', 2)[1]);
   }
   fromDbId(id: number, aspect: Aspect.Installed): string {
     return `${aspect.name}:${id}`;
