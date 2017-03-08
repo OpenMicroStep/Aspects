@@ -277,7 +277,7 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
   "C=": { $instanceOf: "Cat" },                             // Soit C l'ensemble des objets "Cat"
   "persons=": { $instanceOf: "Person" },                    // Soit persons l'ensemble des objets "Person"
   "cats=": {
-    // L'ensemble des chats c qui ont un propriétaire: {c ∈ C | ∃ p ∈ P tq c.owner=p}
+    // L'ensemble des chats c qui ont un propriétaire: {c ∈ C / ∃ p ∈ P tq c.owner=p}
     $out: "=c"
     "c=": { $elementOf: "=C" },
     "p=": { $elementOf: "=persons" },
@@ -294,10 +294,11 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
   "C=": { $instanceOf: "Cat" },                             // Soit C l'ensemble des objets "Cat"
   "persons=": { $instanceOf: "Person" },                    // Soit persons l'ensemble des objets "Person"
   "cats=": {
+    // L'ensemble des chats c qui ont un propriétaire: {c ∈ C / ∃ p ∈ P tq c.owner=p}
+    $out: "=c",
     "c=": { $elementOf: "=C" },
     "p=": { $elementOf: "=persons" },
     "=c._owner": { $eq: "=p" },
-    $out: "=c"
   },
   where: { $union: ["=cats", "=persons"] }
   scope: ['_firstname', '_lastname', '_owner', '_cats'],
@@ -309,9 +310,10 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
     "P=": { $instanceOf: "Person" },
     // Soit C l'ensemble des objets "Cat"
     "C=": { $instanceOf: "Cat" },
-    // Soit persons les objets p de P tel que pour c dans C il existe c._owner = p
+    // L'ensemble des personnes qui sont propriétaire d'un chat: {P ∩ { c.owner / c ∈ C } }
     "persons=": { $intersection: ["=P", "=C:_owner"] },
-    // Soit cats les objets c de C tel que pour p dans P il existe c._owner = p
+    // L'ensemble des chats c qui ont un propriétaire parmi l'ensemble des personnes qui sont propriétaire d'un chat:
+    // {c ∈ C / ∃ p ∈ persons tq c.owner=p}
     "cats=":    {
       "c=": { $elementOf: "=C" },
       "p=": { $elementOf: "=persons" },
@@ -330,12 +332,41 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
     "P=": { $instanceOf: "Person" },
     // Soit C l'ensemble des objets "Cat" qui sont rose
     "C=": { $instanceOf: "Cat", color: "pink" },
-    // Soit persons les objets p de P tel que p est contraint à être le propriétaire d'un chat
-    // A REVOIR. 
+    // L'ensemble des personnes qui ont un chat rose: {p ∈ P / ∃ c ∈ C tq c.owner=p}
     "persons=": {
       "c=": { $elementOf: "=C" },
       "p=": { $elementOf: "=P" },
       "=c._owner": { $eq: "=p" },
+      $out: "=p"
+    },
+    "persons=": { $intersection: ["=C:_owner", "=P"] },
+    results: [
+      { name: "persons", where: "=persons", scope: ['_owner'] },
+    ]
+}
+
+// Toutes les personnes dont tous les chats sont roses
+{
+    // Soit P l'ensemble des objets "Person"
+    "P=": { $instanceOf: "Person" },
+    // Soit C l'ensemble des objets "Cat"
+    "C=": { $instanceOf: "Cat" },
+    // L'ensemble des personnes dont tous les chats sont roses: 
+    // {p ∈ P / (∃ c ∈ C tq c.owner=p) et (∄ c ∈ C tq c.owner=p et c.color != rose) }
+    // {p ∈ P / (∃ c ∈ C tq c.owner=p) et (∀ c ∈ C tq c.owner=p, c.color == 'rose') }
+    // FROM P WHERE NOT EXISTS(SELECT _id FROM C WHERE P._id = C._owner AND C.color != 'rose')
+    // FROM P WHERE ALL(SELECT color FROM C WHERE P._id = C._owner) = 'rose'
+    // FROM P WHERE (SELECT MIN(color = 'rose') FROM C WHERE P._id = C._owner) = 1
+    // FROM P, (SELECT _owner, MIN(color = 'rose') allpink FROM C GROUP BY _owner) CM WHERE P._id = CM._owner AND CM.allpink = 1
+    "persons=": {
+      "c=": { $elementOf: "=C" },
+      "p=": { $elementOf: "=P" },
+      "=c._owner": { $eq: "=p" },
+      $nin: { 
+        $instanceOf: "Cat", 
+        _owner: { $eq: "=p" },
+        color: { $ne: "pink" }
+      },
       $out: "=p"
     },
     "persons=": { $intersection: ["=C:_owner", "=P"] },
