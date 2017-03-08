@@ -22,48 +22,187 @@ Application d'une source de données à une base SQL
    - hybride (un mélange entre les précédents modes)
    - modèle objet pur via des tables (ID,Caractéristique,Valeur)
 
-## Définition du modèle SQL
+## Définition du mappage SQL
 
 ```ts
 {
+  is: "sql-mapped-object"
+  attributes: SqlMappedAttribute[]
+},
+{
+  is: "sql-mapped-attribute",
+  type: "column" | "query" | "relation", 
+  storage: SqlStorage,
+  path: string,
+  mapToStorage?: (objectValue) => storageValue,
+  mapFromStorage?: (storageValue) => objectValue,
+  where?: Query
+  onDelete?: "restrict" | "cascade" | "setnull" | "setdefault" | (versionedObjectToBeDeleted) => Identifier | undefined
+},
+{
   is: "sql-storage",
-  type: "document" | "object" | "bigtable" | "1:1",
-  idGenerator: "autoincrement" | "UUID" | ...,
-  attributes: [... sql-attributes],
-  indexes: [...sql-index],
-  relations: [...sql-relation]
-  // si bigtable ou 1:1 ou document
-  table: string,
-  // si document
-  column?: string,
-},
-{
-  is: "sql-attribute",
-  name: string,
-  column: string,
-  type: 'string' | 'text' | 'binary' | 'integer' | 'decimal' | 'date' | 'boolean' | 'float' | 'double' ,
-  map?: (dbValue) => objectValue,
-  nullable: boolean
-},
-{
-  is: "sql-index",
-  columns: string[],
-  type: 'unique' | 'primary' | 'index'
-},
-{
-  is: "sql-relation",
-  name: string
-  type: "1:1" | "1:n" | "n:n"
-  fromAttribute: string,
-  toStorage: string,
-  toAttribute: string,
-},
+  type: "table" | "document" | "object",
+  idGenerator?: "auto" | "UUID" | (db, versionedObject) => any | ...,
+  idColumn?:  string
+  typeColumn?: string
+  toStoragePrimaryKey?: (versionnedObject) => object
+  table?: string
+  documentPath?: string
+}
 ```
 
-## Génération du modèle SQL
+## Exemples
 
-La définition du modèle est effectué hierarchiquement, c'est à dire que:
+### Famille avec version dans une table à part
 
- - les paramètres définits sur la classe mère s'appliquent aux classes enfants
- - les attributs hérites des paramètres s'appliquant sur la classe considéré
+```ts
+class Person
+  _firstName: string
+  _lastName: string
+  _mother: Person
+  _father: Person
+  _sons: Person[]
+
+"VersionStorage=": {
+  is: "sql-storage",
+  type: "table",
+  dbTable: "AllVersions",
+  idColumn: "id",
+  typeColumn: "type",
+  idGenerator: "autoincrement"
+},
+"VersionStorage=": {
+  is: "sql-storage",
+  type: "table",
+  dbTable: "AllVersions",
+  toStoragePrimaryKey: (versionnedObject) => {
+    let [id, type] = versionnedObject.id().split(':');
+    return { id: id, type: type };
+  }
+},
+"Person=": { is: "sql-mapped-object
+  attributes: ["=_version", "=_firstName", "=_lastName", "=_mother", "=_father", "=_sons"],
+  "PersonStorage=": {
+    is: "sql-storage",
+    type: "table",
+    idColumn: "id",
+    idGenerator: "autoincrement"
+  },
+  "_version=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=VersionStorage",
+    path: "version"
+  },
+  "_firstName=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=PersonStorage",
+    path: "firstName"
+  },
+  "_lastName=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=PersonStorage",
+    path: "lastName"
+  },
+  "_mother=": {
+    is: "sql-mapped-attribute",
+    type: "relation",
+    storage: "=PersonStorage",
+    path: "mother"
+  },
+  "_father=": {
+    is: "sql-mapped-attribute",
+    type: "relation",
+    storage: "=PersonStorage",
+    path: "father"
+  },
+  "_sons=": {
+    is: "sql-mapped-attribute",
+    type: "query",
+    where: {
+      $instanceOf: Person,
+      $or: [
+        { _father: { $eq: "=self" } }, 
+        { _mother: { $eq: "=self" } },
+      ]
+    }
+  }
+}
+```
+
+
+### Person & Chats
+
+```ts
+class Person
+  _firstName: string
+  _lastName: string
+  _cats: Cat[]
+
+class Cat
+  _name: string
+  _owner: Person
+
+"Person=": { is: "sql-mapped-object
+  attributes: ["=_version", "=_firstName", "=_lastName", "=_cats"],
+  "PersonStorage=": {
+    is: "sql-storage",
+    type: "table",
+    idColumn: "id",
+    idGenerator: "autoincrement"
+  },
+  "_version=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=PersonStorage",
+    path: "version"
+  },
+  "_firstName=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=PersonStorage",
+    path: "firstName"
+  },
+  "_lastName=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=PersonStorage",
+    path: "lastName"
+  },
+  "_sons=": {
+    is: "sql-mapped-attribute",
+    type: "relation",
+    path: "_owner"
+  }
+}
+"Cat=": { is: "sql-mapped-object
+  attributes: ["=_version", "=_name", "=_owner"],
+  "CatStorage=": {
+    is: "sql-storage",
+    type: "table",
+    idColumn: "id",
+    idGenerator: "autoincrement"
+  },
+  "_version=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=CatStorage",
+    path: "version"
+  },
+  "_name=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=CatStorage",
+    path: "name"
+  },
+  "_owner=": {
+    is: "sql-mapped-attribute",
+    type: "column",
+    storage: "=CatStorage",
+    path: "owner"
+  }
+}
+```
 
