@@ -73,6 +73,23 @@ Description de la classe
 #### _firstName: string;
 #### _lastName:  string;
 #### _birthDate: date;
+#### _mother: Person;
+#### _father: Person;
+#### _cats: [0, *, Cat];
+_relation_: `_owner`
+
+### queries
+
+#### _sons: [0, *, Person]
+Les enfants de cette personne
+
+    {
+      instanceOf: Person
+      $or: [
+        _father: { $eq: "=self" },
+        _mother: { $eq: "=self" },
+      ]
+    }
 
 ### category core [ts, objc]
 #### firstName() : string;
@@ -82,9 +99,14 @@ Description de la classe
 
 ### farCategory calculation [objc]
 #### age()       : integer;
+
+## class Cat
+### attributes
+#### _owner: Person
+_relation_: `_cats`
 ```
 
-Dans l'exemple ci-dessus, on a 4 mots clés qui sont `class`, `attributes`, `category` et `farCategory`.
+Dans l'exemple ci-dessus, on a 5 mots clés qui sont `class`, `attributes`, `queries`, `category` et `farCategory`.
 
 Toute méthode doit faire partie d'une catégorie. Chaque catégorie doit être implémentée dans les langages spécifiés pour cette catégorie.
 
@@ -123,6 +145,20 @@ Exemples de cardinalités:
 Pour un dictionnaire, il est possible de décrire finement sa constitution via la syntaxe: `{ property: type }`.
 Si property vaut `*`, elle représente alors toutes les clés restantes possibles.
 
+### Relations
+
+L'un des objectifs d'aspect étant de maintenir un graphe d'objet cohérent. Pour les problématiques liées aux relations l'approche classique est de mettre à jour dans les "setters" l'autre coté de la relation. Cela est certe efficace, seulement, cette gestion _manuelle_ ne respecte pas les principes d'aspects.
+
+Lors de la suppression d'un objet aspect, aucun usage de cet objet n'est permis, il est donc de la responsabilité du developpeur de supprimer tout usage avant suppression. Il est possible de demander au CdC la liste des usages en cours d'un objet (composants et relations). Tant qu'il restera un usage, l'objet n'est pas supprimable.
+
+Pour maintenir les relations, le CdC a besoin de relier les 2 cotés de la relation. Cette information est saisie dans le fichier d'interface (_relation_: `_nom_de_l_attribut`).
+
+### Requêtes
+
+Une requête est définit par son nom, le type de retour associé et la définition de la requête en elle même.
+Elle permet de demander simplement des informations supplémentaires proches de l'objet qui la défini sans avoir à créer une requête dédié.
+
+Elle prend la forme d'un attribut accessible uniquement en lecture seule et chargeable uniquement via la DataSource.
 
 ### Signature des méthodes
 
