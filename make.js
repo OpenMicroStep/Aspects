@@ -35,11 +35,6 @@ module.exports =  {
       }
     }]
   },
-  "js=": {
-    is: 'environment', 
-    packager: "npm",
-    components: ["=ts base"]
-  },
   "node=": {
     is: 'component', 
     tsConfig: [{
@@ -57,8 +52,24 @@ module.exports =  {
       "lib": ["dom"]
     }],
   },
-
+  "envs=": { is: 'group',
+    "node=": { is: 'environment' },
+    "js=": {
+      is: 'environment', 
+      packager: "npm",
+      components: ["=ts base"]
+    },
+  },
   "Files=": { is: 'group', elements: [
+      { is: 'group', name: 'buildsystem', path: 'buildsystem', elements: [
+        { is: 'group', name: "src", path: "src", elements: [
+          { is: 'file', name: "index.ts", tags: ["tsc"] }
+        ]},
+        { is: 'group', name: "tst", path: "tst", elements: [
+          { is: 'file', name: "index.ts", tags: ["tsc"] },
+          { is: 'file', name: "data/**" , tags: ["rsc"] }
+        ]}
+      ]},
       { is: 'group', name: 'core', path: 'typescript/core/', elements: [
         { is: 'group', name: 'src', path: 'src/', elements: [
           { is: 'file', name: 'core.ts', tags: ['tsc'] },
@@ -86,10 +97,27 @@ module.exports =  {
       ]},
   ]},
   "typescript targets=": { is: 'group',
-    "core=":  {
+    'bs aspects=': {
+      is: 'target',
+      outputName: '@msbuildsystem/aspects',
+      environments: ["=envs:node"],
+      components: ['=::core::cfg:module', '=::core::', '=::typescript::', '=::js::'],
+      targets: ['core', 'typescript'],
+      files: ['=Files:buildsystem:src ? tsc'],
+    },
+    'bs aspects tests=': {
+      is: 'target',
+      outputName: '@msbuildsystem/aspects.tests',
+      environments: ["=envs:node"],
+      components: ['=::core::cfg:tests', '=::core::', '=::bs aspects::'],
+      targets: ['bs aspects'],
+      files: ['=Files:buildsystem:tst ? tsc'],
+      copyFiles: [{value: ['=Files:buildsystem:tst ? rsc'], dest: 'data/', expand: true }]
+    },
+    "aspects core=":  {
       is: 'target',
       outputName: "@microstep/aspects",
-      environments: ["=js"],
+      environments: ["=envs:js"],
       files: ["=Files:core:src ? tsc"],
       interfaces: [{ 
         value: ["=Files:core:src ? interface"], 
@@ -115,18 +143,18 @@ module.exports =  {
     "core.tests=":  {
       is: 'target',
       outputName: "@microstep/aspects.tests",
-      environments: ["=js"],
+      environments: ["=envs:js"],
       files: ["=Files:core:tst ? tsc"],
-      targets: ["core"],
-      components: ["=test", "=::core::", "=node"],
+      targets: ["aspects core"],
+      components: ["=test", "=::aspects core::", "=node"],
       interfaces: ["=Files:core:tst ? interface"],
     },
     "express=": {
       is: 'target',
       outputName: "@microstep/aspects.express",
-      targets: ["core"],
-      components: ["=::core::", "=node"],
-      environments: ["=js"],
+      targets: ["aspects core"],
+      components: ["=::aspects core::", "=node"],
+      environments: ["=envs:js"],
       files: ["=Files:transport.express ? tsc"],
       npmPackage: [{
         "main": "transport.express.js",
@@ -144,9 +172,9 @@ module.exports =  {
     "sequelize=": {
       is: 'target',
       outputName: "@microstep/aspects.sequelize",
-      targets: ["core"],
-      components: ["=::core::", "=node"],
-      environments: ["=js"],
+      targets: ["aspects core"],
+      components: ["=::aspects core::", "=node"],
+      environments: ["=envs:js"],
       files: ["=Files:datasource.sequelize:src ? tsc"],
       npmPackage: [{
         "main": "datasource.sequelize.js",
@@ -160,9 +188,9 @@ module.exports =  {
     "sequelize.tests=": {
       is: 'target',
       outputName: "@microstep/aspects.sequelize.tests",
-      targets: ["core", "sequelize"],
-      components: ["=test", "=::core::", "=::sequelize::", "=node"],
-      environments: ["=js"],
+      targets: ["aspects core", "sequelize"],
+      components: ["=test", "=::aspects core::", "=::sequelize::", "=node"],
+      environments: ["=envs:js"],
       files: ["=Files:datasource.sequelize:tst ? tsc"],
       interfaces: ["=Files:datasource.sequelize:tst ? interface"],
       npmInstall: [{
@@ -182,9 +210,9 @@ module.exports =  {
       npmInstall: [{
         "@microstep/mstools": "^1.0.2"
       }],
-      targets: ["core"],
-      components: ["=::core::", "=browser"],
-      environments: ["=js"],
+      targets: ["aspects core"],
+      components: ["=::aspects core::", "=browser"],
+      environments: ["=envs:js"],
       files: ["=Files:transport.xhr ? tsc"],
     }
   }
