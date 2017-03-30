@@ -11,19 +11,6 @@ export interface PublicTransport {
 }
 
 const ajv = new Ajv();
-const classifiedTypes = new Set(['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object']);
-function classifiedType(type: Aspect.Type): Aspect.PrimaryType | 'entity' {
-  if (typeof type === 'object') {
-    if (Array.isArray(type))
-      return 'array';
-    else
-      return 'dictionary';
-  }
-  else if (typeof type === 'string') {
-      return <Aspect.PrimaryType | 'entity'>(classifiedTypes.has(type) ? type : 'entity');
-  }
-  return 'object';
-}
 
 export function createAspect(on: ControlCenter, name: string, implementation: VersionedObjectConstructor<VersionedObject>) : Aspect.Constructor {
   let tmp = cachedAspect(name, implementation);
@@ -32,10 +19,11 @@ export function createAspect(on: ControlCenter, name: string, implementation: Ve
     constructor() {
       super(new VersionedObjectManager(on, aspect));
     }
+    static displayName = `${aspect.name}[${aspect.aspect}]`;
     static aspect = aspect;
   };
   on._aspects.set(aspect.name, cstor);
-  return cstor;
+  return nameClass(`${aspect.name}:${aspect.aspect}`, (tmp as any).displayName || tmp.name, cstor);
 }
 
 
@@ -68,7 +56,13 @@ export namespace Aspect {
   }
 
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object';
-  export type Type = PrimaryType | string | any[] | {[s: string]: any};
+  export type Type =
+    { is: 'type', type: 'void' } |
+    { is: 'type', type: 'primitive', name: PrimaryType } |
+    { is: 'type', type: 'class', name: string } |
+    { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" } |
+    { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"} |
+    { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
   export type TypeValidator = ((value) => boolean) & { errors: any[] };
   export interface Definition {
     name: string;
@@ -129,11 +123,20 @@ const installedAttributesOnImpl = new Map<VersionedObjectConstructor<VersionedOb
 const cachedAspects = new Map<string, VersionedObjectConstructorCache>();
 const cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
 
+function nameClass<T extends { new(...args): any }>(name: string, parent: string, cls: T) : T {
+  (cls as any).displayName = name;
+  (cls as any).toString = function toCustomNameString(this: Function) {
+    return `class ${name} extends ${parent} {}`;
+  };
+  Object.defineProperty(cls, "name", { value: name, configurable: true });
+  return cls;
+}
+
 function cachedAspect(name: string, implementation: VersionedObjectConstructor<VersionedObject>) : VersionedObjectConstructorCache {
   let key = JSON.stringify([implementation.definition.name, implementation.definition.version, name]);
   let tmp = cachedAspects.get(key);
   if (!tmp) {
-    tmp = class CachedAspect extends implementation {
+    tmp = nameClass(`CACHED:${implementation.definition.name}:${name}`, `${implementation.definition.name}`, class CachedAspect extends implementation {
       static aspect: Aspect.Installed = {
         name: implementation.definition.name,
         version: implementation.definition.version,
@@ -142,7 +145,7 @@ function cachedAspect(name: string, implementation: VersionedObjectConstructor<V
         attributes: installAttributes(implementation),
         farMethods: new Map()
       };
-    };
+    });
     installAspect(name, tmp, implementation);
     cachedAspects.set(key, tmp);
   }
@@ -215,7 +218,7 @@ function installAttributes(from: VersionedObjectConstructor<VersionedObject>): M
   if (!attributes) {
     attributes = from.parent ? new Map(installAttributes(from.parent)) : new Map();
     from.definition.attributes.forEach(attribute => {
-      let isVersionedObject = classifiedType(attribute.type) === "entity";
+      let isVersionedObject = attribute.type.type === "class";
       let validator = createValidator(attribute.type);
       let name = attribute.name;
       Object.defineProperty(from.prototype, name, {
@@ -232,7 +235,7 @@ function installAttributes(from: VersionedObjectConstructor<VersionedObject>): M
       attributes!.set(name, {
         name: attribute.name,
         validator: validator,
-        versionedObject: isVersionedObject ? attribute.type as string : undefined,
+        versionedObject: isVersionedObject ? attribute.name : undefined,
         type: attribute.type
       });
     });
@@ -333,53 +336,58 @@ function protectPublicImpl(prototype, farMethod: Aspect.InstalledMethod, farImpl
     };
 }
 
-function convertTypeToJsonSchema(type: Aspect.Type): any {
-  if (typeof type === "string") {
-    switch(type) {
-      case 'any':        return { };
-      case 'integer':    return { type: "integer"   };
-      case 'decimal':    return { type: "number"    };
-      case 'date':       return { instanceof: "Date" };
-      case 'localdate':  return { type: "localdate" };
-      case 'string':     return { type: "string"    };
-      case 'array':      return { type: "array"     };
-      case 'dictionary': return { type: "object"    };
-      case 'object':     return { type: "object"    };
-      case 'identifier': return { type: "string"    };
-      default: return { }; // TODO: throw new Error(`unsupported type: ${type}`);
+function convertTypeToJsonSchema(type: Aspect.Type): any { 
+  switch (type.type) {
+    case 'primitive':
+      switch (type.name) {
+        case 'integer':    return { type: "integer"   };
+        case 'decimal':    return { type: "number"    };
+        case 'date':       return { instanceof: "Date" };
+        case 'localdate':  return { type: "localdate" };
+        case 'string':     return { type: "string"    };
+        case 'array':      return { type: "array"     };
+        case 'dictionary': return { type: "object"    };
+        case 'object':     return { type: "object"    };
+        case 'identifier': return { type: "string"    };
+      }
+      // console.warn(`unsupported primitive type: ${type.name}`);
+      return {};
+    case 'class':
+    case 'set':
+      return {}; // TODO
+    case 'array': {
+      let ret: any = {
+        type: "array",
+        items: convertTypeToJsonSchema(type.itemType)
+      };
+      if (typeof type.min === "number")
+        ret.minItems = type.min;
+      if (typeof type.max === "number")
+        ret.maxItems = type.max;
+      return ret;
     }
+    case 'dictionary': {
+      let properties = {};
+      let patternProperties = {};
+      let required: string[] = [];
+      Object.keys(type.properties).forEach(k => {
+        let schema = convertTypeToJsonSchema(type.properties[k]);
+        if (k !== '*') {
+          properties[k] = schema;
+          required.push(k);
+        }
+        else {
+          patternProperties["^[a-z0-9]+$"] = schema;
+        }
+      });
+      return {
+        type: "object",
+        properties: properties,
+        patternProperties: patternProperties,
+        required: required.length ? required : undefined
+      };
+    }
+    default:
+      throw new Error(`unsupported type: ${(type as any).type }`);
   }
-  else if (Array.isArray(type)) {
-    let ret: any = {
-      type: "array",
-      items: convertTypeToJsonSchema(type[2])
-    };
-    if (type[0])
-      ret.minItems = parseInt(type[0]);
-    if (type[1] !== '*')
-      ret.maxItems = parseInt(type[1]);
-    return ret;
-  }
-  else if (typeof type === "object") {
-    let properties = {};
-    let patternProperties = {};
-    let required: string[] = [];
-    Object.keys(type).forEach(k => {
-      let schema = convertTypeToJsonSchema(type[k]);
-      if (k !== '*') {
-        properties[k] = schema;
-        required.push(k);
-      }
-      else {
-        patternProperties["^[a-z0-9]+$"] = schema;
-      }
-    });
-    return {
-      type: "object",
-      properties: properties,
-      patternProperties: patternProperties,
-      required: required.length ? required : undefined
-    };
-  }
-  throw new Error(`unsupported type: ${type}`);
 }

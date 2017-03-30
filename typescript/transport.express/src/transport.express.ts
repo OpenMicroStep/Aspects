@@ -17,7 +17,7 @@ export class ExpressTransport implements PublicTransport {
   installMethod(cstor: VersionedObjectConstructor<VersionedObject>, method: Aspect.InstalledMethod) {
     let path = `/${cstor.definition.version}/${cstor.definition.name}/:id/${method.name}`;
     let isA0Void = method.argumentTypes.length === 0;
-    let isRVoid = method.returnType === "void";
+    let isRVoid = method.returnType.type === "void";
     console.info('GET:', path);
     if (!isA0Void)
       this.app.use(path, text_middleware);
