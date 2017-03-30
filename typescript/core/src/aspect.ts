@@ -76,6 +76,7 @@ export namespace Aspect {
     is: string;
     name: string;
     type: Type;
+    relation?: string;
   };
   export interface Category {
     is: string;
@@ -96,16 +97,22 @@ export namespace Aspect {
   export interface InstalledFarMethod extends InstalledMethod {
     transport: FarTransport;
   };
+  export interface Reference {
+    class: string
+    attribute: string
+  };
   export interface InstalledAttribute {
     name: string;
     type: Type;
     versionedObject: string | undefined,
     validator: TypeValidator;
+    relation: Reference | undefined
   };
   export interface Installed {
     name: string;
     aspect: string;
     version: number;
+    references: Reference[];
     categories: Set<string>;
     attributes: Map<string, InstalledAttribute>;
     farMethods: Map<string, InstalledFarMethod>;
@@ -141,6 +148,7 @@ function cachedAspect(name: string, implementation: VersionedObjectConstructor<V
         name: implementation.definition.name,
         version: implementation.definition.version,
         aspect: name,
+        references: [],
         categories: new Set(),
         attributes: installAttributes(implementation),
         farMethods: new Map()
@@ -221,6 +229,16 @@ function installAttributes(from: VersionedObjectConstructor<VersionedObject>): M
       let isVersionedObject = attribute.type.type === "class";
       let validator = createValidator(attribute.type);
       let name = attribute.name;
+      let relation: Aspect.Reference | undefined = undefined;
+      if (attribute.relation) {
+        if (attribute.type.type !== "class")
+          throw new Error(`attribute type of a relation must be a class`);
+        relation = { class: attribute.type.name, attribute: attribute.relation };
+      }
+      if (attribute.type.type === "class") {
+        let aspect = cachedAspects.get(attribute.name);
+        aspect && aspect.aspect.references.push({ class: from.definition.name, attribute: attribute.name });
+      }
       Object.defineProperty(from.prototype, name, {
         enumerable: true,
         get(this: VersionedObject) { return this.__manager.attributeValue(name as keyof VersionedObject) },
@@ -236,7 +254,8 @@ function installAttributes(from: VersionedObjectConstructor<VersionedObject>): M
         name: attribute.name,
         validator: validator,
         versionedObject: isVersionedObject ? attribute.name : undefined,
-        type: attribute.type
+        type: attribute.type,
+        relation: relation
       });
     });
     installedAttributesOnImpl.set(from, attributes);
