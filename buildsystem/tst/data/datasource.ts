@@ -36,6 +36,7 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
   "name": "DataSource",
   "version": 0,
   "attributes": [],
+  "queries": [],
   "categories": [
     {
       "is": "category",
@@ -47,12 +48,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "itemType": {
                 "is": "type",
                 "name": "VersionedObject",
-                "tags": [],
                 "type": "class"
               },
               "type": "array",
@@ -62,18 +60,14 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
             {
               "is": "type",
               "name": "dictionary",
-              "tags": [],
               "type": "primitive"
             }
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -96,23 +90,17 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
             {
               "is": "type",
               "name": "dictionary",
-              "tags": [],
               "type": "primitive"
             }
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "properties": {
               "*": {
                 "is": "type",
-                "name": "",
-                "tags": [],
                 "itemType": {
                   "is": "type",
                   "name": "VersionedObject",
-                  "tags": [],
                   "type": "class"
                 },
                 "type": "array",
@@ -129,17 +117,12 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "properties": {
                 "objects": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "VersionedObject",
-                    "tags": [],
                     "type": "class"
                   },
                   "type": "array",
@@ -148,12 +131,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
                 },
                 "scope": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "string",
-                    "tags": [],
                     "type": "primitive"
                   },
                   "type": "array",
@@ -166,12 +146,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -185,12 +162,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "itemType": {
                 "is": "type",
                 "name": "VersionedObject",
-                "tags": [],
                 "type": "class"
               },
               "type": "array",
@@ -200,12 +174,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -226,23 +197,17 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
             {
               "is": "type",
               "name": "dictionary",
-              "tags": [],
               "type": "primitive"
             }
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "properties": {
               "*": {
                 "is": "type",
-                "name": "",
-                "tags": [],
                 "itemType": {
                   "is": "type",
                   "name": "VersionedObject",
-                  "tags": [],
                   "type": "class"
                 },
                 "type": "array",
@@ -259,17 +224,12 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "properties": {
                 "objects": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "VersionedObject",
-                    "tags": [],
                     "type": "class"
                   },
                   "type": "array",
@@ -278,12 +238,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
                 },
                 "scope": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "string",
-                    "tags": [],
                     "type": "primitive"
                   },
                   "type": "array",
@@ -296,12 +253,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -315,12 +269,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "itemType": {
                 "is": "type",
                 "name": "VersionedObject",
-                "tags": [],
                 "type": "class"
               },
               "type": "array",
@@ -330,12 +281,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -356,23 +304,17 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
             {
               "is": "type",
               "name": "dictionary",
-              "tags": [],
               "type": "primitive"
             }
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "properties": {
               "*": {
                 "is": "type",
-                "name": "",
-                "tags": [],
                 "itemType": {
                   "is": "type",
                   "name": "VersionedObject",
-                  "tags": [],
                   "type": "class"
                 },
                 "type": "array",
@@ -389,17 +331,12 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "properties": {
                 "objects": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "VersionedObject",
-                    "tags": [],
                     "type": "class"
                   },
                   "type": "array",
@@ -408,12 +345,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
                 },
                 "scope": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "string",
-                    "tags": [],
                     "type": "primitive"
                   },
                   "type": "array",
@@ -426,12 +360,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -445,12 +376,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "itemType": {
                 "is": "type",
                 "name": "VersionedObject",
-                "tags": [],
                 "type": "class"
               },
               "type": "array",
@@ -460,12 +388,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -486,23 +411,17 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
             {
               "is": "type",
               "name": "dictionary",
-              "tags": [],
               "type": "primitive"
             }
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "properties": {
               "*": {
                 "is": "type",
-                "name": "",
-                "tags": [],
                 "itemType": {
                   "is": "type",
                   "name": "VersionedObject",
-                  "tags": [],
                   "type": "class"
                 },
                 "type": "array",
@@ -519,17 +438,12 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "properties": {
                 "objects": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "VersionedObject",
-                    "tags": [],
                     "type": "class"
                   },
                   "type": "array",
@@ -538,12 +452,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
                 },
                 "scope": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "string",
-                    "tags": [],
                     "type": "primitive"
                   },
                   "type": "array",
@@ -556,12 +467,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -575,12 +483,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "itemType": {
                 "is": "type",
                 "name": "VersionedObject",
-                "tags": [],
                 "type": "class"
               },
               "type": "array",
@@ -590,12 +495,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -615,12 +517,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "itemType": {
                 "is": "type",
                 "name": "ObjectSet",
-                "tags": [],
                 "type": "class"
               },
               "type": "array",
@@ -630,17 +529,12 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "properties": {
               "*": {
                 "is": "type",
-                "name": "",
-                "tags": [],
                 "itemType": {
                   "is": "type",
                   "name": "VersionedObject",
-                  "tags": [],
                   "type": "class"
                 },
                 "type": "array",
@@ -657,17 +551,12 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "properties": {
                 "objects": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "VersionedObject",
-                    "tags": [],
                     "type": "class"
                   },
                   "type": "array",
@@ -676,12 +565,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
                 },
                 "scope": {
                   "is": "type",
-                  "name": "",
-                  "tags": [],
                   "itemType": {
                     "is": "type",
                     "name": "string",
-                    "tags": [],
                     "type": "primitive"
                   },
                   "type": "array",
@@ -694,12 +580,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",
@@ -713,12 +596,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           "argumentTypes": [
             {
               "is": "type",
-              "name": "",
-              "tags": [],
               "itemType": {
                 "is": "type",
                 "name": "VersionedObject",
-                "tags": [],
                 "type": "class"
               },
               "type": "array",
@@ -728,12 +608,9 @@ export const DataSource = VersionedObject.extends<DataSourceConstructor<DataSour
           ],
           "returnType": {
             "is": "type",
-            "name": "",
-            "tags": [],
             "itemType": {
               "is": "type",
               "name": "VersionedObject",
-              "tags": [],
               "type": "class"
             },
             "type": "array",

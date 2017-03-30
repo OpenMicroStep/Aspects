@@ -15,6 +15,7 @@ Définition d'un objet aspect
 ### attributs
 #### is: 'attribute'
 #### type: Type
+#### relation: { class: string, attribute: string }
 
 ## Query
 ### attributs

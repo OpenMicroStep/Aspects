@@ -30,6 +30,8 @@ export class TypeElement extends Element {
   type: 'primitive' | 'class' | 'array' | 'set' | 'dictionary';
   itemType?: TypeElement = undefined;
   properties?: { [s: string]: TypeElement } = undefined;
+  min?: number;
+  max?: number | '*';
 
   __decl(allowUndefined: boolean) {
     switch (this.type) {
@@ -55,6 +57,17 @@ export class TypeElement extends Element {
         return `{${Object.keys(this.properties).map(k => `${k === '*' ? '[k: string]' : `${k}?`}: ${this.properties![k].__decl(false)}`).join(', ')}}`;
     }
   }
+
+  toJSON() {
+    let r: Partial<TypeElement> = { is: this.is };
+    this.name                     && (r.name = this.name);
+    this.itemType !== undefined   && (r.itemType = this.itemType);
+    this.properties !== undefined && (r.properties = this.properties);
+    this.type !== undefined       && (r.type = this.type);
+    this.min !== undefined        && (r.min = this.min);
+    this.max !== undefined        && (r.max = this.max);
+    return r;
+  }
 }
 
 elementFactories.registerSimple('class', (reporter, name, definition, attrPath, parent: AspectBaseElement) => {
@@ -65,6 +78,7 @@ elementFactories.registerSimple('class', (reporter, name, definition, attrPath, 
 export class ClassElement extends Element {
   superclass: string = "VersionedObject";
   attributes: AttributeElement[] = [];
+  queries: QueryElement[] = [];
   categories: CategoryElement[] = [];
   farCategories: CategoryElement[] = [];
   aspects: AspectElement[] = [];
@@ -89,8 +103,8 @@ ${cats.map(category => `\n  __c(name: '${category.name}'): ${this.name}.Categori
   __i<T extends ${this.name}>(name: string): {};
 }
 export interface ${this.name} extends ${parent} {
-${this.attributes.map(attribute => `  ${attribute.name}: ${attribute.type.__decl(true)};\n`).join('')}}
-export const ${this.name} = VersionedObject.extends<${this.name}Constructor<${this.name}>>(${parent}, ${JSON.stringify(this.__definition(), null, 2)});
+${[...this.attributes, ...this.queries].map(attribute => `  ${attribute.name}: ${attribute.type.__decl(true)};\n`).join('')}}
+export const ${this.name} = VersionedObject.extends<${this.name}Constructor<${this.name}>>(${parent}, ${JSON.stringify(this, null, 2)});
 ${workaround}
 export namespace ${this.name} {
   export namespace Categories {${
@@ -110,15 +124,16 @@ export namespace ${this.name} {
 `;
   }
 
-  __definition() {
+  toJSON() {
     return {
       is: this.is,
       name: this.name,
       version: 0,
-      attributes: this.attributes.map(a => a.__definition()),
-      categories: this.categories.map(c => c.__definition()),
-      farCategories: this.farCategories.map(c => c.__definition()),
-      aspects: this.aspects.map(a => a.__definition())
+      attributes: this.attributes.map(a => a.toJSON()),
+      queries: this.queries.map(a => a.toJSON()),
+      categories: this.categories.map(c => c.toJSON()),
+      farCategories: this.farCategories.map(c => c.toJSON()),
+      aspects: this.aspects.map(a => a.toJSON())
     };
   }
 }
@@ -128,12 +143,31 @@ elementFactories.registerSimple('attribute', (reporter, name, definition, attrPa
 });
 export class AttributeElement extends Element {
   type: TypeElement;
+  relation?: string;
 
-  __definition() {
+  toJSON() {
     return {
       is: this.is,
       name: this.name,
-      type: this.type
+      type: this.type,
+      relation: this.relation
+    };
+  }
+}
+
+elementFactories.registerSimple('query', (reporter, name, definition, attrPath, parent) => {
+  return new QueryElement('query', name, parent);
+});
+export class QueryElement extends Element {
+  type: TypeElement;
+  query: any;
+
+  toJSON() {
+    return {
+      is: this.is,
+      name: this.name,
+      type: this.type,
+      query: this.query
     };
   }
 }
@@ -194,11 +228,11 @@ ${this.is === 'farCategory' ? this.__declImplFarMethods('C') : this.__declImplMe
     return this.methods.map(method => `      ${method.name}: FarImplementation<${clazz}, ${method.__declFarArgument()}, ${method.__declReturn()}>;\n`).join('');
   }
 
-  __definition(){
+  toJSON(){
     return {
       is: this.is,
       name: this.name,
-      methods: this.methods.map(m => m.__definition())
+      methods: this.methods.map(m => m.toJSON())
     };
   }
 }
@@ -220,7 +254,7 @@ export class MethodElement extends Element {
     return this.return.__decl(false);
   }
 
-  __definition() {
+  toJSON() {
     return {
       is: this.is,
       name: this.name,
@@ -237,7 +271,7 @@ export class AspectElement extends Element {
   categories: CategoryElement[] = [];
   farCategories: CategoryElement[] = [];
 
-  __definition() {
+  toJSON() {
     return {
       is: this.is,
       name: this.name,

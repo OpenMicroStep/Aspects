@@ -41,31 +41,39 @@ Description de la classe              Person=: {
 */
 import {Reporter, Parser} from '@msbuildsystem/core';
 
-type Rule<T, P> = { rx?: RegExp, subs: string[], parser?: (parser: Parser) => T, gen?: (v: T, parent: P) => void };
+type Rule<T, P> = { subs: string[], parser: (parser: Parser) => T | undefined, gen?: (v: T, parent: P) => any };
 const rules: { [s: string]: Rule<any, any> } = {
   "class": {
-    rx: /^\s*class\s+/,
-    subs: ['attributes', 'category', 'farCategory', 'aspect'],
+    subs: ['attributes', 'queries', 'category', 'farCategory', 'aspect'],
     parser: parseClass,
     gen: (clazz, parent) => parent[`${clazz.name}=`] = clazz
   } as Rule<Element.Class, object>,
   "attributes": {
-    rx: /^\s*attributes\s*$/,
-    subs: ['attribute']
+    parser: (parser) => parser.test('attributes') || undefined,
+    subs: ['attribute'],
+    gen: (v, p) => p,
   },
+  "queries": {
+    parser: (parser) => parser.test('queries') || undefined,
+    subs: ['query'],
+    gen: (v, p) => p,
+  },
+  "query": {
+    parser: parseQuery,
+    subs: [],
+    gen: aspectRuleGen("queries", "queries"),
+  } as Rule<Element.Query, Element.Class>,
   "attribute": {
     parser: parseAttribute,
     subs: [],
     gen: aspectRuleGen("attributes", "attributes"),
   } as Rule<Element.Attribute, Element.Class>,
   "category": {
-    rx: /^\s*category\s+/,
     parser: parseCategory,
     subs: ["method"],
     gen: aspectRuleGen("categories", "categories"),
   } as Rule<Element.Category, Element.Class>,
   "farCategory": {
-    rx: /^\s*farCategory\s+/,
     parser: parseFarCategory,
     subs: ["method"],
     gen: aspectRuleGen("categories", "farCategories"),
@@ -88,11 +96,11 @@ function aspectRuleGen(namespace: string, attr: string) {
   return function(el, parent) {
     parent[`${namespace}=`][`${el.name}=`] = el;
     parent[attr].push(`=${namespace}:${el.name}`);
+    return el;
   };
 }
 function aspectRuleCategories(is: string) : Rule<string[], Element.Aspect> {
   return {
-    rx: new RegExp(`^\\s*${is}\\s*:`),
     parser: (parser) => _parseCategories(parser, is),
     subs: [],
     gen: (categories: string[], parent: Element.Aspect) => {
@@ -111,35 +119,36 @@ export function parseInterface(reporter: Reporter, data: string) : object {
   let headerLevel: number;
   let stack = [{ rules: [rules.class], output: output }];
   do {
+    let parsed = false;
     if ((headerLevel = parser.skip(ch => ch === '#')) > 0) { // parse header
       parser.skip(Parser.isSpaceChar);
-      let content = parser.while(ch => ch !== '\n', 0).trim();
       let o = stack[first ? 0 : headerLevel + offset];
-      for (let rule of o.rules) {
-        if (!rule.rx || rule.rx.test(content)) {
+      if (o) {
+        for (let rule of o.rules) {
           let sub = { rules: rule.subs.map(r => rules[r]), output: o.output };
           let ok = true;
           if (rule.parser) {
-            let parser = new Parser(new Reporter(), content);
             sub.output = rule.parser(parser);
-            ok = parser.reporter.diagnostics.length === 0;
-            reporter.aggregate(parser.reporter);
+            ok = sub.output !== undefined && parser.reporter.diagnostics.length === 0;
           }
           if (ok) {
             if (rule.gen)
-              rule.gen(sub.output, o.output);
+              sub.output = rule.gen(sub.output, o.output) || sub.output;
             if (first) {
               offset = - headerLevel;
               first = false;
             }
             stack[headerLevel + offset + 1] = sub;
+            stack.length = headerLevel + offset + 2;
+            parsed = true;
             break;
           }
         }
       }
     }
-    parser.skip(ch => ch !== '\n'); // Go to next line
-  } while (parser.test('\n'));
+    if (!parsed)
+      parseUntilNextLine(parser);
+  } while (!parser.atEnd());
   return output;
 }
 
@@ -155,20 +164,30 @@ namespace Element {
     name: string,
     superclass?: string,
 
-    "attributes=": { is: "group", elements: Attribute[] },
+    "attributes=": { is: "group" },
     attributes: string[],
 
-    "categories=": { is: "group", elements: (Category | FarCategory)[] },
+    "queries=": { is: "group" },
+    queries: string[],
+
+    "categories=": { is: "group" },
     categories: string[],
     farCategories: string[],
 
-    "aspects=": { is: "group", elements: Aspect[] },
+    "aspects=": { is: "group" },
     aspects: string[]
   }
   export type Attribute = {
     is: 'attribute',
     name: string,
-    type: Type
+    type: Type,
+    relation?: string
+  }
+  export type Query = {
+    is: 'query',
+    name: string,
+    type: Type,
+    query: any
   }
   export type Category = {
     is: 'category',
@@ -194,74 +213,126 @@ namespace Element {
   }
 }
 
-function parseAttribute(parser: Parser) : Element.Attribute {
+function parseUntilNextLine(parser: Parser) : boolean {
+  parser.skip(Parser.isNotLineChar);
+  return !!(Parser.isLineChar(parser.ch) && parser.next());
+}
+
+function _parseAttribute(parser: Parser, is: string) {
   let name = parseName(parser);
-  parser.skip(Parser.isAnySpaceChar);
+  parser.skip(Parser.isSpaceChar);
   parser.consume(':');
-  parser.skip(Parser.isAnySpaceChar);
+  parser.skip(Parser.isSpaceChar);
   let type = parseType(parser);
-  return { is: 'attribute', name: name, type: type };
+  parseUntilNextLine(parser);
+  return { is: is, name: name, type: type };
 }
 
-function _parseCategory(parser: Parser, is: 'category' | 'farCategory') {
-  parser.consume(is);
-  parser.skip(Parser.isAnySpaceChar, 1);
-  let name = parseName(parser);
-  return { is: is, name: name, methods: [] };
+function parseAttribute(parser: Parser) : Element.Attribute {
+  let attr = _parseAttribute(parser, 'attribute') as Element.Attribute;
+  do {
+    if (parser.ch === '#')
+      break;
+    parser.skip(Parser.isSpaceChar);
+    if (parser.test('_relation_:')) {
+      parser.skip(Parser.isSpaceChar);
+      attr.relation = parseQuotedString(parser, '`');
+    }
+  } while (!attr.relation && parseUntilNextLine(parser));
+  return attr;
 }
 
-function _parseCategories(parser: Parser, is: string) : string[] {
-  let categories = [] as string[];
-  parser.consume(is);
-  parser.skip(Parser.isAnySpaceChar);
-  parser.consume(':');
-  parser.skip(Parser.isAnySpaceChar);
-  while (!parser.atEnd()) {
-    categories.push(parseName(parser));
-    parser.skip(Parser.isAnySpaceChar);
+function parseQuery(parser: Parser) : Element.Query {
+  let query = _parseAttribute(parser, 'query') as Element.Query;
+  let json = '';
+  do {
+    if (parser.ch === '#')
+      break;
+    if (parser.test('```')) {
+      while (parser.test('\n') && !parser.test('```')) {
+        json += parser.while(Parser.isNotLineChar, 0) + "\n";
+      }
+    }
+    else if (parser.test('    ')) {
+      do {
+        json += parser.while(Parser.isNotLineChar, 0) + "\n";
+      } while (parser.test('\n    '));
+    }
+  } while (!json && parseUntilNextLine(parser));
+  if (json) {
+    try {
+      JSON.parse(json);
+      query.query = json;
+    } catch (e) {
+      parser.error(`invalid json for query ${query.name}`);
+      query.query = undefined;
+    }
   }
+  return query;
+}
+
+function _parseCategory<T>(parser: Parser, is: 'category' | 'farCategory') : T | undefined {
+  if (!parser.test(is)) return undefined;
+  parser.skip(Parser.isSpaceChar, 1);
+  let name = parseName(parser);parser.skip(ch => ch !== '\n');
+  parseUntilNextLine(parser);
+  return { is: is, name: name, methods: [] } as any;
+}
+
+function _parseCategories(parser: Parser, is: string) : string[] | undefined {
+  if (!parser.test(is)) return undefined;
+  let categories = [] as string[];
+  parser.skip(Parser.isSpaceChar);
+  parser.consume(':');
+  parser.skip(Parser.isSpaceChar);
+  while (Parser.isWordChar(parser.ch)) {
+    categories.push(parseName(parser));
+    parser.skip(Parser.isSpaceChar);
+  }
+  parseUntilNextLine(parser);
   return categories;
 }
 
-function parseCategory(parser: Parser) : Element.Category {
+function parseCategory(parser: Parser) : Element.Category | undefined {
   return _parseCategory(parser, 'category') as Element.Category;
 }
 
-function parseFarCategory(parser: Parser) : Element.FarCategory {
+function parseFarCategory(parser: Parser) : Element.FarCategory | undefined {
   return _parseCategory(parser, 'farCategory') as Element.FarCategory;
 }
-
 
 function parseMethod(parser: Parser) : Element.Method {
   let name = parseName(parser);
   let args = [] as Element.Type[];
   let ret: Element.Type;
-  parser.skip(Parser.isAnySpaceChar);
+  parser.skip(Parser.isSpaceChar);
   parser.consume('(');
-  parser.skip(Parser.isAnySpaceChar);
+  parser.skip(Parser.isSpaceChar);
   if (!parser.test(')')) {
     do {
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
       let argname = parseName(parser);
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
       parser.consume(':');
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
       args.push(parseType(parser));
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
     } while (parser.test(','));
     parser.consume(')');
   }
-  parser.skip(Parser.isAnySpaceChar);
+  parser.skip(Parser.isSpaceChar);
   parser.consume(':');
-  parser.skip(Parser.isAnySpaceChar);
+  parser.skip(Parser.isSpaceChar);
   ret = parseType(parser);
+  parseUntilNextLine(parser);
   return { is: 'method', name: name, arguments: args, return: ret };
 }
 
-function parseAspect(parser: Parser) : Element.Aspect {
-  parser.consume(`aspect`);
-  parser.skip(Parser.isAnySpaceChar);
+function parseAspect(parser: Parser) : Element.Aspect | undefined {
+  if (!parser.test(`aspect`)) return undefined;
+  parser.skip(Parser.isSpaceChar);
   let name = parseName(parser);
+  parseUntilNextLine(parser);
   return {
     is: 'aspect',
     name: name,
@@ -270,23 +341,25 @@ function parseAspect(parser: Parser) : Element.Aspect {
   };
 }
 
-function parseClass(parser: Parser) : Element.Class {
-  parser.consume(`class`);
-  parser.skip(Parser.isAnySpaceChar, 1);
+function parseClass(parser: Parser) : Element.Class | undefined {
+  if (!parser.test(`class`)) return undefined;
+  parser.skip(Parser.isSpaceChar, 1);
   let name = parseName(parser);
   let ret: Element.Class = {
     is: 'class',
     name: name,
-    "attributes=": { is: 'group', elements: [] }, attributes: [],
-    "categories=": { is: 'group', elements: [] }, categories: [], farCategories: [],
-    "aspects=": { is: 'group', elements: [] }, aspects: [],
+    "attributes=": { is: 'group' }, attributes: [],
+    "queries="   : { is: 'group' }, queries: [],
+    "categories=": { is: 'group' }, categories: [], farCategories: [],
+    "aspects="   : { is: 'group' }, aspects: [],
   };
-  parser.skip(Parser.isAnySpaceChar);
+  parser.skip(Parser.isSpaceChar);
   if (parser.test(':')) {
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
     ret.superclass = parseName(parser);
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
   }
+  parseUntilNextLine(parser);
   return ret;
 }
 
@@ -314,30 +387,30 @@ function parseType(parser: Parser) : Element.Type {
   let ret: Element.Type;
   let type: string;
   if ((type = parser.test('[') || parser.test('<'))) {
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
     let min = +parser.while(Parser.isNumberChar, 1);
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
     parser.consume(',');
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
     let max: number | "*" = +parser.while(Parser.isNumberChar, 0) || parser.consume('*');
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
     parser.consume(',');
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
     ret = { is: 'type', type: type === '[' ? 'array' : 'set', min: min, max: max, itemType: parseType(parser) } as Element.Type;
-    parser.skip(Parser.isAnySpaceChar);
+    parser.skip(Parser.isSpaceChar);
     parser.consume(type === '[' ? ']' : '>');
   }
   else if (parser.test('{')) {
     let properties = {};
     ret = { is: 'type', type: 'dictionary', properties: properties };
     do {
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
       let key = parser.test('*') || parseName(parser);
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
       parser.consume(':');
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
       ret.properties[key] = parseType(parser);
-      parser.skip(Parser.isAnySpaceChar);
+      parser.skip(Parser.isSpaceChar);
     } while (parser.test(','));
     parser.consume('}');
   }

@@ -26,11 +26,11 @@ export const Resource = VersionedObject.extends<ResourceConstructor<Resource>>(V
       "type": {
         "is": "type",
         "name": "string",
-        "tags": [],
         "type": "primitive"
       }
     }
   ],
+  "queries": [],
   "categories": [
     {
       "is": "category",
@@ -43,7 +43,6 @@ export const Resource = VersionedObject.extends<ResourceConstructor<Resource>>(V
           "returnType": {
             "is": "type",
             "name": "string",
-            "tags": [],
             "type": "primitive"
           }
         }
@@ -107,11 +106,11 @@ export const Car = VersionedObject.extends<CarConstructor<Car>>(Resource, {
       "type": {
         "is": "type",
         "name": "string",
-        "tags": [],
         "type": "primitive"
       }
     }
   ],
+  "queries": [],
   "categories": [
     {
       "is": "category",
@@ -124,7 +123,6 @@ export const Car = VersionedObject.extends<CarConstructor<Car>>(Resource, {
           "returnType": {
             "is": "type",
             "name": "string",
-            "tags": [],
             "type": "primitive"
           }
         }
@@ -141,7 +139,6 @@ export const Car = VersionedObject.extends<CarConstructor<Car>>(Resource, {
           "returnType": {
             "is": "type",
             "name": "string",
-            "tags": [],
             "type": "primitive"
           }
         }
