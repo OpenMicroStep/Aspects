@@ -17,7 +17,8 @@ export function createAspect(on: ControlCenter, name: string, implementation: Ve
   let aspect = tmp.aspect;
   let cstor = class InstalledAspect extends tmp {
     constructor() {
-      super(new VersionedObjectManager(on, aspect));
+      super(new VersionedObjectManager(on, aspect))
+      this.__manager._object = this;
     }
     static displayName = `${aspect.name}[${aspect.aspect}]`;
     static aspect = aspect;
@@ -104,9 +105,9 @@ export namespace Aspect {
   export interface InstalledAttribute {
     name: string;
     type: Type;
-    versionedObject: string | undefined,
+    versionedObject: string | undefined;
     validator: TypeValidator;
-    relation: Reference | undefined
+    relation: Reference | undefined;
   };
   export interface Installed {
     name: string;
@@ -221,42 +222,51 @@ function installCategoryCache(cache: Map<string, Aspect.InstalledMethod>, on: Ve
     }
   });
 }
+
+function findReferences(type: Aspect.Type, apply: (ref: string) => void) {
+  switch (type.type) {
+    case 'array': findReferences(type.itemType, apply); break;
+    case 'set': findReferences(type.itemType, apply); break;
+    case 'class': apply(type.name); break;
+    case 'dictionary': Object.keys(type.properties).forEach(k => findReferences(type.properties[k], apply)); break;
+  }
+}
 function installAttributes(from: VersionedObjectConstructor<VersionedObject>): Map<string, Aspect.InstalledAttribute> {
   let attributes = installedAttributesOnImpl.get(from);
   if (!attributes) {
     attributes = from.parent ? new Map(installAttributes(from.parent)) : new Map();
     from.definition.attributes.forEach(attribute => {
-      let isVersionedObject = attribute.type.type === "class";
-      let validator = createValidator(attribute.type);
-      let name = attribute.name;
-      let relation: Aspect.Reference | undefined = undefined;
+      const data: Aspect.InstalledAttribute = {
+        name: attribute.name,
+        validator: createValidator(attribute.type),
+        versionedObject: attribute.type.type === "class" ? attribute.name : undefined,
+        type: attribute.type,
+        relation: undefined
+      };
       if (attribute.relation) {
-        if (attribute.type.type !== "class")
-          throw new Error(`attribute type of a relation must be a class`);
-        relation = { class: attribute.type.name, attribute: attribute.relation };
+        if (attribute.type.type === "class")
+          data.relation = { class: attribute.type.name, attribute: attribute.relation };
+        else if ((attribute.type.type === "array" || attribute.type.type === "set") && attribute.type.itemType.type === "class")
+          data.relation = { class: attribute.type.itemType.name, attribute: attribute.relation };
+        else
+          throw new Error(`attribute type of a relation must be a class, an array of classes or a set of classes`);
       }
-      if (attribute.type.type === "class") {
-        let aspect = cachedAspects.get(attribute.name);
+      findReferences(attribute.type, (ref) => {
+        let aspect = cachedAspects.get(ref);
         aspect && aspect.aspect.references.push({ class: from.definition.name, attribute: attribute.name });
-      }
-      Object.defineProperty(from.prototype, name, {
+      });
+      Object.defineProperty(from.prototype, data.name, {
         enumerable: true,
-        get(this: VersionedObject) { return this.__manager.attributeValue(name as keyof VersionedObject) },
+        get(this: VersionedObject) { return this.__manager.attributeValue(data.name as keyof VersionedObject) },
         set(this: VersionedObject, value) {
-          if (VersionedObjectManager.SafeMode && !validator(value))
+          if (VersionedObjectManager.SafeMode && !data.validator(value))
             throw new Error(`attribute value is invalid`);
-          if (isVersionedObject)
+          if (value && data.versionedObject)
             value = this.__manager._controlCenter.registeredObject(value.id()) || value; // value will be merged later
-          this.__manager.setAttributeValue(name as keyof VersionedObject, value);
+          this.__manager.setAttributeValueFast(data.name as keyof VersionedObject, value, data);
         }
       });
-      attributes!.set(name, {
-        name: attribute.name,
-        validator: validator,
-        versionedObject: isVersionedObject ? attribute.name : undefined,
-        type: attribute.type,
-        relation: relation
-      });
+      attributes!.set(data.name, data);
     });
     installedAttributesOnImpl.set(from, attributes);
   }

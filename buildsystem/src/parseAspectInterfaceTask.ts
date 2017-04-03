@@ -47,7 +47,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
       }),
       (step: Step<{}>) => {
         let dest = File.getShared(path.join(this.dest.path, `aspects.interfaces.ts`));
-        let r = this.src.ext.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation} from '@microstep/aspects';`;
+        let r = this.src.ext.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@microstep/aspects';`;
         r += `\n${this.src.ext.header}\n`;
         root.__classes.forEach(cls => {
           r += cls.__decl();

@@ -7,3 +7,4 @@ export * from './invocation';
 export {DataSource, DataSourceConstructor} from '../../../generated/aspects.interfaces';
 export * from './datasource';
 export * from './datasource.memory';
+export {List as ImmutableList, Set as ImmutableSet, Map as ImmutableMap} from 'immutable';

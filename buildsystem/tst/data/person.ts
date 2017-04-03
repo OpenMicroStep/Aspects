@@ -1,4 +1,4 @@
-import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation} from '@microstep/aspects';
+import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@microstep/aspects';
 
 export interface PersonConstructor<C extends Person> extends VersionedObjectConstructor<C> {
   parent: VersionedObjectConstructor<VersionedObject>;
@@ -20,8 +20,8 @@ export interface Person extends VersionedObject {
   _birthDate: Date | undefined;
   _mother: Person | undefined;
   _father: Person | undefined;
-  _cats: Cat[] | undefined;
-  _sons: Person[] | undefined;
+  _cats: ImmutableSet<Cat>;
+  readonly _sons: ImmutableList<Person>;
 }
 export const Person = VersionedObject.extends<PersonConstructor<Person>>(VersionedObject, {
   "is": "class",
@@ -83,7 +83,7 @@ export const Person = VersionedObject.extends<PersonConstructor<Person>>(Version
           "name": "Cat",
           "type": "class"
         },
-        "type": "array",
+        "type": "set",
         "min": 0,
         "max": "*"
       },

@@ -121,7 +121,7 @@ module.exports =  {
       files: ["=Files:core:src ? tsc"],
       interfaces: [{ 
         value: ["=Files:core:src ? interface"], 
-        customHeader: "import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
+        customHeader: "import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal, ImmutableList, ImmutableSet, ImmutableObject} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
       }],
       //tsConfig: [{ traceResolution: true }],
       npmPackage: [{
@@ -130,14 +130,16 @@ module.exports =  {
         "dependencies": {
           "@microstep/async": "^0.1.0",
           "ajv": "^4.9.0",
-          "@microstep/mstools": "^1.0.2"
+          "@microstep/mstools": "^1.0.2",
+          "immutable": "^3.8.1"
         }
       }],
       npmInstall: [{
         "@microstep/async": "^0.1.0",
         "ajv": "^4.9.0",
         "@types/ajv": "^0.0.4",
-        "@microstep/mstools": "^1.0.2"
+        "@microstep/mstools": "^1.0.2",
+        "immutable": "^3.8.1"
       }]
     },
     "core.tests=":  {

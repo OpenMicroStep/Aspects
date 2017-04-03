@@ -1,4 +1,4 @@
-import {VersionedObject, VersionedObjectManager, ControlCenter} from '@microstep/aspects';
+import {VersionedObject, VersionedObjectManager, ControlCenter, ImmutableSet} from '@microstep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -129,8 +129,28 @@ function shared() {
   assert.instanceOf(c1, C);
   assert.instanceOf(c1, Car);
 }
+
+function relation() {
+  let cc = new ControlCenter();
+  let C = Car.installAspect(cc, 'test1');
+  let P = People.installAspect(cc, 'test1');
+
+  let c0 = new C();
+  let c1 = new C();
+  let p0 = new P();
+  p0._cars = ImmutableSet<Car>();
+  c0._owner = p0;
+  c1._owner = undefined;
+  assert.equal(c0._owner, p0);
+  assert.sameMembers(p0._cars.toArray(), [c0]);
+  p0._cars = p0._cars.add(c1);
+  assert.sameMembers(p0._cars.toArray(), [c0, c1]);
+  assert.equal(c0._owner, p0);
+  assert.equal(c1._owner, p0);
+}
 export const tests = { name: 'VersionedObject', tests: [
   basics,
   shared,
+  relation,
   tests_perfs
 ]};

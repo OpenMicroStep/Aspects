@@ -7,10 +7,6 @@ export interface AComponent {
 
 }
 
-function tmpLoad(o, k) {
-  return typeof k === 'string' && (k=k.substring(1)) ? Object.assign({ name: k }, o[`${k}=`]) : k;
-}
-
 export class ControlCenter {
   _notificationCenter = new NotificationCenter();
   _objects = new Map<Identifier, { object: VersionedObject, components: Set<AComponent> }>();

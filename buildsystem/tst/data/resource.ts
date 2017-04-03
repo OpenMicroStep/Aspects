@@ -1,4 +1,4 @@
-import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation} from '@microstep/aspects';
+import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@microstep/aspects';
 
 export interface ResourceConstructor<C extends Resource> extends VersionedObjectConstructor<C> {
   parent: VersionedObjectConstructor<VersionedObject>;

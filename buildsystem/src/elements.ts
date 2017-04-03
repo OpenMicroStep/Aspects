@@ -23,6 +23,10 @@ function appendUndefined(type: string, allowUndefined: boolean) {
   return allowUndefined ? `${type} | undefined` : type;
 }
 
+function embedType(condition: boolean, prefix: [string, string], type: string, suffix: [string, string]) {
+  return condition ? `${prefix[0]}${type}${suffix[0]}` : `${prefix[1]}${type}${suffix[1]}`; 
+}
+
 elementFactories.registerSimple('type', (reporter, name, definition, attrPath, parent: AspectBaseElement) => {
   return new TypeElement('type', name, parent);
 });
@@ -33,7 +37,7 @@ export class TypeElement extends Element {
   min?: number;
   max?: number | '*';
 
-  __decl(allowUndefined: boolean) {
+  __decl(isAttribute: boolean, allowUndefined: boolean = false, relation: boolean = false) {
     switch (this.type) {
       case 'primitive':
         switch (this.name) {
@@ -50,11 +54,11 @@ export class TypeElement extends Element {
       case 'class':
         return appendUndefined(this.name, allowUndefined);
       case 'array':
-        return appendUndefined(`${this.itemType ? this.itemType.__decl(false) : 'any'}[]`, allowUndefined);
+        return embedType(isAttribute, [`ImmutableList<`, ``], this.itemType ? this.itemType.__decl(isAttribute) : 'any' , [`>`, `[]`]);
       case 'set':
-        return appendUndefined(`Set<${this.itemType ? this.itemType.__decl(false) : 'any'}>`, allowUndefined);
+        return embedType(isAttribute, [`ImmutableSet<`, ``], this.itemType ? this.itemType.__decl(isAttribute) : 'any' , [`>`, ``]);
       case 'dictionary':
-        return `{${Object.keys(this.properties).map(k => `${k === '*' ? '[k: string]' : `${k}?`}: ${this.properties![k].__decl(false)}`).join(', ')}}`;
+        return embedType(isAttribute, [`ImmutableObject<`, ``], `{${Object.keys(this.properties).map(k => `${k === '*' ? '[k: string]' : `${k}?`}: ${this.properties![k].__decl(isAttribute)}`).join(', ')}}` , [`>`, ``]);
     }
   }
 
@@ -103,7 +107,11 @@ ${cats.map(category => `\n  __c(name: '${category.name}'): ${this.name}.Categori
   __i<T extends ${this.name}>(name: string): {};
 }
 export interface ${this.name} extends ${parent} {
-${[...this.attributes, ...this.queries].map(attribute => `  ${attribute.name}: ${attribute.type.__decl(true)};\n`).join('')}}
+${[...this.attributes, ...this.queries].map(attribute => 
+  `  ${
+  attribute instanceof QueryElement ? 'readonly ' : ''}${
+  attribute.name}: ${
+  attribute.type.__decl(true, true, attribute instanceof AttributeElement && !!attribute.relation)};\n`).join('')}}
 export const ${this.name} = VersionedObject.extends<${this.name}Constructor<${this.name}>>(${parent}, ${JSON.stringify(this, null, 2)});
 ${workaround}
 export namespace ${this.name} {
@@ -144,6 +152,12 @@ elementFactories.registerSimple('attribute', (reporter, name, definition, attrPa
 export class AttributeElement extends Element {
   type: TypeElement;
   relation?: string;
+
+  __resolveWithPath(reporter: Reporter, attrPath: AttributePath) {
+    super.__resolveWithPath(reporter, attrPath);
+    if (this.relation && this.type.type === 'array')
+      this.type.type = 'set';
+  }
 
   toJSON() {
     return {
