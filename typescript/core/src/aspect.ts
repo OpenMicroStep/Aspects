@@ -239,7 +239,7 @@ function installAttributes(from: VersionedObjectConstructor<VersionedObject>): M
       const data: Aspect.InstalledAttribute = {
         name: attribute.name,
         validator: createValidator(attribute.type),
-        versionedObject: attribute.type.type === "class" ? attribute.name : undefined,
+        versionedObject: attribute.type.type === "class" ? attribute.type.name : undefined,
         type: attribute.type,
         relation: undefined
       };
