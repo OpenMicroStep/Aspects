@@ -1,5 +1,5 @@
 import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
-import {SequelizeDataSource, SequelizeDataSourceImpl, SequelizeStorage, SqlMappedObject, SqlMappedAttribute} from '@openmicrostep/aspects.sequelize';
+import {SequelizeDataSource, SequelizeDataSourceImpl, SqlStorage, SqlMappedObject, SqlMappedAttribute} from '@openmicrostep/aspects.sequelize';
 import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -38,16 +38,15 @@ export const tests =
     models.Car.belongsTo(models.People, { foreignKey: '_owner', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
 
     const storages = {
-      Resource         : new SequelizeStorage({ keyPath: [{ model: models.Resource, columns: { _id: "_id" }       }] }),
-      People           : new SequelizeStorage({ keyPath: [{ model: models.People  , columns: { _id: "_id" }       }] }),
-      Car              : new SequelizeStorage({ keyPath: [{ model: models.Car     , columns: { _id: "_id" }       }] }),
-      DriversFromCar   : new SequelizeStorage({ keyPath: [{ model: models.Drivers , columns: { _id: "car_id" }    }] }),
-      CarFromPeople    : new SequelizeStorage({ keyPath: [{ model: models.Car     , columns: { _id: "_owner" }    }] }),
-      DriversFromPeople: new SequelizeStorage({ keyPath: [{ model: models.Drivers , columns: { _id: "people_id" } }] }),
+      Resource         : new SqlStorage({ keyPath: [{ model: models.Resource, fromColumns: ["_id"      ] } ] }),
+      People           : new SqlStorage({ keyPath: [{ model: models.People  , fromColumns: ["_id"      ] } ] }),
+      Car              : new SqlStorage({ keyPath: [{ model: models.Car     , fromColumns: ["_id"      ] } ] }),
+      DriversFromCar   : new SqlStorage({ keyPath: [{ model: models.Drivers , fromColumns: ["car_id"   ] } ] }),
+      CarFromPeople    : new SqlStorage({ keyPath: [{ model: models.Car     , fromColumns: ["_owner"   ] } ] }),
+      DriversFromPeople: new SqlStorage({ keyPath: [{ model: models.Drivers , fromColumns: ["people_id"] } ] }),
     }
     const mappers = {
-      People: new SqlMappedObject({ attributes: [
-        new SqlMappedAttribute({ storage: storages.Resource         , name: "_id"        , path: ["_id"]        }),
+      People: new SqlMappedObject({ interface: People, select: storages.People, insert: storages.Resource, attributes: [
         new SqlMappedAttribute({ storage: storages.Resource         , name: "_version"   , path: ["_version"]   }),
         new SqlMappedAttribute({ storage: storages.Resource         , name: "_name"      , path: ["_name"]      }),
         new SqlMappedAttribute({ storage: storages.People           , name: "_firstname" , path: ["_firstname"] }),
@@ -56,12 +55,11 @@ export const tests =
         new SqlMappedAttribute({ storage: storages.CarFromPeople    , name: "_cars"      , path: ["_owner"]     }),
         new SqlMappedAttribute({ storage: storages.DriversFromPeople, name: "_drivenCars", path: ["people_id"]  }),
       ]}),
-      Car: new SqlMappedObject({ attributes: [
-        new SqlMappedAttribute({ storage: storages.Resource      , name: "_id"        , path: ["_id"]   }),
+      Car: new SqlMappedObject({ interface: Car, select: storages.Car, insert: storages.Resource, attributes: [
         new SqlMappedAttribute({ storage: storages.Resource      , name: "_version", path: ["_version"] }),
         new SqlMappedAttribute({ storage: storages.Resource      , name: "_name"   , path: ["_name"]    }),
-        new SqlMappedAttribute({ storage: storages.People        , name: "_model"  , path: ["_model"]   }),
-        new SqlMappedAttribute({ storage: storages.People        , name: "_owner"  , path: ["_owner"]   }),
+        new SqlMappedAttribute({ storage: storages.Car           , name: "_model"  , path: ["_model"]   }),
+        new SqlMappedAttribute({ storage: storages.Car           , name: "_owner"  , path: ["_owner"]   }),
         new SqlMappedAttribute({ storage: storages.DriversFromCar, name: "_drivers", path: ["car_id"]   }),
       ]}),
     };
@@ -81,57 +79,10 @@ export const tests =
       cc: cc
     });
     sequelize.sync({ force: true })
-      .then(async () => {
-        /*let QueryGenerator = (sequelize as any).dialect.QueryGenerator;
-        sequelize.query(QueryGenerator.selectQuery('Resource', {
-          attributes: ['_anem']
-        }))*/
-        let r0 = await (sResource.build({ _name: 'n' }) as any).save();
-        let p0 = await (sPeople.build({ _id: r0._id, _firstname: 'fn', _lastname: 'ln' }) as any).save();
-        let r = await sPeople.findAll({
-          raw: true,
-          attributes: ['_firstname', '_lastname'],
-          include: [{
-            model: sResource,
-            attributes: ['_name'],
-          }]
-        });
-        console.info(r);
-      })
       .then(() => flux.continue())
       .catch((err) => console.info(err));
   }) }
 ];
-
-
-let t = 
-{
-  "Storages=": {
-    is: "group",
-  },
-  "People=": {
-    is: "sql-mapped-object",
-    attributes: [
-      { is: "sql-mapped-attribute", storage: "=Storages:Resource"         , name: "_version"   , path: ["_version"]   },
-      { is: "sql-mapped-attribute", storage: "=Storages:Resource"         , name: "_name"      , path: ["_name"]      },
-      { is: "sql-mapped-attribute", storage: "=Storages:People"           , name: "_firstname" , path: ["_firstname"] },
-      { is: "sql-mapped-attribute", storage: "=Storages:People"           , name: "_lastname"  , path: ["_lastname"]  },
-      { is: "sql-mapped-attribute", storage: "=Storages:People"           , name: "_birthDate" , path: ["_birthDate"] },
-      { is: "sql-mapped-attribute", storage: "=Storages:CarFromPeople"    , name: "_cars"      , path: ["_owner"]     },
-      { is: "sql-mapped-attribute", storage: "=Storages:DriversFromPeople", name: "_drivenCars", path: ["people_id"]  },
-    ]
-  },
-  "Car=": {
-    is: "sql-mapped-object",
-    attributes: [
-      { is: "sql-mapped-attribute", storage: "=Storages:Resource"      , name: "_version", path: ["_version"] },
-      { is: "sql-mapped-attribute", storage: "=Storages:Resource"      , name: "_name"   , path: ["_name"]    },
-      { is: "sql-mapped-attribute", storage: "=Storages:People"        , name: "_model"  , path: ["_model"]   },
-      { is: "sql-mapped-attribute", storage: "=Storages:People"        , name: "_owner"  , path: ["_owner"]   },
-      { is: "sql-mapped-attribute", storage: "=Storages:DriversFromCar", name: "_drivers", path: ["car_id"]   },
-    ]
-  }
-}
 
 /*
 where: { instanceOf: People }

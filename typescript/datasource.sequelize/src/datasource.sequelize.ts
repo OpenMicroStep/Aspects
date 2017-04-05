@@ -6,18 +6,6 @@ import {SqlMappedObject} from './mapper';
 export * from './mapper';
 import {SequelizeQuery} from './query';
 
-/*interface QueryGenerator {
-  selectQuery(tableName: string, options: {
-    attributes: string[],
-    where: any,
-    order: any,
-    group: any,
-    limit: any,
-    offset: any,
-  })
-}
-this.db.sequelize.dialect.QueryGenerator
-*/
 export class SequelizeDataSourceImpl extends DataSource {
   sequelize: sequelize.Sequelize;
   mappers: { [s: string] : SqlMappedObject };

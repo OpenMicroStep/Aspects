@@ -2,7 +2,12 @@ import * as sequelize from 'sequelize';
 import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal} from '@microstep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {SqlMappedObject, SqlStorage} from './mapper';
+import {SqlMappedObject, SqlStorage, SqlMappedAttribute} from './mapper';
+
+
+function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O) : O[] | undefined {
+  return arr ? arr.map(map) : undefined;
+}
 
 export class SequelizeQuery {
   mapper?: SqlMappedObject = undefined;
@@ -13,7 +18,7 @@ export class SequelizeQuery {
   requiredBy: SequelizeQuery[] = [];
   promise: Promise<VersionedObject[]> | undefined = undefined;
 
-  constructor(public db: { sequelize: sequelize.Sequelize, mappers: { [s: string] : SqlMappedObject } }
+  constructor(public db: { sequelize: sequelize.Sequelize, mappers: { [s: string] : SqlMappedObject }, controlCenter(): ControlCenter }
             , public sharedQueries = new Map<ObjectSet, SequelizeQuery>()) {}
 
   // BEGIN BUILD
@@ -32,29 +37,83 @@ export class SequelizeQuery {
       where = (where["$and"] = where["$and"] || {}) as sequelize.WhereOptions;
     where[key] = value;
   }
+
+  getWhere(storage: SqlStorage) {
+    let where = this.where.get(storage);
+    if (!where)
+      this.where.set(storage, where = {});
+    return where;
+  }
+
+  cstor() {
+    if (!this.mapper)
+      throw new Error(`cannot get cstor before mapper is set`);
+    let cstor = this.db.controlCenter().aspect(this.mapper.interface.definition.name);
+    if (!cstor)
+      throw new Error(`cannot find aspect ${this.mapper}`);
+    return cstor;
+  }
   
   addOperator(attribute: string | undefined, operator: string, value) {
     if (!this.mapper)
       throw new Error(`cannot add operator before mapper is set`);
+    let isVersionedObject = !attribute;
     attribute = attribute || "_id";
 
     let sqlattr = this.mapper.attributes.get(attribute);
     if (!sqlattr)
       throw new Error(`attribute ${attribute} is not defined in ${this.mapper}`);
+    
+    let where = this.getWhere(sqlattr.storage);
+    if (Array.isArray(value)) {
+      /*if (attribute === '_id') {
+        let inName: string | undefined = undefined;
+        let inValues: any[] | undefined = [];
+        let orValues: any[] = [];
+        for (let v of value) {
+          v = sqlattr!.storage.toStorageKey(sqlattr.mapToStorage(v));
+          let keys = Object.keys(v);
+          if (inValues && keys.length === 1 && (inName === undefined || inName === keys[0])) {
+            inName = keys[0];
+            inValues.push(v[keys[0]]);
+          }
+          else {
+            if (inValues && inValues.length)
+              orValues.push(...inValues.map(v => ({ [inName!]: v })));
+            inValues = undefined;
+            orValues.push(v);
+          }
+        }
+        if (inValues && inName) {
+          where = where[inName] = (where[inName] || {}) as sequelize.WhereOptions;
+          this.addKeyValue(where, operator, inValues);
+          return;
+        }
+        else {
+          throw new Error(`identifier on multiple columns is not supported yet`);
+        }
+      }
+      else {*/
+      value = value.map(v => sqlattr!.mapToStorage(v));
+    }
 
-    let where = this.where.get(sqlattr.storage);
-    if (!where)
-      this.where.set(sqlattr.storage, where = {});
-    if (Array.isArray(value))
-      value = value.map(v => sqlattr!.mapToStorage(attribute!, value));
     if (attribute === '_id') {
-      // TODO: this is going to be very complex ...
+      let p = sqlattr.storage.keyPath[0];
+      if (Array.isArray(value)) {
+        value = value.map(v => sqlattr!.storage.toStorageKey(value));
+      }
+      else {
+        Object.assign(where, p.toStorageKey(sqlattr.storage.toStorageKey(value)));
+      }
+    }
+    else if (sqlattr.path.length === 1) {
+      attribute = sqlattr.path[0];
+      where = where[attribute] = (where[attribute] || {}) as sequelize.WhereOptions;
+      this.addKeyValue(where, operator, value);
     }
     else {
-      attribute = sqlattr.path[0];
+      throw new Error(`complex path to value aren't supported yet`); // TODO
     }
-    where = where[attribute] = (where[attribute] || {}) as sequelize.WhereOptions;
-    this.addKeyValue(where, operator, value);
   }
 
   addDependency(dep: SequelizeQuery) {
@@ -165,33 +224,33 @@ export class SequelizeQuery {
   }
   // END BUILD
 
-  execute(cc: ControlCenter): Promise<VersionedObject[]> {
+  execute(): Promise<VersionedObject[]> {
     if (!this.promise) {
-      let deps = this.dependencies.map(d => d.execute(cc));
+      let deps = this.dependencies.map(d => d.execute());
       this.promise = Promise.all(deps).then(async () => {
         let ret: VersionedObject[];
         if (!this.mapper)
           throw new Error(`no mapper`);
-        let idStorage = this.mapper.attributes.get('_id')!.storage;
-        let attributeByStorage = new Map<SqlStorage, string[]>();
+        let idStorage = this.mapper.select;
+        let attributeByStorage = new Map<SqlStorage, SqlMappedAttribute[]>();
         let attributes = this.attributes || [];
-        attributes.unshift('_id', '_version');
-
+        attributes.unshift('_version');
         for (let attribute of attributes) {
           let sqlattr = this.mapper.attributes.get(attribute);
-          if (!sqlattr)
-            throw new Error(`attribute ${attribute} is not defined in ${this.mapper}`);
+          if (!sqlattr) throw new Error(`attribute ${attribute} is not defined in ${this.mapper}`);
           let attrs = attributeByStorage.get(sqlattr.storage);
-          if (!attrs)
-            attributeByStorage.set(sqlattr.storage, attrs = []);
-          attrs.push(sqlattr.path[0]);
+          if (!attrs) attributeByStorage.set(sqlattr.storage, attrs = []);
+          attrs.push(sqlattr);
         }
+        attributes.unshift('_id');
 
         let include: sequelize.IncludeOptions[] = [];
         let includeByStorage = new Map<SqlStorage, sequelize.IncludeOptions>();
+        let rattributes = (attributeByStorage.get(idStorage) || []).map(v => v.path[0]);
+        
         let request = {
           raw: true,
-          attributes: attributeByStorage.get(idStorage),
+          attributes: rattributes,
           where: this.where.get(idStorage),
           include: include,
         }
@@ -208,46 +267,51 @@ export class SequelizeQuery {
         for (let query of this.sharedQueries.values()) {
           for (let [storage, attributes] of attributeByStorage) {
             if (storage !== idStorage)
-              getInclude(storage).attributes = attributes;
+              getInclude(storage).attributes = attributes.map(v => v.path[0]);
           }
           for (let [storage, where] of query.where) {
             if (storage !== idStorage)
               getInclude(storage).where = where;
           }
         }
-        let objects = await idStorage.model.findAll(request);
-        // TODO: LOAD
+
+        let objects = await idStorage.keyPath[0].model.findAll(request);
+        let cc = this.db.controlCenter();
+        for (let object of objects)
+          this.values.push(this.loadObject(cc, object, idStorage, attributeByStorage));
         return this.values;
       });
     }
     return this.promise;
   }
 
-  loadObject(o, cstor: Aspect.Constructor, cc: ControlCenter, loadAttributes: Aspect.InstalledAttribute[]) {
-    let id = this.db.fromDbId(o._id, cstor.aspect);
-    let version = o._version;
-    let attributes = new Map<string, any>();
-    for (let attr of loadAttributes) {
-      // TODO: map key/value
-      let value = o[attr.name];
-      let versionedObjectName = attr.versionedObject;
-      if (versionedObjectName) {
-        let cstor = cc.aspect(versionedObjectName);
-        if (!cstor)
-          throw new Error(`cannot find aspect for ${versionedObjectName}`);
-        let id = this.db.fromDbId(value, cstor.aspect);
-        value = cc.registeredObject(id);
-        if (!value) {
-          value = new cstor();
-          value.manager().setId(id);
+  loadObject(cc: ControlCenter, object: object, idStorage: SqlStorage, attributeByStorage: Map<SqlStorage, SqlMappedAttribute[]>): VersionedObject {
+    let id = idStorage.fromStorageKey(idStorage.keyPath[0].fromStorageKey(object));
+    let remoteAttributes = new Map<string, any>();
+    let vo = cc.registeredObject(id) || new (this.cstor())();
+    let manager = vo.manager();
+    let aspect = manager.aspect();
+    for (let [storage, attributes] of attributeByStorage) {
+      for (let attribute of attributes) {
+        if (attribute.name !== '_id') {
+          let aspectAttr = aspect.attributes.get(attribute.name);
+          let value = attribute.mapFromStorage(object[attribute.path[0]]);
+          if (aspectAttr && aspectAttr.versionedObject) {
+            let subid = value;
+            value = cc.registeredObject(subid);
+            if (!value) {
+              value = new (cc.aspect(aspectAttr.versionedObject)!)();
+              value.manager().setId(subid);
+            }
+          }
+          remoteAttributes.set(attribute.name, value);
         }
       }
-      attributes.set(attr.name, value);
     }
-    let vo = cc.registeredObject(id) || new cstor();
-    let manager = vo.manager();
+    let version = remoteAttributes.get('_version');
+    remoteAttributes.delete('_version');
     manager.setId(id);
-    manager.mergeWithRemoteAttributes(attributes as Map<keyof VersionedObject, any>, version);
-    this.values.push(vo);
+    manager.mergeWithRemoteAttributes(remoteAttributes as Map<keyof VersionedObject, any>, version);
+    return vo;
   }
 }
