@@ -1,4 +1,4 @@
-import { Element, AttributePath, ElementDefinition, ProviderMap, Reporter } from '@msbuildsystem/core';
+import { Element, AttributePath, ElementDefinition, ProviderMap, Reporter } from '@openmicrostep/msbuildsystem.core';
 
 export const elementFactories = Element.createElementFactoriesProviderMap('aspects');
 

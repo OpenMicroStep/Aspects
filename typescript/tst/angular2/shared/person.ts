@@ -1,4 +1,4 @@
-import {ControlCenter, VersionedObject} from '@microstep/aspects';
+import {ControlCenter, VersionedObject} from '@openmicrostep/aspects';
 import {Person, DemoApp} from './index';
 
 Person.category('core', {

@@ -1,6 +1,6 @@
-import {controlCenter, ControlCenter, VersionedObject, DataSource, Conditions, Scope} from '@microstep/aspects';
-import {ExpressTransport} from '@microstep/aspects.express';
-import {SequelizeDataSource} from '@microstep/aspects.sequelize';
+import {controlCenter, ControlCenter, VersionedObject, DataSource, Conditions, Scope} from '@openmicrostep/aspects';
+import {ExpressTransport} from '@openmicrostep/aspects.express';
+import {SequelizeDataSource} from '@openmicrostep/aspects.sequelize';
 import {Heroe, MonApp} from '../shared/index';
 import * as express from 'express';
 require('source-map-support').install();

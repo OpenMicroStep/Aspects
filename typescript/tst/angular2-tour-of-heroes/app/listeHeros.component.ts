@@ -2,7 +2,7 @@ import { Component, ViewChild, AfterViewInit, OnDestroy, Inject, forwardRef } fr
 import { Router } from '@angular/router';
 import {Heroe} from '../shared/index';
 import {controlCenter, dataSource} from './main';
-import {Invocation, DataSource, Notification} from '@microstep/aspects';
+import {Invocation, DataSource, Notification} from '@openmicrostep/aspects';
 @Component({
     selector: 'listeHeros',
     template: `

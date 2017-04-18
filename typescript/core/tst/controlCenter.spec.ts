@@ -1,4 +1,4 @@
-import {ControlCenter, NotificationCenter} from '@microstep/aspects';
+import {ControlCenter, NotificationCenter} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 
 function basics() {

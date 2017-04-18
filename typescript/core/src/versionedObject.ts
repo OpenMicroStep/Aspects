@@ -1,6 +1,6 @@
 import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, createAspect, addIsEqualSupport, addReplaceInGraphSupport, replaceInGraph} from './core';
-import { Flux } from '@microstep/async';
-import {MSTE} from '@microstep/mstools';
+import { Flux } from '@openmicrostep/async';
+import {MSTE} from '@openmicrostep/mstools';
 import * as Immutable from 'immutable';
 
 export interface ImmutableObject<T> extends Immutable.Collection.Keyed<keyof T, T[keyof T]> {

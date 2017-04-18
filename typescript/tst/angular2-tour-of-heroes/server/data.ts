@@ -1,3 +1,3 @@
-import {Sequelize, SequelizeDataSource} from '@microstep/aspects.sequelize';
+import {Sequelize, SequelizeDataSource} from '@openmicrostep/aspects.sequelize';
 export const dataSource = new SequelizeDataSource();
 dataSource.define(Heroe);

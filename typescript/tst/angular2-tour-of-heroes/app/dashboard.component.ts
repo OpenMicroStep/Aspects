@@ -1,7 +1,7 @@
 import { Component, ViewChild, AfterViewInit, OnDestroy } from '@angular/core';
 import {Heroe} from '../shared/index';
 import {controlCenter, dataSource} from './main';
-import {Invocation, DataSource, Notification} from '@microstep/aspects';
+import {Invocation, DataSource, Notification} from '@openmicrostep/aspects';
 
 @Component({
   selector: 'my-dashboard',

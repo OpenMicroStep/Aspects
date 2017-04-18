@@ -1,6 +1,6 @@
-import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, installPublicTransport, registerQuery, InvocationState} from '@microstep/aspects';
-import {SequelizeDataSource} from '@microstep/aspects.sequelize';
-import {ExpressTransport} from '@microstep/aspects.express';
+import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, installPublicTransport, registerQuery, InvocationState} from '@openmicrostep/aspects';
+import {SequelizeDataSource} from '@openmicrostep/aspects.sequelize';
+import {ExpressTransport} from '@openmicrostep/aspects.express';
 import {Person, DemoApp} from '../shared/index';
 import * as express from 'express';
 import * as Sequelize from 'sequelize';

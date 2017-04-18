@@ -1,5 +1,5 @@
 import { VersionedObject, ControlCenter, NotificationCenter } from './core';
-import { Flux } from '@microstep/async';
+import { Flux } from '@openmicrostep/async';
 
 export enum InvocationState {
   Prepared,

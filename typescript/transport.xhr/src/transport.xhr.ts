@@ -1,5 +1,5 @@
-import {FarTransport, VersionedObject, ControlCenter, replaceInGraph} from '@microstep/aspects';
-import { MSTE } from '@microstep/mstools';
+import {FarTransport, VersionedObject, ControlCenter, replaceInGraph} from '@openmicrostep/aspects';
+import { MSTE } from '@openmicrostep/mstools';
 
 export class XHRTransport implements FarTransport {
   remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {

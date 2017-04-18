@@ -1,8 +1,8 @@
 import {
   resolver, FileElement, File, Reporter, AttributeTypes
-} from '@msbuildsystem/core';
-import { JSTarget, JSCompilers } from '@msbuildsystem/js';
-import { TypescriptCompiler } from '@msbuildsystem/js.typescript';
+} from '@openmicrostep/msbuildsystem.core';
+import { JSTarget, JSCompilers } from '@openmicrostep/msbuildsystem.js';
+import { TypescriptCompiler } from '@openmicrostep/msbuildsystem.js.typescript';
 import *  as path from 'path';
 import { ParseAspectInterfaceTask, InterfaceFileGroup } from './index';
 

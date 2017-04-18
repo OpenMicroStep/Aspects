@@ -1,4 +1,4 @@
-import {controlCenter, ControlCenter, VersionedObject, DataSource} from '@microstep/aspects';
+import {controlCenter, ControlCenter, VersionedObject, DataSource} from '@openmicrostep/aspects';
 import * as interfaces from '../generated/aspects.interfaces';
 
 export const MonApp = interfaces.MonApp;

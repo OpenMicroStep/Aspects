@@ -1,4 +1,4 @@
-import {VersionedObject, VersionedObjectManager, ControlCenter, ImmutableSet} from '@microstep/aspects';
+import {VersionedObject, VersionedObjectManager, ControlCenter, ImmutableSet} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -82,7 +82,7 @@ function basics() {
   v1._name = "Resource Name 2";
   assert.equal(v1.name(), "Resource Name 2");
 
-  assert.deepEqual(v1.manager().diff(), { // only changed values
+  assert.deepEqual<any>(v1.manager().diff(), { // only changed values
     "_id": 2,
     "_version": VersionedObjectManager.NextVersion,
     "_localAttributes": {
@@ -91,7 +91,7 @@ function basics() {
     "_versionAttributes": {},
   });
 
-  assert.deepEqual(v1.manager().snapshot(), { // complete object snapshot
+  assert.deepEqual<any>(v1.manager().snapshot(), { // complete object snapshot
     "_id": 2,
     "_version": VersionedObjectManager.NextVersion,
     "_localAttributes": {
@@ -102,13 +102,13 @@ function basics() {
 
   v1.manager().setVersion(2);
 
-  assert.deepEqual(v1.manager().diff(), { // complete object snapshot
+  assert.deepEqual<any>(v1.manager().diff(), { // complete object snapshot
     "_id": 2,
     "_version": 2,
     "_localAttributes": {},
     "_versionAttributes": {},
   });
-  assert.deepEqual(v1.manager().snapshot(), { // complete object snapshot
+  assert.deepEqual<any>(v1.manager().snapshot(), { // complete object snapshot
     "_id": 2,
     "_version": 2,
     "_localAttributes": {},

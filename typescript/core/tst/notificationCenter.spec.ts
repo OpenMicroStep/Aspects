@@ -1,4 +1,4 @@
-import {NotificationCenter, Notification} from '@microstep/aspects';
+import {NotificationCenter, Notification} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import {tests as tests_perfs} from './notificationCenter.perfs.spec';
 

@@ -1,6 +1,6 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import * as aspects from '@microstep/aspects';
-import { XHRTransport } from '@microstep/aspects.xhr';
+import * as aspects from '@openmicrostep/aspects';
+import { XHRTransport } from '@openmicrostep/aspects.xhr';
 import { AppModule } from './app.module';
 import {Heroe, MonApp} from '../shared/index';
 

@@ -1,6 +1,6 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { ControlCenter, DataSource, Aspect } from '@microstep/aspects';
-import { XHRTransport } from '@microstep/aspects.xhr';
+import { ControlCenter, DataSource, Aspect } from '@openmicrostep/aspects';
+import { XHRTransport } from '@openmicrostep/aspects.xhr';
 import { AppModule } from './app.module';
 import {Person, DemoApp} from '../shared/index';
 

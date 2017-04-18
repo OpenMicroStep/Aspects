@@ -1,7 +1,7 @@
-import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, InvocationState, replaceInGraph } from '@microstep/aspects';
+import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, InvocationState, replaceInGraph } from '@openmicrostep/aspects';
 import { Router } from 'express';
 import * as bodyparser from 'body-parser';
-import { MSTE } from '@microstep/mstools';
+import { MSTE } from '@openmicrostep/mstools';
 
 const text_middleware = bodyparser.text({type: () => true });
 

@@ -1,4 +1,4 @@
-import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@microstep/aspects';
+import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
 
 export interface PersonConstructor<C extends Person> extends VersionedObjectConstructor<C> {
   parent: VersionedObjectConstructor<VersionedObject>;

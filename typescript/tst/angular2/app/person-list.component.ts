@@ -2,7 +2,7 @@ import { Component, ViewChildren, ViewChild, AfterViewInit, OnDestroy } from '@a
 import {PersonComponent} from './person.component';
 import {controlCenter, dataSource} from './main';
 import {Person} from '../shared/index';
-import {Notification, Invocation, DataSource} from '@microstep/aspects';
+import {Notification, Invocation, DataSource} from '@openmicrostep/aspects';
 
 @Component({
     selector: 'person-list',

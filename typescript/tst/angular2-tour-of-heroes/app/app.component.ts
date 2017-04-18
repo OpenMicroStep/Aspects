@@ -3,7 +3,7 @@ import { HeroDetailComponent } from './heroDetail.component';
 import { ListeHerosComponent } from './listeHeros.component';
 import {controlCenter, dataSource} from './main';
 import {Heroe} from '../shared/index';
-import {Notification, Invocation, DataSource} from '@microstep/aspects';
+import {Notification, Invocation, DataSource} from '@openmicrostep/aspects';
 
 @Component({
     selector: 'my-app',

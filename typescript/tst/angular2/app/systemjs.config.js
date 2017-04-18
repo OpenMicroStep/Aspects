@@ -53,10 +53,10 @@
 
   // No umd for router yet
   packages['@angular/router'] = { main: 'index.js', defaultExtension: 'js' };
-  packages['@microstep/aspects'] = { main: 'typescript/core/src/core.js', defaultExtension: 'js' };
-  packages['@microstep/aspects.xhr'] = { main: 'transport.xhr.js', defaultExtension: 'js' };
-  packages['@microstep/async'] = { main: 'dist/async.js', defaultExtension: 'js' };
-  packages['@microstep/mstools'] = { main: 'dist/mstools.umd.js', defaultExtension: 'js' };
+  packages['@openmicrostep/aspects'] = { main: 'typescript/core/src/core.js', defaultExtension: 'js' };
+  packages['@openmicrostep/aspects.xhr'] = { main: 'transport.xhr.js', defaultExtension: 'js' };
+  packages['@openmicrostep/async'] = { main: 'dist/async.js', defaultExtension: 'js' };
+  packages['@openmicrostep/mstools'] = { main: 'dist/mstools.umd.js', defaultExtension: 'js' };
   packages['ajv'] = { main: 'dist/ajv.min.js', defaultExtension: 'js' };
   
   var config = {

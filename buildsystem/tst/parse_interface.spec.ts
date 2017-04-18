@@ -1,5 +1,5 @@
-import {Reporter, Workspace, Runner, RunnerContext, RootGraph, File, Flux} from '@msbuildsystem/core';
-import {ParseAspectInterfaceTask, parseInterface} from '@msbuildsystem/aspects';
+import {Reporter, Workspace, Runner, RunnerContext, RootGraph, File, Flux} from '@openmicrostep/msbuildsystem.core';
+import {ParseAspectInterfaceTask, parseInterface} from '@openmicrostep/msbuildsystem.aspects';
 import {assert} from 'chai';
 import * as path from 'path';
 import * as fs from 'fs';

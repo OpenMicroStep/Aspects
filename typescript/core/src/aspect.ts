@@ -1,5 +1,5 @@
 import { ControlCenter, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, Invocation, InvocationState } from './core';
-import {Async, Flux} from '@microstep/async';
+import {Async, Flux} from '@openmicrostep/async';
 import * as Ajv from 'ajv';
 
 export interface FarTransport {

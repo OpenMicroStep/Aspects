@@ -4,7 +4,7 @@ import { Location }               from '@angular/common';
 import 'rxjs/add/operator/switchMap';
 import {Heroe} from '../shared/index';
 import {controlCenter, dataSource} from './main';
-import {Invocation, DataSource, Notification} from '@microstep/aspects';
+import {Invocation, DataSource, Notification} from '@openmicrostep/aspects';
 @Component({
     selector: 'heroDetail',
     template: `

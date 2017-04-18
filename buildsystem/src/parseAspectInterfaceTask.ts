@@ -1,7 +1,7 @@
 import {
   Element, ElementDefinition,
   File, Graph, InOutTask, Directory, Step
-} from '@msbuildsystem/core';
+} from '@openmicrostep/msbuildsystem.core';
 import *  as path from 'path';
 import { AspectRootElement, parseInterface, elementFactories } from './index';
 
@@ -47,7 +47,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
       }),
       (step: Step<{}>) => {
         let dest = File.getShared(path.join(this.dest.path, `aspects.interfaces.ts`));
-        let r = this.src.ext.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@microstep/aspects';`;
+        let r = this.src.ext.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
         r += `\n${this.src.ext.header}\n`;
         root.__classes.forEach(cls => {
           r += cls.__decl();

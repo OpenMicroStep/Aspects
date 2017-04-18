@@ -26,13 +26,13 @@ module.exports =  {
       environments: ["=::logitud.typescript.angular::"],
       files: ["=files:app ? tsc", "=files:shared ? tsc"],
       copyFiles: [{ value: ["=files:app ? copy"], dest: "app" }],
-      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'app', header: `import {DataSource} from '@microstep/aspects';` }]
+      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'app', header: `import {DataSource} from '@openmicrostep/aspects';` }]
     },
     "server=":  {
       is: 'target',
       environments: ["=::logitud.typescript.node::"],
       files: ["=files:server", "=files:shared ? tsc"],
-      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'server', header: `import {DataSource} from '@microstep/aspects';` }],
+      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'server', header: `import {DataSource} from '@openmicrostep/aspects';` }],
       npmInstall: [{
         "sequelize": "^3.27.0",
         "@types/sequelize": "^4.0.39",

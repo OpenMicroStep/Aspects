@@ -27,7 +27,7 @@ module.exports =  {
     }],
     npmInstall: [{
       "@types/chai": "^3.4.29",
-      "@microstep/tests": "^0.1.0"
+      "@openmicrostep/tests": "^0.1.0"
     }],
     npmPackage: [{
       "dependencies": {
@@ -53,7 +53,6 @@ module.exports =  {
     }],
   },
   "envs=": { is: 'group',
-    "node=": { is: 'environment' },
     "js=": {
       is: 'environment', 
       packager: "npm",
@@ -61,15 +60,6 @@ module.exports =  {
     },
   },
   "Files=": { is: 'group', elements: [
-      { is: 'group', name: 'buildsystem', path: 'buildsystem', elements: [
-        { is: 'group', name: "src", path: "src", elements: [
-          { is: 'file', name: "index.ts", tags: ["tsc"] }
-        ]},
-        { is: 'group', name: "tst", path: "tst", elements: [
-          { is: 'file', name: "index.ts", tags: ["tsc"] },
-          { is: 'file', name: "data/**" , tags: ["rsc"] }
-        ]}
-      ]},
       { is: 'group', name: 'core', path: 'typescript/core/', elements: [
         { is: 'group', name: 'src', path: 'src/', elements: [
           { is: 'file', name: 'core.ts', tags: ['tsc'] },
@@ -97,26 +87,9 @@ module.exports =  {
       ]},
   ]},
   "typescript targets=": { is: 'group',
-    'bs aspects=': {
-      is: 'target',
-      outputName: '@msbuildsystem/aspects',
-      environments: ["=envs:node"],
-      components: ['=::core::cfg:module', '=::core::', '=::typescript::', '=::js::'],
-      targets: ['core', 'typescript'],
-      files: ['=Files:buildsystem:src ? tsc'],
-    },
-    'bs aspects tests=': {
-      is: 'target',
-      outputName: '@msbuildsystem/aspects.tests',
-      environments: ["=envs:node"],
-      components: ['=::core::cfg:tests', '=::core::', '=::bs aspects::'],
-      targets: ['bs aspects'],
-      files: ['=Files:buildsystem:tst ? tsc'],
-      copyFiles: [{value: ['=Files:buildsystem:tst ? rsc'], dest: 'data/', expand: true }]
-    },
     "aspects core=":  {
       is: 'target',
-      outputName: "@microstep/aspects",
+      outputName: "@openmicrostep/aspects",
       environments: ["=envs:js"],
       files: ["=Files:core:src ? tsc"],
       interfaces: [{ 
@@ -128,23 +101,23 @@ module.exports =  {
         "main": "typescript/core/src/core.js",
         "typings": "typescript/core/src/core.d.ts",
         "dependencies": {
-          "@microstep/async": "^0.1.0",
+          "@openmicrostep/async": "^0.1.0",
           "ajv": "^4.9.0",
-          "@microstep/mstools": "^1.0.2",
+          "@openmicrostep/mstools": "^1.0.2",
           "immutable": "^3.8.1"
         }
       }],
       npmInstall: [{
-        "@microstep/async": "^0.1.0",
+        "@openmicrostep/async": "^0.1.0",
         "ajv": "^4.9.0",
         "@types/ajv": "^0.0.4",
-        "@microstep/mstools": "^1.0.2",
+        "@openmicrostep/mstools": "^1.0.2",
         "immutable": "^3.8.1"
       }]
     },
     "core.tests=":  {
       is: 'target',
-      outputName: "@microstep/aspects.tests",
+      outputName: "@openmicrostep/aspects.tests",
       environments: ["=envs:js"],
       files: ["=Files:core:tst ? tsc"],
       targets: ["aspects core"],
@@ -153,7 +126,7 @@ module.exports =  {
     },
     "express=": {
       is: 'target',
-      outputName: "@microstep/aspects.express",
+      outputName: "@openmicrostep/aspects.express",
       targets: ["aspects core"],
       components: ["=::aspects core::", "=node"],
       environments: ["=envs:js"],
@@ -168,7 +141,7 @@ module.exports =  {
         "express-serve-static-core": "^0.1.1",
         "@types/body-parser": "^0.0.33",
         "body-parser": "^1.15.2",
-        "@microstep/mstools": "^1.0.2"
+        "@openmicrostep/mstools": "^1.0.2"
       }]
     },
     "sequelize=": {
@@ -183,6 +156,7 @@ module.exports =  {
         "typings": "datasource.sequelize.d.ts"
       }],
       npmInstall: [{
+        "@openmicrostep/msbuildsystem.shared": "^0.3.0",
         "sequelize": "^3.27.0",
         "@types/sequelize": "^4.0.39"
       }]
@@ -204,13 +178,13 @@ module.exports =  {
     "client=": {
       is: 'target',
       packager: "npm",
-      outputName: "@microstep/aspects.xhr",
+      outputName: "@openmicrostep/aspects.xhr",
       npmPackage: [{
         "main": "transport.xhr.js",
         "typings": "transport.xhr.d.ts"
       }],
       npmInstall: [{
-        "@microstep/mstools": "^1.0.2"
+        "@openmicrostep/mstools": "^1.0.2"
       }],
       targets: ["aspects core"],
       components: ["=::aspects core::", "=browser"],

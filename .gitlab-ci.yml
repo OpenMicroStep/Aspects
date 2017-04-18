@@ -5,8 +5,8 @@ build:
   image: node:6-alpine
   stage: build
   script:
-   - npm install -q -g @msbuildsystem/cli
-   - msbuildsystem modules install @msbuildsystem/js.typescript @msbuildsystem/aspects
+   - npm install -q -g @openmicrostep/msbuildsystem.cli
+   - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript @openmicrostep/msbuildsystem.aspects @openmicrostep/msbuildsystem.js.logitud
    - msbuildsystem build -w dist/
   artifacts:
     expire_in: 31d
@@ -19,19 +19,19 @@ test:
   dependencies:
    - build
   script:
-   - npm install -q -g @microstep/tests
-   - mstests dist/js/debug/node_modules/@microstep/aspects.tests/typescript/core/tst/core.spec.js 
-             dist/js/debug/node_modules/@microstep/aspects.sequelize.tests/typescript/datasource.sequelize/tst/datasource.sequelize.spec.js
+   - npm install -q -g @openmicrostep/tests
+   - mstests dist/js/debug/node_modules/@openmicrostep/aspects.tests/typescript/core/tst/core.spec.js 
+             dist/js/debug/node_modules/@openmicrostep/aspects.sequelize.tests/typescript/datasource.sequelize/tst/datasource.sequelize.spec.js
 
 publish:
   image: node:6-alpine
   stage: deploy
   script:
     - echo "$NPM_AUTH" >> ~/.npmrc
-    - npm publish dist/js/debug/node_modules/@microstep/aspects
-    - npm publish dist/js/debug/node_modules/@microstep/aspects.express
-    - npm publish dist/js/debug/node_modules/@microstep/aspects.sequelize
-    - npm publish dist/js/debug/node_modules/@microstep/aspects.xhr
+    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects
+    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects.express
+    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects.sequelize
+    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects.xhr
   dependencies:
    - build
   only:

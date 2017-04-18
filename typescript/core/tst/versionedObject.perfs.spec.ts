@@ -1,4 +1,4 @@
-import {VersionedObject, VersionedObjectManager, ControlCenter} from '@microstep/aspects';
+import {VersionedObject, VersionedObjectManager, ControlCenter} from '@openmicrostep/aspects';
 import './resource';
 import {Resource} from '../../../generated/aspects.interfaces';
 

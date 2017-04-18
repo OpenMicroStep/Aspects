@@ -39,7 +39,7 @@ Description de la classe              Person=: {
                                       AnotherClass=: {...}
                                       }
 */
-import {Reporter, Parser} from '@msbuildsystem/core';
+import {Reporter, Parser} from '@openmicrostep/msbuildsystem.core';
 
 type Rule<T, P> = { subs: string[], parser: (parser: Parser) => T | undefined, gen?: (v: T, parent: P) => any };
 const rules: { [s: string]: Rule<any, any> } = {

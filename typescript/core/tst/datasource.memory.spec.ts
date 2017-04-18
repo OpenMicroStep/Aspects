@@ -1,4 +1,4 @@
-import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@microstep/aspects';
+import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import {createTests} from './datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
