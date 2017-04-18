@@ -1,5 +1,5 @@
 import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
-import {SequelizeDataSource, SequelizeDataSourceImpl, SqlStorage, SqlMappedObject, SqlMappedAttribute} from '@openmicrostep/aspects.sequelize';
+import {SequelizeDataSource, SequelizeDataSourceImpl, SqlStorage, SqlMappedObject, SqlMappedAttribute} from '@openmicrostep/aspects.sql';
 import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -37,31 +37,27 @@ export const tests =
     models.Resource.hasMany(models.People, {  foreignKey: '_id', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
     models.Car.belongsTo(models.People, { foreignKey: '_owner', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
 
-    const storages = {
-      Resource         : new SqlStorage({ keyPath: [{ model: models.Resource, fromColumns: ["_id"      ] } ] }),
-      People           : new SqlStorage({ keyPath: [{ model: models.People  , fromColumns: ["_id"      ] } ] }),
-      Car              : new SqlStorage({ keyPath: [{ model: models.Car     , fromColumns: ["_id"      ] } ] }),
-      DriversFromCar   : new SqlStorage({ keyPath: [{ model: models.Drivers , fromColumns: ["car_id"   ] } ] }),
-      CarFromPeople    : new SqlStorage({ keyPath: [{ model: models.Car     , fromColumns: ["_owner"   ] } ] }),
-      DriversFromPeople: new SqlStorage({ keyPath: [{ model: models.Drivers , fromColumns: ["people_id"] } ] }),
-    }
     const mappers = {
-      People: new SqlMappedObject({ interface: People, select: storages.People, insert: storages.Resource, attributes: [
-        new SqlMappedAttribute({ storage: storages.Resource         , name: "_version"   , path: ["_version"]   }),
-        new SqlMappedAttribute({ storage: storages.Resource         , name: "_name"      , path: ["_name"]      }),
-        new SqlMappedAttribute({ storage: storages.People           , name: "_firstname" , path: ["_firstname"] }),
-        new SqlMappedAttribute({ storage: storages.People           , name: "_lastname"  , path: ["_lastname"]  }),
-        new SqlMappedAttribute({ storage: storages.People           , name: "_birthDate" , path: ["_birthDate"] }),
-        new SqlMappedAttribute({ storage: storages.CarFromPeople    , name: "_cars"      , path: ["_owner"]     }),
-        new SqlMappedAttribute({ storage: storages.DriversFromPeople, name: "_drivenCars", path: ["people_id"]  }),
-      ]}),
-      Car: new SqlMappedObject({ interface: Car, select: storages.Car, insert: storages.Resource, attributes: [
-        new SqlMappedAttribute({ storage: storages.Resource      , name: "_version", path: ["_version"] }),
-        new SqlMappedAttribute({ storage: storages.Resource      , name: "_name"   , path: ["_name"]    }),
-        new SqlMappedAttribute({ storage: storages.Car           , name: "_model"  , path: ["_model"]   }),
-        new SqlMappedAttribute({ storage: storages.Car           , name: "_owner"  , path: ["_owner"]   }),
-        new SqlMappedAttribute({ storage: storages.DriversFromCar, name: "_drivers", path: ["car_id"]   }),
-      ]}),
+      "People=": { 
+        is: "sql-mapped-object",
+        inserts: [
+          { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+                                                                     { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
+          { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+                                                                     { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id" }] },
+          { is: "sql-insert", name: "P", table: "People"  , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id" }] },
+        ],
+        attributes: [
+            { is: "sql-mapped-attribute", name: "_id"        , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "id"        }] },
+            { is: "sql-mapped-attribute", name: "_version"   , insert: "=V", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "idVersion" }, { is: "sql-path", table: "Version", key: "id", where: { type: "Resource" }, value: "version" }] },
+            { is: "sql-mapped-attribute", name: "_name"      , insert: "=R", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "name"      }] },
+            { is: "sql-mapped-attribute", name: "_firstname" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "firstname" }] },
+            { is: "sql-mapped-attribute", name: "_lastname"  , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "lastname"  }] },
+            { is: "sql-mapped-attribute", name: "_birthDate" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "birthDate" }], fromDB: v => new Date(v), toDb: d => d.getTime() },
+            { is: "sql-mapped-attribute", name: "_cars"                    , path: [{ is: "sql-path", table: "Car"     , key: "owner" , value: "id"        }] },
+            { is: "sql-mapped-attribute", name: "_drivenCars"              , path: [{ is: "sql-path", table: "Drivers" , key: "people", value: "car"       }] },
+        ]
+      }
     };
 
     let cc = new ControlCenter();

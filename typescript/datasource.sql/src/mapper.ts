@@ -1,7 +1,72 @@
 import * as sequelize from 'sequelize';
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, VersionedObjectConstructor} from '@microstep/aspects';
+import {Element} from '@openmicrostep/msbuildsystem.shared';
+import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, VersionedObjectConstructor} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
+
+export class SqlInsert extends Element {
+  table: string;
+  values: SqlValue[] = [];
+}
+
+export class SqlValue extends Element {
+  type: "autoincrement" | "ref" | "value"
+  insert?: SqlInsert
+  value?: string
+}
+
+export class SqlPath extends Element {
+  table: string
+  key: string
+  value: string
+  where: SqlValue[] = [];
+  fromDb: (value) => any
+  toDb: (value) => any
+
+  uniqid(value: boolean) {
+    let ret = JSON.stringify([this.table, this.key, this.where]);
+    if (value)
+      ret += JSON.stringify(this.value);
+    return ret;
+  }
+}
+
+export class SqlMappedAttribute extends Element {
+  insert: SqlInsert | undefined;
+  path: SqlPath[] = [];
+  fromDbKey: (value) => any
+  toDbKey: (value) => any
+
+  last(): SqlPath {
+    return this.path[this.path.length - 1];
+  }
+
+  pathref_uniqid() {
+    let key = "";
+    for (let i = 0, ilast = this.path.length - 1; i <= ilast; i++)
+      key += this.path[i].uniqid(i !== ilast);
+    return key;
+  }
+}
+
+export class SqlMappedObject extends Element {
+  inserts: SqlInsert[] = [];
+  attributes: SqlMappedAttribute[] = [];
+  
+  get(attribute: string) : SqlMappedAttribute {
+    let sqlattr = this.attributes.find(a => a.name === attribute);
+    if (!sqlattr)
+      throw new Error(`attribute ${attribute} is not defined in ${this}`);
+    return sqlattr;
+  }
+
+  toString() {
+    return this.name;
+  }
+}
+
+function pass(v) { return v; }
+
 
 export class SqlStorage {
   idGenerator?: (transaction: sequelize.Transaction, versionedObject: VersionedObject) => Promise<any[]>;
@@ -88,84 +153,3 @@ export class SqlStorage {
   }
 }
 
-export class SqlMappedObject {
-  interface: VersionedObjectConstructor<VersionedObject>;
-  select: SqlStorage;
-  insert: SqlStorage;
-  attributes = new Map<string, SqlMappedAttribute>();
-
-  constructor(options: {
-    interface: VersionedObjectConstructor<VersionedObject>
-    select: SqlStorage
-    insert: SqlStorage
-    attributes: SqlMappedAttribute[]
-  }) {
-    this.interface = options.interface;
-    this.select = options.select;
-    this.insert = options.insert;
-    for (let a of options.attributes)
-      this.attributes.set(a.name, a);
-  }
-
-  async save(transaction: sequelize.Transaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
-    let id: Identifier;
-    let manager = object.manager();
-    let aspect = manager.aspect();
-    let isNew = VersionedObjectManager.isLocalId(manager.id());
-    let objects = new Map<SqlStorage, { newValues: object, oldValues: object }>();
-    let version = isNew ? 0 : manager._version + 1;
-    let map = (k: string, nv, ov) => {
-      let attribute = this.attributes.get(k)!;
-      let obj = objects.get(attribute.storage);
-      if (!obj)
-        objects.set(attribute.storage, obj = { newValues: {}, oldValues: {} });
-      obj.newValues[attribute.path[0]] = attribute.mapToStorage(nv);
-      if (!isNew)
-        obj.oldValues[attribute.path[0]] = attribute.mapToStorage(ov);
-    };
-    manager._localAttributes.forEach((nv, k) => map(k, nv, isNew ? undefined : manager._versionAttributes.get(k)));
-    map('_version', version, manager._version);
-    if (isNew)
-      id = await this.insert.create(transaction, (objects.get(this.insert) || { newValues: {}, oldValues: {} }).newValues, object);
-    else
-      id = manager.id();
-    for (let [storage, obj] of objects.entries()) {
-      if (storage !== this.insert) {
-        if (isNew)
-          await storage.insert(transaction, obj.newValues, id)
-        else
-          await storage.update(transaction, obj.newValues, obj.oldValues, id);
-      }
-    }
-    return { _id: id, _version: version };
-  }
-
-  toString() {
-    return this.interface.definition.name;
-  }
-}
-
-function pass(v) { return v; }
-
-export class SqlMappedAttribute {
-  name: string;
-  storage: SqlStorage;
-  path: string[];
-  mapToStorage: (value: any) => any;
-  mapFromStorage: (value: any) => any;
-
-  constructor ({ name, storage, path, mapToStorage, mapFromStorage, where }: {
-    name: string;
-    storage: SqlStorage; // référence vers la source de données (document, table, ...)
-    path: string[]; // chemin au sein de la source de données vers la valeur de l'attribute
-    mapToStorage?: (objectValue: any) => any; // mappage de la valeur aspect vers la valeur en base
-    mapFromStorage?: (storageValue: any) => any; // mappage depuis la valeur en base vers la valeur aspect
-    where?: ObjectSet; // si type === "query", la requête DataSource à effectuer. L'élément "=::self::" est prédéfini comme étant l'objet Aspect sur lequel porte la recherche
-  }) {
-    this.name = name;
-    this.storage = storage;
-    this.path = path;
-    this.mapToStorage = mapToStorage || pass;
-    this.mapFromStorage = mapFromStorage || pass;
-  }
-}

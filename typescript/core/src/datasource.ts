@@ -143,18 +143,20 @@ export namespace DataSourceInternal {
     ElementOf,
     CustomStart = 100 // The first 100 ([0-99]) are reserved
   }
-  export type ConstraintBetweenSetTypes = 
+  export type ConstraintBetweenColumnsTypes = 
     ConstraintType.Equal |
     ConstraintType.NotEqual |
     ConstraintType.GreaterThan |
     ConstraintType.GreaterThanOrEqual |
     ConstraintType.LessThan |
-    ConstraintType.LessThanOrEqual |
-    ConstraintType.Text |
+    ConstraintType.LessThanOrEqual;
+  export type ConstraintBetweenSetTypes = 
+    ConstraintBetweenColumnsTypes |
     ConstraintType.In |
     ConstraintType.NotIn;
   export type ConstraintOnValueTypes = 
     ConstraintBetweenSetTypes |
+    ConstraintType.Text |
     ConstraintType.Exists;
   export type ConstraintOnTypeTypes = 
     ConstraintType.In | 

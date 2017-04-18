@@ -72,9 +72,9 @@ module.exports =  {
           { is: 'file', name: 'resource.interface.md', tags: ['interface'] },
         ]},
       ]},
-      { is: 'group', name: 'datasource.sequelize', path: 'typescript/datasource.sequelize/', elements: [
+      { is: 'group', name: 'datasource.sql', path: 'typescript/datasource.sql/', elements: [
         { is: 'group', name: 'src', path: 'src/', elements: [
-          { is: 'file', name: 'datasource.sequelize.ts', tags: ['tsc'] },
+          { is: 'file', name: 'index.ts', tags: ['tsc'] },
         ]},
         { is: 'group', name: 'tst', path: 'tst/', elements: [
           { is: 'file', name: 'datasource.sequelize.spec.ts', tags: ['tsc'] },
@@ -146,16 +146,16 @@ module.exports =  {
         }],
       }],
     },
-    "sequelize=": {
+    "sql=": {
       is: 'target',
-      outputName: "@openmicrostep/aspects.sequelize",
+      outputName: "@openmicrostep/aspects.sql",
       targets: ["aspects core"],
       components: ["=::aspects core::", "=node"],
       environments: ["=envs:js"],
-      files: ["=Files:datasource.sequelize:src ? tsc"],
+      files: ["=Files:datasource.sql:src ? tsc"],
       npmPackage: [{ is: "component",
-        "main": "datasource.sequelize.js",
-        "typings": "datasource.sequelize.d.ts",
+        "main": "datasource.sql.js",
+        "typings": "datasource.sql.d.ts",
         "devDependencies": [{ is: "component",
           "@openmicrostep/msbuildsystem.shared": "^0.3.0",
           "sequelize": "^3.27.0",
@@ -163,14 +163,14 @@ module.exports =  {
         }],
       }],
     },
-    "sequelize.tests=": {
+    "sql.tests=": {
       is: 'target',
-      outputName: "@openmicrostep/aspects.sequelize.tests",
-      targets: ["aspects core", "sequelize"],
-      components: ["=test", "=::aspects core::", "=::sequelize::", "=node"],
+      outputName: "@openmicrostep/aspects.sql.tests",
+      targets: ["aspects core", "sql"],
+      components: ["=test", "=::aspects core::", "=::sql::", "=node"],
       environments: ["=envs:js"],
-      files: ["=Files:datasource.sequelize:tst ? tsc"],
-      interfaces: ["=Files:datasource.sequelize:tst ? interface"],
+      files: ["=Files:datasource.sql:tst ? tsc"],
+      interfaces: ["=Files:datasource.sql:tst ? interface"],
       npmPackage: [{ is: "component",
         "devDependencies": [{ is: "component",
           "sequelize": "^3.27.0",
