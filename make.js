@@ -156,10 +156,8 @@ module.exports =  {
       npmPackage: [{ is: "component",
         "main": "index.js",
         "typings": "index.d.ts",
-        "devDependencies": [{ is: "component",
+        "dependencies": [{ is: "component",
           "@openmicrostep/msbuildsystem.shared": "^0.3.0",
-          "sequelize": "^3.27.0",
-          "@types/sequelize": "^4.0.39"
         }],
       }],
     },
@@ -172,9 +170,7 @@ module.exports =  {
       files: ["=Files:datasource.sql:tst ? tsc"],
       interfaces: ["=Files:datasource.sql:tst ? interface"],
       npmPackage: [{ is: "component",
-        "devDependencies": [{ is: "component",
-          "sequelize": "^3.27.0",
-          "@types/sequelize": "^4.0.39",
+        "dependencies": [{ is: "component",
           "sqlite3": "^3.1.8"
         }],
       }],

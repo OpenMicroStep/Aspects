@@ -1,45 +1,23 @@
 import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
-import {SequelizeDataSource, SequelizeDataSourceImpl, SqlMappedObject, SqlMappedAttribute, SequelizeDBConnector, loadSqlMappers} from '@openmicrostep/aspects.sql';
+import {SequelizeDataSource, SequelizeDataSourceImpl, SqlMappedObject, SqlMappedAttribute, DBConnector, loadSqlMappers, SqlMaker, Pool, SqliteDBConnector} from '@openmicrostep/aspects.sql';
 import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
-import * as Sequelize from 'sequelize';
+var sqlite3 = require('sqlite3').verbose();
+
+function fromDbKeyPeople(id) { return `${id}:People`; }
+function fromDbKeyCar(id)    { return `${id}:Car`   ; }
+function toDBKey(id) { return +id.split(':')[0]; }
+
 export const name = "SequelizeDataSource";
-let sequelize;
 export const tests = 
 [
   { name: "sqlite", tests: createTests(function createSqliteControlCenter(flux) {
-    let sequelize = new Sequelize("sqlite://test.sqlite", {
-      //logging: () => {}
-    });
-    const models = {
-      Resource: sequelize.define('Resource', {
-        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: true },
-        version: Sequelize.INTEGER,
-        name: Sequelize.STRING,
-      }),
-      People: sequelize.define('People', {
-        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: false },
-        firstname: Sequelize.STRING,
-        lastname: Sequelize.STRING,
-        birthDate: Sequelize.DATE
-      }),
-      Car: sequelize.define('Car', {
-        id: { type: Sequelize.INTEGER, primaryKey: true, autoIncrement: false },
-        model: Sequelize.STRING
-      }),
-      Drivers: sequelize.define('Drivers', {}),
-    };
-    models.Car.belongsToMany(models.People, { as: 'drivers', through: models.Drivers, onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
-    models.People.belongsToMany(models.Car, { as: 'drivenCars', through: models.Drivers, onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
-    models.Car.belongsTo(models.Resource, { as: 'Resource', foreignKey: 'id', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
-    models.People.belongsTo(models.Resource, {  foreignKey: 'id', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
-    models.Resource.hasMany(models.People, {  foreignKey: 'id', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
-    models.Car.belongsTo(models.People, { foreignKey: 'owner', onDelete: 'RESTRICT', onUpdate: 'RESTRICT' });
-
     const mappers = loadSqlMappers({
       "People=": { 
         is: "sql-mapped-object",
+        fromDbKey: (id) => `${id}:People`,
+        toDbKey: toDBKey,
         inserts: [
           { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
                                                                      { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
@@ -60,6 +38,8 @@ export const tests =
       },
       "Car=": { 
         is: "sql-mapped-object",
+        fromDbKey: (id) => `${id}:Car`,
+        toDbKey: toDBKey,
         inserts: [
           { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
                                                                      { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
@@ -72,9 +52,11 @@ export const tests =
             { is: "sql-mapped-attribute", name: "_version"   , insert: "=V", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "idVersion" }, { is: "sql-path", table: "Version", key: "id", where: { type: "Resource" }, value: "version" }] },
             { is: "sql-mapped-attribute", name: "_name"      , insert: "=R", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "name"      }] },
             { is: "sql-mapped-attribute", name: "_model"     , insert: "=C", path: [{ is: "sql-path", table: "Car"     , key: "id"    , value: "model"     }] },
+            { is: "sql-mapped-attribute", name: "_owner"     , insert: "=C", path: [{ is: "sql-path", table: "Car"     , key: "id"    , value: "owner"     }] },
         ]
       }
     });
+    const pool = new Pool(SqliteDBConnector.provider(sqlite3, ':memory:'));
 
     let cc = new ControlCenter();
     let C = Car.installAspect(cc, 'test1');
@@ -83,16 +65,21 @@ export const tests =
     let db = new DB();
     let mdb = db as any;
     mdb.mappers = mappers;
-    mdb.connector = new SequelizeDBConnector(sequelize);
+    mdb.pool = pool;
+    mdb.maker = new SqlMaker();
     Object.assign(flux.context, {
       Car: C,
       People: P,
       db: db,
       cc: cc
     });
-    sequelize.sync({ force: true })
-      .then(() => flux.continue())
-      .catch((err) => console.info(err));
+    pool.scoped(async db => {
+      await db.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
+      await db.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
+      await db.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` DATETIME)', bind: [] });
+      await db.unsafeRun({ sql: 'CREATE TABLE `Car` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `model` VARCHAR(255), `owner` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
+      flux.continue();
+    });
   }) }
 ];
 

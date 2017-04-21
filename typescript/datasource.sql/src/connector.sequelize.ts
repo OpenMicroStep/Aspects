@@ -1,6 +1,6 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding} from './index';
 
-async function select(db, tr, sql_select) : Promise<any[][]> {
+async function select(db, tr, sql_select) : Promise<object[]> {
   let results = await db.query(sql_select.sql, { bind: sql_select.bind, transaction: tr, raw: true });
   return results;
 }
@@ -20,7 +20,7 @@ export class SequelizeDBConnector implements DBConnector {
     return new SequelizeDBTransaction(this.db, await this.db.transaction());
   }
 
-  select(sql_select: SqlBinding) : Promise<any[][]> {
+  select(sql_select: SqlBinding) : Promise<object[]> {
     return select(this.db, undefined, sql_select);
   }
 
@@ -36,7 +36,7 @@ export class SequelizeDBConnector implements DBConnector {
 class SequelizeDBTransaction implements DBConnectorTransaction {
   constructor(public db, public tr) {}
 
-  select(sql_select: SqlBinding) : Promise<any[][]> {
+  select(sql_select: SqlBinding) : Promise<object[]> {
     return select(this.db, this.tr, sql_select);
   }
 

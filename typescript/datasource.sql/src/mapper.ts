@@ -13,6 +13,9 @@ export function loadSqlMappers(definition) : { [s: string]: SqlMappedObject } {
   return ret;
 }
 
+elementFactories.registerSimple('sql-insert', (reporter, name, definition, attrPath, parent: Element) => {
+  return new SqlInsert('sql-insert', name, parent);
+});
 export class SqlInsert extends Element {
   table: string;
   values: SqlValue[] = [];
@@ -27,6 +30,8 @@ export class SqlValue extends Element {
   value?: string
 }
 
+function pass(v) { return v; }
+
 elementFactories.registerSimple('sql-path', (reporter, name, definition, attrPath, parent: Element) => {
   return new SqlPath('sql-path', name, parent);
 });
@@ -35,8 +40,8 @@ export class SqlPath extends Element {
   key: string
   value: string
   where: SqlValue[] = [];
-  fromDb: (value) => any
-  toDb: (value) => any
+  fromDb: (value) => any = pass;
+  toDb: (value) => any = pass;
 
   uniqid(value: boolean) {
     let ret = JSON.stringify([this.table, this.key, this.where]);
@@ -52,8 +57,8 @@ elementFactories.registerSimple('sql-mapped-attribute', (reporter, name, definit
 export class SqlMappedAttribute extends Element {
   insert: SqlInsert | undefined;
   path: SqlPath[] = [];
-  fromDbKey: (value) => any
-  toDbKey: (value) => any
+  fromDbKey: (value) => any = pass;
+  toDbKey: (value) => any = pass;
 
   last(): SqlPath {
     return this.path[this.path.length - 1];
@@ -72,6 +77,8 @@ elementFactories.registerSimple('sql-mapped-object', (reporter, name, definition
 });
 export class SqlMappedObject extends Element {
   inserts: SqlInsert[] = [];
+  fromDbKey: (value) => any = pass;
+  toDbKey: (value) => any = pass;
   attributes: SqlMappedAttribute[] = [];
   
   get(attribute: string) : SqlMappedAttribute {

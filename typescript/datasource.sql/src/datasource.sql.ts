@@ -1,18 +1,17 @@
-import * as sequelize from 'sequelize';
 import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlMappedObject} from './mapper';
 export * from './mapper';
-import {SqlQuery} from './query';
-import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector} from './index';
+import {SqlQuery, mapValue} from './query';
+import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, Pool} from './index';
 
 export class SequelizeDataSourceImpl extends DataSource {
-  connector: DBConnector;
+  pool: Pool<DBConnector>;
   mappers: { [s: string] : SqlMappedObject };
   maker: SqlMaker;
 
-  execute(set: ObjectSet): Promise<VersionedObject[]> {
+  execute(db: DBConnector, set: ObjectSet): Promise<VersionedObject[]> {
     let query = new SqlQuery();
     let ctx = {
       maker: this.maker,
@@ -21,14 +20,13 @@ export class SequelizeDataSourceImpl extends DataSource {
       aliases: 0
     };
     query.build(ctx, set);
-    return query.execute(ctx, this.controlCenter(), this.connector);
+    return query.execute(ctx, this.controlCenter(), db);
   }
-
   async save(transaction: DBConnectorTransaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
     let manager = object.manager();
     let aspect = manager.aspect();
     let id = manager.id();
-    let version = manager.version() + 1;
+    let version = manager._version;
     let mapper = this.mappers[aspect.name];
     if (!mapper)
       return Promise.reject(`mapper not found for: ${aspect.name}`);
@@ -43,14 +41,14 @@ export class SequelizeDataSourceImpl extends DataSource {
     let map = (k: string, nv: any, ov: any | undefined) => {
       let attribute = mapper.get(k);
       let last = attribute.last();
-      let nvdb = last.toDb(nv);
+      let nvdb = last.toDb(mapValue(mapper, this, nv, k === '_id'));
       if (isNew && attribute.insert) { // insert syntax
         let values = valuesByTable.get(attribute.insert)!;
         values.set(last.value, nvdb);
       }
       else { // update syntax
-        let iddb = attribute.toDbKey(id);
-        let ovdb = ov && last.toDb(ov);
+        let iddb = attribute.toDbKey(mapper.toDbKey(id));
+        let ovdb = ov && last.toDb(mapValue(mapper, this, ov, k === '_id'));
         let key = attribute.pathref_uniqid();
         let values = valuesByPath.get(key);
         if (!values) {
@@ -69,7 +67,7 @@ export class SequelizeDataSourceImpl extends DataSource {
               where.push(this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key)))
               l = p;
             }
-            let select = this.maker.select([l.value], from, [], this.maker.and(where));
+            let select = this.maker.sub(this.maker.select([l.value], from, [], this.maker.and(where)));
             values.where = this.maker.compare_bind({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
           }
           else {
@@ -82,6 +80,8 @@ export class SequelizeDataSourceImpl extends DataSource {
       }
     };
     manager._localAttributes.forEach((nv, k) => map(k, nv, isNew ? undefined : manager._versionAttributes.get(k)));
+    map("_version", version + 1, version);
+    version++;
     if (isNew) {
       for (let c of mapper.inserts) {
         let autoinc = "";
@@ -105,28 +105,30 @@ export class SequelizeDataSourceImpl extends DataSource {
               throw new Error(`unsupported sql-value type: ${value.type}`);
           }
         }
-        let sql_insert = this.maker.insert(c.name, this.maker.values(Array.from(values.keys()), Array.from(values.values())));
+        let sql_insert = this.maker.insert(c.table, this.maker.values(Array.from(values.keys()), Array.from(values.values())));
         let result = await transaction.insert(sql_insert); // sequential insertion
         if (autoinc)
-          values.set(autoinc, { sql: this.maker.quote(autoinc), bind: [result] });
+          values.set(autoinc, result);
         if (c === idAttr.insert)
-          id = values.get(idAttr.last().value);
+          id = mapper.fromDbKey(idAttr.fromDbKey(values.get(idAttr.last().value)));
       }
     }
     for (let entry of valuesByPath.values()) {
       let sql_update = this.maker.update(entry.table, entry.sets, this.maker.and([entry.where, ...entry.checks]));
-      await transaction.update(sql_update); // TODO: test for any advantage to parallelize this ?
+      let changes = await transaction.update(sql_update); // TODO: test for any advantage to parallelize this ?
+      if (changes !== 1)
+        throw new Error(`cannot update`);
     }
     return { _id: id, _version: version };
   }
 
   implQuery(sets: ObjectSet[]): Promise<{ [k: string]: VersionedObject[] }> {
     let ret = {};
-    return Promise.all(sets
+    return this.pool.scoped(db => Promise.all(sets
       .filter(s => s.name)
-      .map(s => this.execute(s)
+      .map(s => this.execute(db, s)
       .then(obs => ret[s.name!] = obs))
-    ).then(() => ret);
+    )).then(() => ret);
   }
 
   async implLoad({objects, scope} : {
@@ -149,21 +151,28 @@ export class SequelizeDataSourceImpl extends DataSource {
       new DataSourceInternal.ConstraintOnValue(ConstraintType.In, set, undefined, list);
       sets.push(set);
     });
-    let results = await Promise.all(sets.map(s => this.execute(s)));
+    let results = await this.pool.scoped(db => Promise.all(sets.map(s => this.execute(db, s))));
     return ([] as VersionedObject[]).concat(...results);
   }
 
-  async implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
-    let tr = await this.connector.transaction();
-    let versions: { _id: Identifier, _version: number }[] = [];
-    for (let obj of objects)
-      versions.push(await this.save(tr, obj));
-    versions.forEach((v, i) => {
-      let manager = objects[i].manager();
-      manager.setId(v._id);
-      manager.setVersion(v._version);
+  implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
+    return this.pool.scoped(async (db) => {
+      let tr = await db.transaction();
+      let versions: { _id: Identifier, _version: number }[] = [];
+      try {
+        for (let obj of objects)
+          versions.push(await this.save(tr, obj));
+        await tr.commit();
+      } catch(e) {
+        await tr.rollback();
+      }
+      versions.forEach((v, i) => {
+        let manager = objects[i].manager();
+        manager.setId(v._id);
+        manager.setVersion(v._version);
+      });
+      return objects;
     });
-    return objects;
   }
 }
 

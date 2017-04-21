@@ -7,15 +7,19 @@ function push_bindings(bind: any[], bindings: SqlBinding[]) {
   for (let b of bindings)
     bind.push(...b.bind);
 }
+function join_sqls(bind: SqlBinding[], separator: string) : string {
+  return bind.map(b => b.sql).join(separator);
+}
 
 export interface DBConnector {
   transaction(): Promise<DBConnectorTransaction>;
-  select(sql_select: SqlBinding) : Promise<any[][]>;
+  unsafeRun(sql: SqlBinding) : Promise<void>;
+  select(sql_select: SqlBinding) : Promise<object[]>;
   update(sql_update: SqlBinding) : Promise<number>;
   insert(sql_insert: SqlBinding) : Promise<any>;
 }
 export interface DBConnectorTransaction {
-  select(sql_select: SqlBinding) : Promise<any[][]>;
+  select(sql_select: SqlBinding) : Promise<object[]>;
   update(sql_update: SqlBinding) : Promise<number>;
   insert(sql_insert: SqlBinding) : Promise<any>;
   commit() : Promise<void>;
@@ -24,14 +28,14 @@ export interface DBConnectorTransaction {
 export class SqlMaker {
   select(sql_columns: string[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where: SqlBinding, limit?: [number, number]) : SqlBinding {
     let bind: SqlBinding[] = [];
-    let sql = `SELECT ${sql_columns.join(',')}\nFROM ${sql_from.join(',')}`;
+    let sql = `SELECT ${sql_columns.join(',')}\nFROM ${join_sqls(sql_from, ',')}`;
     push_bindings(bind, sql_from);
     if (sql_joins.length) {
-      sql += `\n${sql_joins.join('\n')}`;
+      sql += `\n${join_sqls(sql_joins, '\n')}`;
       push_bindings(bind, sql_from);
     }
     if (sql_where) {
-      sql += `\nWHERE ${sql_where}`;
+      sql += `\nWHERE ${sql_where.sql}`;
       bind.push(...sql_where.bind);
     }
     if (limit && limit.length)
@@ -58,7 +62,7 @@ export class SqlMaker {
   }
 
   quote(value: string) {
-    return `'${value}'`;
+    return `\`${value}\``;
   }
 
   from(table: string, alias?: string) : SqlBinding {
@@ -78,8 +82,11 @@ export class SqlMaker {
     };
   }
 
-  column(table: string, name: string) {
-    return this.quote(table) + "." + this.quote(name);
+  column(table: string, name: string, alias?: string) {
+    let r = this.quote(table) + "." + this.quote(name);
+    if (alias)
+      r += ` ${this.quote(alias)}`;
+    return r;
   }
 
   set(sql_column: string, value: any) : SqlBinding {
@@ -97,6 +104,7 @@ export class SqlMaker {
       sql += condition.sql;
       bind.push(...condition.bind);
     }
+    sql += ")";
     return { sql: sql, bind: bind };
   }
 
@@ -110,15 +118,19 @@ export class SqlMaker {
 
   op(sql_column: string, operator: DataSourceInternal.ConstraintOnValueTypes, value): SqlBinding {
     switch (operator) {
-      case ConstraintType.Equal:              return { sql: `${sql_column} = ?`       , bind: [value] };
+      case ConstraintType.Equal: {
+        if (value === null || value === undefined)
+          return { sql: `${sql_column} IS NULL`, bind: [] };
+        return { sql: `${sql_column} = ?`       , bind: [value] };
+      }
       case ConstraintType.NotEqual:           return { sql: `${sql_column} <> ?`      , bind: [value] };
       case ConstraintType.GreaterThan:        return { sql: `${sql_column} > ?`       , bind: [value] };
       case ConstraintType.GreaterThanOrEqual: return { sql: `${sql_column} >= ?`      , bind: [value] };
       case ConstraintType.LessThan:           return { sql: `${sql_column} < ?`       , bind: [value] };
       case ConstraintType.LessThanOrEqual:    return { sql: `${sql_column} <= ?`      , bind: [value] };
       case ConstraintType.Text:               return { sql: `${sql_column} LIKE ?`    , bind: [value] };
-      case ConstraintType.In:                 return { sql: `${sql_column} IN (?)`    , bind: [value] };
-      case ConstraintType.NotIn:              return { sql: `${sql_column} NOT IN (?)`, bind: [value] };
+      case ConstraintType.In:                 return { sql: `${sql_column} IN (${value.map(v => '?').join(',')})`    , bind: value };
+      case ConstraintType.NotIn:              return { sql: `${sql_column} NOT IN (${value.map(v => '?').join(',')})`, bind: value };
       case ConstraintType.Exists:             return { sql: `${sql_column} ${value ? 'NOT NULL' : 'IS NULL'}`, bind: [] };
     }
     throw new Error(`unsupported op operator ${operator}`);
