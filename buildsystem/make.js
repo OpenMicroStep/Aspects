@@ -31,7 +31,7 @@ module.exports =  {
       components: ['=::core::cfg:tests', '=::core::', '=::bs aspects::'],
       targets: ['bs aspects'],
       files: ['=Files:buildsystem:tst ? tsc'],
-      copyFiles: [{value: ['=Files:buildsystem:tst ? rsc'], dest: 'data/', expand: true }]
+      copyFiles: [{ is: "associate", elements: ['=Files:buildsystem:tst ? rsc'], dest: 'data/', expand: true }]
     }
   }
 };

@@ -1,5 +1,5 @@
 import {
-  resolver, FileElement, File, Reporter, AttributeTypes
+  resolver, FileElement, File, Reporter, AttributeTypes, AssociateElement,
 } from '@openmicrostep/msbuildsystem.core';
 import { JSTarget, JSCompilers } from '@openmicrostep/msbuildsystem.js';
 import { TypescriptCompiler } from '@openmicrostep/msbuildsystem.js.typescript';
@@ -14,7 +14,7 @@ export class AspectTypescriptCompiler extends TypescriptCompiler {
     this.name.name = "aspects";
   }
 
-  @resolver(AttributeTypes.groupValidator<File, { header: string; customHeader: string; }>(FileElement.validateFile, {
+  @resolver(AssociateElement.groupValidator(FileElement.validateFile, {
     header:       { validator: AttributeTypes.validateString, default: "" },
     customHeader: { validator: AttributeTypes.validateString, default: "" }
   }))

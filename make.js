@@ -2,10 +2,10 @@ module.exports =  {
   is: "project",
   name: "Aspects",
   "ts base=": { is: 'component', type: "javascript", compiler: "aspects",
-      npmPackage: [{
+      npmPackage: [{ is: "component",
         "version": "0.2.9",
       }],
-      tsConfig: [{
+      tsConfig: [{ is: "component",
         "module": "commonjs",
         "target": "es6",
         "declaration": true,
@@ -22,32 +22,34 @@ module.exports =  {
   "test=": {
     is: 'component',
     components: ["=ts base"],
-    tsConfig: [{
+    tsConfig: [{ is: "component",
       "types": ["chai"]
     }],
-    npmInstall: [{
-      "@types/chai": "^3.4.29",
-      "@openmicrostep/tests": "^0.1.0"
-    }],
-    npmPackage: [{
-      "dependencies": {
+    npmPackage: [{ is: "component",
+      dependencies: [{ is: "component",
         "chai": "^3.5.0"
-      }
+      }],
+      devDependencies: [{ is: "component", 
+        "@types/chai": "^3.4.29",
+        "@openmicrostep/tests": "^0.1.0"
+      }]
     }]
   },
   "node=": {
     is: 'component', 
-    tsConfig: [{
+    tsConfig: [{ is: "component",
       "module": "commonjs",
       "types": ["node"]
     }],
-    npmInstall: [{
-      "@types/node": "^4.0.30"
+    npmPackage: [{ is: "component",
+      devDependencies: [{ is: "component", 
+        "@types/node": "^4.0.30"
+      }]
     }],
   },
   "browser=": { 
     is: 'component', 
-    tsConfig: [{
+    tsConfig: [{ is: "component",
       "module": "commonjs",
       "lib": ["dom"]
     }],
@@ -93,27 +95,27 @@ module.exports =  {
       environments: ["=envs:js"],
       files: ["=Files:core:src ? tsc"],
       interfaces: [{ 
-        value: ["=Files:core:src ? interface"], 
+        is: "associate",
+        elements: ["=Files:core:src ? interface"], 
         customHeader: "import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal, ImmutableList, ImmutableSet, ImmutableObject} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
       }],
-      //tsConfig: [{ traceResolution: true }],
-      npmPackage: [{
+      npmPackage: [{ is: "component",
         "main": "typescript/core/src/core.js",
         "typings": "typescript/core/src/core.d.ts",
-        "dependencies": {
+        "dependencies": [{ is: "component",
           "@openmicrostep/async": "^0.1.0",
           "ajv": "^4.9.0",
           "@openmicrostep/mstools": "^1.0.2",
           "immutable": "^3.8.1"
-        }
+        }],
+        "devDependencies": [{ is: "component",
+          "@openmicrostep/async": "^0.1.0",
+          "ajv": "^4.9.0",
+          "@types/ajv": "^0.0.4",
+          "@openmicrostep/mstools": "^1.0.2",
+          "immutable": "^3.8.1"
+        }],
       }],
-      npmInstall: [{
-        "@openmicrostep/async": "^0.1.0",
-        "ajv": "^4.9.0",
-        "@types/ajv": "^0.0.4",
-        "@openmicrostep/mstools": "^1.0.2",
-        "immutable": "^3.8.1"
-      }]
     },
     "core.tests=":  {
       is: 'target',
@@ -131,60 +133,62 @@ module.exports =  {
       components: ["=::aspects core::", "=node"],
       environments: ["=envs:js"],
       files: ["=Files:transport.express ? tsc"],
-      npmPackage: [{
+      npmPackage: [{ is: "component",
         "main": "transport.express.js",
-        "typings": "transport.express.d.ts"
+        "typings": "transport.express.d.ts",
+        "devDependencies": [{ is: "component",
+          "express": "^4.14.0",
+          "@types/express": "^4.0.34",
+          "express-serve-static-core": "^0.1.1",
+          "@types/body-parser": "^0.0.33",
+          "body-parser": "^1.15.2",
+          "@openmicrostep/mstools": "^1.0.2"
+        }],
       }],
-      npmInstall: [{
-        "express": "^4.14.0",
-        "@types/express": "^4.0.34",
-        "express-serve-static-core": "^0.1.1",
-        "@types/body-parser": "^0.0.33",
-        "body-parser": "^1.15.2",
-        "@openmicrostep/mstools": "^1.0.2"
-      }]
     },
     "sequelize=": {
       is: 'target',
-      outputName: "@microstep/aspects.sequelize",
+      outputName: "@openmicrostep/aspects.sequelize",
       targets: ["aspects core"],
       components: ["=::aspects core::", "=node"],
       environments: ["=envs:js"],
       files: ["=Files:datasource.sequelize:src ? tsc"],
-      npmPackage: [{
+      npmPackage: [{ is: "component",
         "main": "datasource.sequelize.js",
-        "typings": "datasource.sequelize.d.ts"
+        "typings": "datasource.sequelize.d.ts",
+        "devDependencies": [{ is: "component",
+          "@openmicrostep/msbuildsystem.shared": "^0.3.0",
+          "sequelize": "^3.27.0",
+          "@types/sequelize": "^4.0.39"
+        }],
       }],
-      npmInstall: [{
-        "@openmicrostep/msbuildsystem.shared": "^0.3.0",
-        "sequelize": "^3.27.0",
-        "@types/sequelize": "^4.0.39"
-      }]
     },
     "sequelize.tests=": {
       is: 'target',
-      outputName: "@microstep/aspects.sequelize.tests",
+      outputName: "@openmicrostep/aspects.sequelize.tests",
       targets: ["aspects core", "sequelize"],
       components: ["=test", "=::aspects core::", "=::sequelize::", "=node"],
       environments: ["=envs:js"],
       files: ["=Files:datasource.sequelize:tst ? tsc"],
       interfaces: ["=Files:datasource.sequelize:tst ? interface"],
-      npmInstall: [{
-        "sequelize": "^3.27.0",
-        "@types/sequelize": "^4.0.39",
-        "sqlite3": "^3.1.8"
-      }]
+      npmPackage: [{ is: "component",
+        "devDependencies": [{ is: "component",
+          "sequelize": "^3.27.0",
+          "@types/sequelize": "^4.0.39",
+          "sqlite3": "^3.1.8"
+        }],
+      }],
     },
     "client=": {
       is: 'target',
       packager: "npm",
       outputName: "@openmicrostep/aspects.xhr",
-      npmPackage: [{
+      npmPackage: [{ is: "component",
         "main": "transport.xhr.js",
-        "typings": "transport.xhr.d.ts"
-      }],
-      npmInstall: [{
-        "@openmicrostep/mstools": "^1.0.2"
+        "typings": "transport.xhr.d.ts",
+        "devDependencies": [{ is: "component",
+          "@openmicrostep/mstools": "^1.0.2"
+        }],
       }],
       targets: ["aspects core"],
       components: ["=::aspects core::", "=browser"],

@@ -1,5 +1,5 @@
-import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@microstep/aspects';
-import {SequelizeDataSource, SequelizeDataSourceImpl} from '@microstep/aspects.sequelize';
+import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
+import {SequelizeDataSource, SequelizeDataSourceImpl} from '@openmicrostep/aspects.sequelize';
 import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
