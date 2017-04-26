@@ -14,20 +14,14 @@ export type InterfaceFileGroup = {
 }
 
 export class ParseAspectInterfaceTask extends InOutTask {
-  constructor(graph: Graph, public src: InterfaceFileGroup, public dest: Directory) {
-    super({ type: "aspect parser", name: "interfaces" }, graph, src.values, []);
+  constructor(graph: Graph, public src: InterfaceFileGroup, public dest: File) {
+    super({ type: "aspect parser", name: "interfaces" }, graph, src.values, [dest]);
   }
 
   uniqueKey() {
-    return Object.assign(super.uniqueKey(), {
-      dest: this.dest.path,
-      ext: this.src.ext
-    });
+    return { ...super.uniqueKey(), ext: this.src.ext };
   }
-  isRunRequired(step: Step<{ runRequired?: boolean }>) {
-    step.context.runRequired = true;
-      step.continue();
-  }
+  
   run(step: Step<{}>) {
     let root = new AspectRootElement('root', 'root', null);
     step.setFirstElements([
@@ -46,23 +40,17 @@ export class ParseAspectInterfaceTask extends InOutTask {
         });
       }),
       (step: Step<{}>) => {
-        let dest = File.getShared(path.join(this.dest.path, `aspects.interfaces.ts`));
         let r = this.src.ext.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
         r += `\n${this.src.ext.header}\n`;
         root.__classes.forEach(cls => {
           r += cls.__decl();
         });
-        dest.writeUtf8File(r, (err) => {
+        this.dest.writeUtf8File(r, (err) => {
           step.context.reporter.error(err);
           step.continue();
         });
       }
     ]);
-    step.continue();
-  }
-
-  clean(step) {
-    // TODO
     step.continue();
   }
 }

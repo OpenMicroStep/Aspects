@@ -27,7 +27,7 @@ export class AspectTypescriptCompiler extends TypescriptCompiler {
 
   buildGraph(reporter: Reporter) {
     super.buildGraph(reporter);
-    let dest = File.getShared(path.join(this.graph.paths.intermediates, 'generated'), true);
+    let dest = File.getShared(path.join(this.graph.paths.intermediates, 'generated', `aspects.interfaces.ts`));
     this.parsers = this.interfaces.map(i => new ParseAspectInterfaceTask(this, i, dest));
     this.parsers.forEach(p => this.tsc.addDependency(p));
   }
