@@ -36,8 +36,8 @@ Object.assign(angular, {
 
     "@openmicrostep/mstools": "^1.0.2",
     "@openmicrostep/async": "^0.1.1",
-    "@openmicrostep/aspects": "^0.2.0",
-    "@openmicrostep/aspects.xhr": "^0.2.0",
+    "@openmicrostep/aspects": "^0.4.0",
+    "@openmicrostep/aspects.xhr": "^0.4.0",
   }]
 });
 Workspace.globalExports.set(angular.name, angular);
@@ -62,9 +62,9 @@ Object.assign(node, {
   npmInstall: [{
     "@openmicrostep/mstools": "^1.0.2",
     "@openmicrostep/async": "^0.1.0",
-    "@openmicrostep/aspects": "^0.2.0",
-    "@openmicrostep/aspects.express": "^0.2.0",
-    "@openmicrostep/aspects.sequelize": "^0.2.0",
+    "@openmicrostep/aspects": "^0.4.0",
+    "@openmicrostep/aspects.express": "^0.4.0",
+    "@openmicrostep/aspects.sql": "^0.4.0",
     "@types/node": "^4.0.30",
     "express": "^4.14.0",
     "body-parser": "^1.15.2",
