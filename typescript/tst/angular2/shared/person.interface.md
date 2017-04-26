@@ -16,7 +16,7 @@ Description de la classe
 #### age()       : integer;
 
 ### aspect server
-#### categories: core, calculation
+#### categories: core calculation
 
 ### aspect client
 #### categories: core

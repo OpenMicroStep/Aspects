@@ -1,7 +1,7 @@
 import {ControlCenter, VersionedObject, DataSource} from '@openmicrostep/aspects';
 import {Person, DemoApp} from './index';
 
-DemoApp.category('core', {
+DemoApp.category('core', <DemoApp.ImplCategories.core<DemoApp>>{
    dataSource() { return this._dataSource; }
 });
 DemoApp.category('far', <DemoApp.ImplCategories.far<DemoApp>>{

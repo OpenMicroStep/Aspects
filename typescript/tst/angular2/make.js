@@ -23,21 +23,20 @@ module.exports =  {
     "app=":  {
       is: 'target',
       //tsConfig: [{ traceResolution: true }],
-      environments: ["=::logitud.typescript.angular::"],
+      environments: ["=::openms.aspects.angular::"],
       files: ["=files:app ? tsc", "=files:shared ? tsc"],
-      copyFiles: [{ value: ["=files:app ? copy"], dest: "app" }],
-      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'app', header: `import {DataSource} from '@openmicrostep/aspects';` }]
+      copyFiles: [{ is: "associate", elements: ["=files:app ? copy"], dest: "" }],
+      interfaces: [{ is: "associate", elements: ['=files:shared ? interface'], header: `import {DataSource} from '@openmicrostep/aspects';` }]
     },
     "server=":  {
       is: 'target',
-      environments: ["=::logitud.typescript.node::"],
+      environments: ["=::openms.aspects.node::"],
       files: ["=files:server", "=files:shared ? tsc"],
-      interfaces: [{ value: ['=files:shared ? interface'], aspect: 'server', header: `import {DataSource} from '@openmicrostep/aspects';` }],
-      npmInstall: [{
-        "sequelize": "^3.27.0",
-        "@types/sequelize": "^4.0.39",
-        "sqlite3": "^3.1.8",
-        "source-map-support": "^0.4.11",
+      interfaces: [{ is: "associate", elements: ['=files:shared ? interface'], header: `import {DataSource} from '@openmicrostep/aspects';` }],
+      npmPackage: [{ is: "component",
+        dependencies: [{ is: "component",
+          "sqlite3": "^3.1.8",
+        }]
       }],
     }
   }

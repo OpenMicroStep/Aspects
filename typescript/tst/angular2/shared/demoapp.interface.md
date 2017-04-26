@@ -16,7 +16,7 @@ Description de la classe
 #### arr_p0_1():  [0, *, Person]
 
 ### aspect server
-#### categories: core, far
+#### categories: core far
 
 ### aspect client
 #### categories: core
