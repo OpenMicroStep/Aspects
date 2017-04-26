@@ -13,7 +13,7 @@ export function registerQuery(id: string, creator: (query) => any) {
   queries.set(id, creator);
 }
 
-DataSource.category('client_', <DataSource.ImplCategories.client_<DataSource.Categories.server_>>{
+DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.server>>{
   query(this, request: { [k: string]: any }) {
     return this.farPromise('distantQuery', request);
   },
@@ -27,7 +27,7 @@ DataSource.category('client_', <DataSource.ImplCategories.client_<DataSource.Cat
   }
 });
 
-DataSource.category('server_', <DataSource.ImplCategories.server_<DataSource.Categories.safe>>{
+DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.safe>>{
   distantQuery(this, request: { [k: string]: any }) {
     // throw "TODO: generate request (request is an id + options)";
     request = queries.get(request['id'])!(request);
