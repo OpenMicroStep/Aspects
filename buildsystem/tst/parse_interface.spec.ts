@@ -11,7 +11,7 @@ function test_parse(f: Flux<RunnerContext>, file: string) {
   let task = new ParseAspectInterfaceTask(g, {
     values: [File.getShared(path.join(__dirname, `data/${file}.md`), true)],
     ext: { header: '', customHeader: '' }
-  }, File.getShared(path.join(w.directory, `${file}`), true));
+  }, File.getShared(path.join(w.directory, `${file}/aspects.interfaces.ts`)));
   let runner = new Runner(g, 'build');
   runner.on('taskend', (ctx) => {
     if (ctx.task === task)
