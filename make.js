@@ -77,7 +77,7 @@ module.exports =  {
           { is: 'file', name: 'index.ts', tags: ['tsc'] },
         ]},
         { is: 'group', name: 'tst', path: 'tst/', elements: [
-          { is: 'file', name: 'datasource.sequelize.spec.ts', tags: ['tsc'] },
+          { is: 'file', name: 'datasource.sql.spec.ts', tags: ['tsc'] },
           { is: 'file', name: 'resource.interface.md', tags: ['interface'] },
         ]},
       ]},
