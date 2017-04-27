@@ -95,7 +95,7 @@ addReplaceInGraphSupport(Object, Object_replaceInGraph);
 addReplaceInGraphSupport(Array, Array_replaceInGraph);
 
 export function replaceInGraph(value, replacer: (object) => any, done: Set<any>): any {
-  if (typeof value === "object") {
+  if (value && typeof value === "object") {
     if (done.has(value)) return;
     done.add(value);
     value = replacer(value);
