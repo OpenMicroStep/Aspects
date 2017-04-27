@@ -40,8 +40,6 @@ export class SqlPath extends Element {
   key: string
   value: string
   where: SqlValue[] = [];
-  fromDb: (value) => any = pass;
-  toDb: (value) => any = pass;
 
   uniqid(value: boolean) {
     let ret = JSON.stringify([this.table, this.key, this.where]);
@@ -59,6 +57,8 @@ export class SqlMappedAttribute extends Element {
   path: SqlPath[] = [];
   fromDbKey: (value) => any = pass;
   toDbKey: (value) => any = pass;
+  fromDb: (value) => any = pass;
+  toDb: (value) => any = pass;
 
   last(): SqlPath {
     return this.path[this.path.length - 1];
