@@ -27,8 +27,8 @@ export class Pool<T> implements Pool.Protocol<T> {
   async scoped<P>(scope: (db: T) => Promise<P>, priority: number = 0) : Promise<P> {
     let db = await this.acquire(priority);
     return scope(db)
-      .then(v => { this.release(db); return v; })
-      .catch(v => { this.release(db); return v; })
+      .then(v => { this.release(db); return Promise.resolve(v); })
+      .catch(v => { this.release(db); return Promise.reject(v); })
   }
 
   acquire(priority: number = 0) : Promise<T> {
