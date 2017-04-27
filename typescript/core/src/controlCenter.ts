@@ -68,13 +68,14 @@ export class ControlCenter {
   unregisterObjects(component: AComponent, objects: VersionedObject[]) {
     objects.forEach(o => {
       let i = this._objects;
-      let d = i.get(o.id());
+      let id = o.id();
+      let d = i.get(id);
       if (!d)
         throw new Error(`cannot unregister an object that is not registered`);
       if (!d.components.delete(component))
         throw new Error(`cannot unregister an object that is not registered by the given component`);
       if (d.components.size === 0)
-        i.delete(o.id());
+        i.delete(id);
     });
   }
 
