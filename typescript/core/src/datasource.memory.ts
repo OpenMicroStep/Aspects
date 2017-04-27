@@ -39,26 +39,20 @@ export const InMemoryDataSource = VersionedObject.cluster(class InMemoryDataSour
     let cc = this.controlCenter();
     let component = {};
     cc.registerComponent(component);
-    sets.forEach(set => {
-      if (set.name) {
-        let lObjects: VersionedObject[] = [];
-        this.objects.forEach(dObject => {
-          if (set.pass(dObject)) {
-            let dManager = dObject.manager();
-            let cstor = cc.aspect(dManager.aspect().name)!;
-            let lObject = cc.registeredObject(dObject.id()) || new cstor();
-            let remoteAttributes = new Map<keyof VersionedObject, any>();
-            let lManager = lObject.manager();
-            cc.registerObjects(component, [lObject]);
-            if (set.scope) for (let k of set.scope as (keyof VersionedObject)[])
-              remoteAttributes.set(k, this.from(dManager._versionAttributes.get(k), component));
-            lManager.setId(dObject.id());
-            lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version());
-            lObjects.push(lObject);
-          }
-        });
-        ret[set.name] = lObjects;
-      }
+    DataSourceInternal.applySets(sets, [...this.objects.values()], true).forEach((objs, set) => {
+      ret[set.name] = objs.map(dObject => {
+        let dManager = dObject.manager();
+        let cstor = cc.aspect(dManager.aspect().name)!;
+        let lObject = cc.registeredObject(dObject.id()) || new cstor();
+        let remoteAttributes = new Map<keyof VersionedObject, any>();
+        let lManager = lObject.manager();
+        cc.registerObjects(component, [lObject]);
+        if (set.scope) for (let k of set.scope as (keyof VersionedObject)[])
+          remoteAttributes.set(k, this.from(dManager._versionAttributes.get(k), component));
+        lManager.setId(dObject.id());
+        lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version());
+        return lObject;
+      });
     });
     cc.unregisterComponent(component);
     return ret;
