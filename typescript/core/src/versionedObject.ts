@@ -535,10 +535,10 @@ export class VersionedObject implements MSTE.Decodable {
     this.manager().snapshot().encodeToMSTE(encoder); // TODO: remove this implementation with the correct one as soon as possible
   }
 
-  id()     : Identifier { return this.__manager._id; }
-  version(): number { return this.__manager._version; }
+  id()     : Identifier { return this.__manager.id(); }
+  version(): number { return this.__manager.version(); }
   manager(): VersionedObjectManager<this> { return this.__manager; }
-  controlCenter(): ControlCenter { return this.__manager._controlCenter; }
+  controlCenter(): ControlCenter { return this.__manager.controlCenter(); }
 
   farCallback<O extends VersionedObject, R>(this: O, method: string, argument: any, callback: (envelop: Invocation<O, R>) => void) {
     new Invocation(this, method, argument).farCallback(callback);
