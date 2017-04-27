@@ -173,6 +173,16 @@ export namespace DataSourceInternal {
       this.attribute = attribute;
     }
   }
+
+  function map(value) {
+    if (value instanceof VersionedObject)
+      value = value.id();
+    return value;
+  }
+  function find(arr, value) {
+    value = map(value);
+    return Array.isArray(arr) && arr.findIndex(v => map(v) === value) !== -1;
+  }
   export class ConstraintOnValue extends Constraint {
     type: ConstraintOnValueTypes;
     value: any;
@@ -183,8 +193,8 @@ export namespace DataSourceInternal {
     }
     pass(left, right) {
       switch(this.type) {
-        case ConstraintType.Equal: return left === right;
-        case ConstraintType.NotEqual: return left !== right;
+        case ConstraintType.Equal: return map(left) === map(right);
+        case ConstraintType.NotEqual: return map(left) !== map(right);
         case ConstraintType.GreaterThan: return left > right;
         case ConstraintType.GreaterThanOrEqual: return left >= right;
         case ConstraintType.LessThan: return left < right;
@@ -199,8 +209,8 @@ export namespace DataSourceInternal {
           }
           return false;
         }
-        case ConstraintType.In: return Array.isArray(right) && right.indexOf(left) !== -1;
-        case ConstraintType.NotIn: return Array.isArray(right) && right.indexOf(left) === -1;
+        case ConstraintType.In: return find(right, left);
+        case ConstraintType.NotIn: return !find(right, left);
         case ConstraintType.Exists: {
           return right !== undefined && (!Array.isArray(right) || right.length > 0);
         }
