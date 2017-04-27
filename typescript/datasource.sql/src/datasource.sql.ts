@@ -1,4 +1,4 @@
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal} from '@openmicrostep/aspects';
+import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlMappedObject} from './mapper';
@@ -11,7 +11,7 @@ export class SequelizeDataSourceImpl extends DataSource {
   mappers: { [s: string] : SqlMappedObject };
   maker: SqlMaker;
 
-  execute(db: DBConnector, set: ObjectSet): Promise<VersionedObject[]> {
+  execute(db: DBConnector, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
     let query = new SqlQuery();
     let ctx = {
       maker: this.maker,
@@ -20,7 +20,7 @@ export class SequelizeDataSourceImpl extends DataSource {
       aliases: 0
     };
     query.build(ctx, set);
-    return query.execute(ctx, this.controlCenter(), db);
+    return query.execute(ctx, this.controlCenter(), db, component);
   }
   async save(transaction: DBConnectorTransaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
     let manager = object.manager();
@@ -41,14 +41,14 @@ export class SequelizeDataSourceImpl extends DataSource {
     let map = (k: string, nv: any, ov: any | undefined) => {
       let attribute = mapper.get(k);
       let last = attribute.last();
-      let nvdb = last.toDb(mapValue(mapper, this, nv, k === '_id'));
+      let nvdb = attribute.toDb(mapValue(mapper, this, nv, k === '_id'));
       if (isNew && attribute.insert) { // insert syntax
         let values = valuesByTable.get(attribute.insert)!;
         values.set(last.value, nvdb);
       }
       else { // update syntax
         let iddb = attribute.toDbKey(mapper.toDbKey(id));
-        let ovdb = ov && last.toDb(mapValue(mapper, this, ov, k === '_id'));
+        let ovdb = ov && attribute.toDb(mapValue(mapper, this, ov, k === '_id'));
         let key = attribute.pathref_uniqid();
         let values = valuesByPath.get(key);
         if (!values) {
@@ -122,13 +122,22 @@ export class SequelizeDataSourceImpl extends DataSource {
     return { _id: id, _version: version };
   }
 
+  scoped<P>(scope: (component: AComponent) => Promise<P>) : Promise<P> {
+    let component = {};
+    this.controlCenter().registerComponent(component);
+    return scope(component)
+      .then(v => { this.controlCenter().unregisterComponent(component); return Promise.resolve(v); })
+      .catch(v => { this.controlCenter().unregisterComponent(component); return Promise.reject(v); })
+  }
+
   implQuery(sets: ObjectSet[]): Promise<{ [k: string]: VersionedObject[] }> {
     let ret = {};
-    return this.pool.scoped(db => Promise.all(sets
-      .filter(s => s.name)
-      .map(s => this.execute(db, s)
-      .then(obs => ret[s.name!] = obs))
-    )).then(() => ret);
+    return this.pool.scoped(db => this.scoped(component => 
+      Promise.all(sets
+        .filter(s => s.name)
+        .map(s => this.execute(db, s, component)
+        .then(obs => ret[s.name!] = obs))
+      ).then(() => ret)));
   }
 
   async implLoad({objects, scope} : {
@@ -151,7 +160,7 @@ export class SequelizeDataSourceImpl extends DataSource {
       new DataSourceInternal.ConstraintOnValue(ConstraintType.In, set, undefined, list);
       sets.push(set);
     });
-    let results = await this.pool.scoped(db => Promise.all(sets.map(s => this.execute(db, s))));
+    let results = await this.pool.scoped(db => this.scoped(component => Promise.all(sets.map(s => this.execute(db, s, component)))));
     return ([] as VersionedObject[]).concat(...results);
   }
 

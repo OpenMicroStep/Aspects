@@ -1,5 +1,5 @@
 import * as sequelize from 'sequelize';
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal} from '@openmicrostep/aspects';
+import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlBinding, SqlMaker} from './index';
@@ -217,7 +217,7 @@ export class SqlQuery {
   }
   // END BUILD
 
-  execute(ctx: SharedContext, cc: ControlCenter, db: { select(sql_select: SqlBinding) : Promise<object[]> }): Promise<VersionedObject[]> {
+  execute(ctx: SharedContext, cc: ControlCenter, db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
     if (!this.promise) {
       this.promise = (async () => {
         //Array.from(ctx.queries.values()).forEach(q => q.execute(ctx, cc, db)); // start quering deps
@@ -234,7 +234,7 @@ export class SqlQuery {
         let rows = await db.select(query);
         let ret: VersionedObject[] = [];
         for (let row of rows) {
-          ret.push(this.loadObject(ctx, cc, row, attributes))
+          ret.push(this.loadObject(ctx, cc, component, row, attributes))
         }
         return ret;
       })();
@@ -242,18 +242,19 @@ export class SqlQuery {
     return this.promise;
   }
 
-  loadObject(ctx: SharedContext, cc: ControlCenter, row: object, attributes: string[]): VersionedObject {
+  loadObject(ctx: SharedContext, cc: ControlCenter, component: AComponent, row: object, attributes: string[]): VersionedObject {
     let cstor = cc.aspect(this.mapper!.name)!;
     let id = this.mapper!.fromDbKey(this.mapper!.get("_id").fromDbKey(row["_id"]));
     let remoteAttributes = new Map<string, any>();
     let vo = cc.registeredObject(id) || new cstor();
     let manager = vo.manager();
     let aspect = manager.aspect();
+    cc.registerObjects(component, [vo]);
     for (let i = 0; i < attributes.length; i++) {
       let attr = attributes[i];
       let aspectAttr = aspect.attributes.get(attr);
       let sqlattr = this.mapper!.get(attr);
-      let value = sqlattr.last().fromDb(row[attr]);
+      let value = sqlattr.fromDb(row[attr]);
       if (aspectAttr && aspectAttr.versionedObject) {
         let mapper = ctx.mappers[aspectAttr.versionedObject];
         let subid = mapper.fromDbKey(value);
@@ -261,6 +262,7 @@ export class SqlQuery {
         if (!value) {
           value = new (cc.aspect(aspectAttr.versionedObject)!)();
           value.manager().setId(subid);
+          cc.registerObjects(component, [value]);
         }
       }
       remoteAttributes.set(attr, value);

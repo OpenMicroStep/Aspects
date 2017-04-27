@@ -22,7 +22,7 @@ function basicsWithCC(flux) {
       f.continue();
     },
     f => {
-      assert.equal(c0.version(), VersionedObjectManager.NoVersion);
+      assert.equal(c0.version(), VersionedObjectManager.NextVersion);
       assert.equal(c0.manager().hasChanges(), true);
       db.farPromise('rawSave', [c0]).then((envelop) => {
         assert.sameMembers(envelop.result(), [c0]);
@@ -96,8 +96,8 @@ function relationsWithCC(flux) {
   let c0 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 3" });
   let c1 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 2" });
   let c2 = Object.assign(new Car(), { _name: "Peugeot", _model: "3008 DKR" });
-  let p0 = Object.assign(new People(), { _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons" });
-  let p1 = Object.assign(new People(), { _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons" });
+  let p0 = Object.assign(new People(), { _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons", _birthDate: new Date() });
+  let p1 = Object.assign(new People(), { _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons", _birthDate: new Date(0) });
   flux.setFirstElements([
     f => {
       cc.registerComponent(component);
@@ -123,16 +123,29 @@ function relationsWithCC(flux) {
       });
     },
     f => {
-      cc.unregisterObjects(component, [c0]);
-      db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _owner: p0 }, scope: ['_name', '_owner', '_model'] }).then((envelop) => {
-        let res = envelop.result()['cars'];
-        assert.equal(res.length, 1);
-        let lc0 = res[0] as typeof c0;
+      cc.unregisterObjects(component, [c0, p0]);
+      db.farPromise('rawQuery', { results: [
+        { name: "cars"   , where: { $instanceOf: Car   , _owner: p0   }, scope: ['_name', '_owner', '_model']             },
+        { name: "peoples", where: { $instanceOf: People, _id: p0.id() }, scope: ['_firstname', '_lastname', '_birthDate'] },
+      ]}).then((envelop) => {
+        let cars = envelop.result()['cars'];
+        let peoples = envelop.result()['peoples'];
+        assert.equal(cars.length, 1);
+        assert.equal(peoples.length, 1);
+        let lc0 = cars[0] as typeof c0;
+        let lp0 = peoples[0] as typeof p0;
         assert.equal(lc0._name, c0._name);
-        assert.equal(lc0._owner, c0._owner);
+        assert.equal(lc0._owner!.id(), c0._owner!.id());
+        assert.equal(lc0._owner, lp0);
         assert.equal(lc0._model, c0._model);
         c0 = lc0;
-        cc.registerObjects(component, [c0]);
+
+        assert.equal(lp0._firstname, p0._firstname);
+        assert.equal(lp0._lastname, p0._lastname);
+        assert.equal(lp0._birthDate.getTime(), p0._birthDate.getTime());
+        p0 = lp0;
+
+        cc.registerObjects(component, [p0, c0]);
         f.continue();
       });
     },
