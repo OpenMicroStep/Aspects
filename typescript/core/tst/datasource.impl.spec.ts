@@ -134,6 +134,8 @@ function relationsWithCC(flux) {
         assert.equal(peoples.length, 1);
         let lc0 = cars[0] as typeof c0;
         let lp0 = peoples[0] as typeof p0;
+        assert.notEqual(lc0, c0, "objects where unregistered, the datasource should not return the same object");
+        assert.notEqual(lp0, p0, "objects where unregistered, the datasource should not return the same object");
         assert.equal(lc0._name, c0._name);
         assert.equal(lc0._owner!.id(), c0._owner!.id());
         assert.equal(lc0._owner, lp0);
