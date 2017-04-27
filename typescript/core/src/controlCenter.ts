@@ -49,7 +49,7 @@ export class ControlCenter {
 
   registerObjects(component: AComponent, objects: VersionedObject[], method?: string, events?: string[]) {
     if (!this._components.has(component))
-      throw new Error(`you must register the component with 'addComponent' before registering objects`);
+      throw new Error(`you must register the component with 'registerComponent' before registering objects`);
     const notificationCenter = this.notificationCenter();
     objects.forEach(o => {
       let id = o.id();
