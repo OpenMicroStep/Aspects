@@ -69,7 +69,7 @@ const transport = new ExpressTransport(router, (cstor, id) => {
     });
 });
 
-installPublicTransport(transport, DataSource, ["server_"]);
+installPublicTransport(transport, DataSource, ["server"]);
 installPublicTransport(transport, DemoApp, ["far"]);
 installPublicTransport(transport, Person, ["calculation"]);
 
