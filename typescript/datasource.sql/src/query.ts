@@ -11,6 +11,7 @@ function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O) 
 }
 
 export type SharedContext = {
+  controlCenter: ControlCenter,
   maker: SqlMaker,
   mappers: { [s: string] : SqlMappedObject },
   queries: Map<ObjectSet, SqlQuery>,
@@ -58,6 +59,10 @@ export class SqlQuery {
     return on;
   }
 
+  cstor(ctx: SharedContext) {
+    return ctx.controlCenter.aspect(this.mapper!.name)!
+  }
+
   addSubRequest(ctx: SharedContext, set: SqlQuery): string {
     let alias = this.subrequests.get(set);
     if (!alias) {
@@ -97,7 +102,17 @@ export class SqlQuery {
   addConstraintOnValue(ctx: SharedContext, attribute: string | undefined, operator: DataSourceInternal.ConstraintOnValueTypes, value: any | any[] | Promise<ObjectSet>) {
     let isId = attribute === "_id";
     value = Array.isArray(value) ? value.map(v => this.mapValue(ctx, v, isId)) : this.mapValue(ctx, value, isId);
-    this.addConstraint(ctx.maker.op(this.sqlColumn(ctx, attribute), operator, value));
+    if (operator === ConstraintType.Text && !attribute) {
+      let constraints: SqlBinding[] = [];
+      this.cstor(ctx).aspect.attributes.forEach(attr => {
+        if (attr.type.type === "primitive")
+          constraints.push(ctx.maker.op(this.sqlColumn(ctx, attr.name), operator, value));
+      });
+      this.addConstraint(ctx.maker.or(constraints));
+    }
+    else {
+      this.addConstraint(ctx.maker.op(this.sqlColumn(ctx, attribute), operator, value));
+    }
   }
 
   addConstraintOnColumn(ctx: SharedContext, attribute: string | undefined, operator: DataSourceInternal.ConstraintBetweenColumnsTypes, rightQuery: SqlQuery | undefined, rightAttribute: string | undefined) {
@@ -139,6 +154,7 @@ export class SqlQuery {
   buildSub(ctx: SharedContext, set: ObjectSet) : SqlQuery {
     let sub = new SqlQuery();
     return sub.build({
+      controlCenter: ctx.controlCenter,
       aliases: 0,
       maker: ctx.maker,
       mappers: ctx.mappers,
@@ -217,7 +233,7 @@ export class SqlQuery {
   }
   // END BUILD
 
-  execute(ctx: SharedContext, cc: ControlCenter, db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
+  execute(ctx: SharedContext, db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
     if (!this.promise) {
       this.promise = (async () => {
         //Array.from(ctx.queries.values()).forEach(q => q.execute(ctx, cc, db)); // start quering deps
@@ -234,7 +250,7 @@ export class SqlQuery {
         let rows = await db.select(query);
         let ret: VersionedObject[] = [];
         for (let row of rows) {
-          ret.push(this.loadObject(ctx, cc, component, row, attributes))
+          ret.push(this.loadObject(ctx, component, row, attributes))
         }
         return ret;
       })();
@@ -242,8 +258,9 @@ export class SqlQuery {
     return this.promise;
   }
 
-  loadObject(ctx: SharedContext, cc: ControlCenter, component: AComponent, row: object, attributes: string[]): VersionedObject {
-    let cstor = cc.aspect(this.mapper!.name)!;
+  loadObject(ctx: SharedContext, component: AComponent, row: object, attributes: string[]): VersionedObject {
+    let cstor = this.cstor(ctx);
+    let cc = ctx.controlCenter;
     let id = this.mapper!.fromDbKey(this.mapper!.get("_id").fromDbKey(row["_id"]));
     let remoteAttributes = new Map<string, any>();
     let vo = cc.registeredObject(id) || new cstor();

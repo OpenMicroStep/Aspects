@@ -420,6 +420,7 @@ export namespace DataSourceInternal {
     $gte: ConstraintType.GreaterThanOrEqual,
     $lt: ConstraintType.LessThan,
     $lte: ConstraintType.LessThanOrEqual,
+    $text: ConstraintType.Text,
   };
 
   function isResult(result: Request): result is Result {

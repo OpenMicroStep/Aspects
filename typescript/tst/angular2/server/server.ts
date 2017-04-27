@@ -37,7 +37,7 @@ pool.scoped(async db => {
 registerQuery("allpersons", (query) => {
   return {
     name: 'persons',
-    where: { $instanceOf: Person }, 
+    where: { $instanceOf: Person, $text: query.text }, 
     scope: ['_firstName', '_lastName']
   }
 });

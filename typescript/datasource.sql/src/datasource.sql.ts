@@ -14,13 +14,14 @@ export class SequelizeDataSourceImpl extends DataSource {
   execute(db: DBConnector, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
     let query = new SqlQuery();
     let ctx = {
+      controlCenter: this.controlCenter(),
       maker: this.maker,
       mappers: this.mappers,
       queries: new Map(),
       aliases: 0
     };
     query.build(ctx, set);
-    return query.execute(ctx, this.controlCenter(), db, component);
+    return query.execute(ctx, db, component);
   }
   async save(transaction: DBConnectorTransaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
     let manager = object.manager();
