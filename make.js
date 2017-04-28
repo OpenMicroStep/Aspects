@@ -117,7 +117,7 @@ module.exports =  {
         }],
       }],
     },
-    "core.tests=":  {
+    "aspects core.tests=":  {
       is: 'target',
       outputName: "@openmicrostep/aspects.tests",
       environments: ["=envs:js"],
@@ -126,7 +126,7 @@ module.exports =  {
       components: ["=test", "=::aspects core::", "=node"],
       interfaces: ["=Files:core:tst ? interface"],
     },
-    "express=": {
+    "aspects express=": {
       is: 'target',
       outputName: "@openmicrostep/aspects.express",
       targets: ["aspects core"],
@@ -146,7 +146,7 @@ module.exports =  {
         }],
       }],
     },
-    "sql=": {
+    "aspects sql=": {
       is: 'target',
       outputName: "@openmicrostep/aspects.sql",
       targets: ["aspects core"],
@@ -161,11 +161,11 @@ module.exports =  {
         }],
       }],
     },
-    "sql.tests=": {
+    "aspects sql.tests=": {
       is: 'target',
       outputName: "@openmicrostep/aspects.sql.tests",
-      targets: ["aspects core", "sql"],
-      components: ["=test", "=::aspects core::", "=::sql::", "=node"],
+      targets: ["aspects core", "aspects sql"],
+      components: ["=test", "=::aspects core::", "=::aspects sql::", "=node"],
       environments: ["=envs:js"],
       files: ["=Files:datasource.sql:tst ? tsc"],
       interfaces: ["=Files:datasource.sql:tst ? interface"],
@@ -175,7 +175,7 @@ module.exports =  {
         }],
       }],
     },
-    "client=": {
+    "aspects client=": {
       is: 'target',
       packager: "npm",
       outputName: "@openmicrostep/aspects.xhr",
