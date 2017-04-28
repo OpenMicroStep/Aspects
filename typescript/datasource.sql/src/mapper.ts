@@ -1,4 +1,3 @@
-import * as sequelize from 'sequelize';
 import {Element, AttributePath, ElementDefinition, ProviderMap, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, VersionedObjectConstructor} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
