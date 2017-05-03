@@ -35,7 +35,7 @@ export namespace DBConnector {
   export function transformPass(sql: SqlBinding) { return sql; }
   export function transformBindings(sql: SqlBinding, replacer: (idx: number) => string) {
     let idx = 0;
-    return { sql: sql.sql.replace(/__$__/g, () => replacer(idx++)), bind: sql.bind };
+    return { sql: sql.sql.replace(/\?/g, () => replacer(idx++)), bind: sql.bind };
   }
   export function createSimple<LIB, OPTIONS, DB>(definition: Definition<LIB, OPTIONS, DB>) {
     class GenericConnectorTransaction implements DBConnectorTransaction {

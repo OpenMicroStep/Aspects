@@ -8,6 +8,7 @@ import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 const sqlite3 = require('sqlite3').verbose();
 const mysql2 = require('mysql2');
+const pg = require('pg');
 
 function fromDbKeyPeople(id) { return `${id}:People`; }
 function fromDbKeyCar(id)    { return `${id}:Car`   ; }
@@ -32,7 +33,7 @@ function createSqlControlCenter(flux) {
           { is: "sql-mapped-attribute", name: "_name"      , insert: "=R", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "name"      }] },
           { is: "sql-mapped-attribute", name: "_firstname" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "firstname" }] },
           { is: "sql-mapped-attribute", name: "_lastname"  , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "lastname"  }] },
-          { is: "sql-mapped-attribute", name: "_birthDate" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "birthDate" }], fromDb: v => new Date(v), toDb: d => d.getTime() },
+          { is: "sql-mapped-attribute", name: "_birthDate" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "birthDate" }], fromDb: v => new Date(+v), toDb: d => d.getTime() },
           { is: "sql-mapped-attribute", name: "_cars"                    , path: [{ is: "sql-path", table: "Car"     , key: "owner" , value: "id"        }] },
           { is: "sql-mapped-attribute", name: "_drivenCars"              , path: [{ is: "sql-path", table: "Drivers" , key: "people", value: "car"       }] },
       ]
@@ -90,15 +91,28 @@ export const tests =
     flux.continue();
   }) },
   { name: "mysql", tests: createTests(async function mysqlCC(flux) {
-    const connector = MySQLDBConnectorFactory(mysql2, { host: 'localhost', user: 'root', password: "my-secret-pw", database: "aspects" }, { max: 1 });
+    const connector = MySQLDBConnectorFactory(mysql2, { host: 'localhost', user: 'root', password: "my-secret-pw", database: "" }, { max: 1 });
     await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
-    // FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE CASCADE
     await connector.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY AUTO_INCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTO_INCREMENT, `idVersion` INTEGER, `name` VARCHAR(255), FOREIGN KEY (idVersion) REFERENCES Version(id))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY, `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` BIGINT, FOREIGN KEY (id) REFERENCES Resource(id))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `Car` (`id` INTEGER PRIMARY KEY, `model` VARCHAR(255), `owner` INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (owner) REFERENCES People(id))', bind: [] });
+    flux.context.connector = connector;
+    flux.setFirstElements([createSqlControlCenter]);
+    flux.continue();
+  }) },
+  { name: "postgres", tests: createTests(async function postgresCC(flux) {
+    const connector = PostgresDBConnectorFactory(pg, { host: 'localhost', user: 'postgres', password: "my-secret-pw", database: "aspects" }, { max: 1 });
+    await connector.unsafeRun({ sql: 'DROP TABLE IF EXISTS "Version" CASCADE', bind: [] });
+    await connector.unsafeRun({ sql: 'DROP TABLE IF EXISTS "Resource" CASCADE', bind: [] });
+    await connector.unsafeRun({ sql: 'DROP TABLE IF EXISTS "People" CASCADE', bind: [] });
+    await connector.unsafeRun({ sql: 'DROP TABLE IF EXISTS "Car" CASCADE', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" SERIAL PRIMARY KEY, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" SERIAL PRIMARY KEY, "idVersion" INTEGER REFERENCES "Version" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "name" VARCHAR(255))', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" BIGINT)', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "model" VARCHAR(255), "owner" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();

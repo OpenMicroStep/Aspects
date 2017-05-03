@@ -68,7 +68,7 @@ export class SqlDataSourceImpl extends DataSource {
               where.push(this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key)))
               l = p;
             }
-            let select = this.maker.sub(this.maker.select([l.value], from, [], this.maker.and(where)));
+            let select = this.maker.sub(this.maker.select([this.maker.column(`U0`, l.value)], from, [], this.maker.and(where)));
             values.where = this.maker.compare_bind({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
           }
           else {

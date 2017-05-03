@@ -67,6 +67,7 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   },
   run(pg, db, sql: SqlBinding) : Promise<any> {
     return new Promise<any>((resolve, reject) => {
+      trace(sql);
       db.query(sql.sql, sql.bind, function (err, rows) {
         err ? reject(err) : resolve();
       });
@@ -81,5 +82,5 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   rollback(pg, db): Promise<void> {
     return new Promise<any>((resolve, reject) => { db.query(trace("ROLLBACK"), (err) => err ? reject(err) : resolve()) });
   },
-  transform(sql) { return DBConnector.transformBindings(sql, idx => `$${idx}`); },
+  transform(sql) { return DBConnector.transformBindings(sql, idx => `$${idx + 1}`); },
 });

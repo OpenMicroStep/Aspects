@@ -173,6 +173,7 @@ module.exports =  {
         "dependencies": [{ is: "component",
           "sqlite3": "^3.1.8",
           "mysql2": "^1.2.0",
+          "pg": "^6.1.5",
         }],
       }],
     },
