@@ -320,6 +320,7 @@ export namespace DataSourceInternal {
     $diff: [Instance<ObjectSetDefinition>, Instance<ObjectSetDefinition>],
     $instanceOf: string | Function,
     $memberOf: string | Function,
+    $text: string,
     $out: string,
     $exists: boolean,
   };
@@ -402,6 +403,11 @@ export namespace DataSourceInternal {
     },
     $out: (context, set, elements, out, value) => {
       throw new Error(`$out is managed in ParseContext`);
+    },
+    $text: (context, set, elements, out, value) => {
+      if (typeof value !== "string")
+        throw new Error(`$text value must be a string`);
+      new ConstraintOnValue(ConstraintType.Text, set, undefined, value);
     },
   }
   
