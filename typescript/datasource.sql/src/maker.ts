@@ -40,7 +40,9 @@ export class SqlMaker {
     return columns.map((c, i) => ({ sql: this.quote(c), bind: [values[i]] }));
   }
 
-  insert(table: string, sql_values: SqlBinding[]) : SqlBinding {
+  insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
+    if (output_columns.length > 1)
+      throw new Error(`default maker doesn't support multiple output columns`);
     return {
       sql: `INSERT INTO ${this.quote(table)} (${sql_values.map(c => c.sql).join(',')}) VALUES (${sql_values.map(c => '?').join(',')})`,
       bind: ([] as SqlBinding[]).concat(...sql_values.map(s => s.bind))

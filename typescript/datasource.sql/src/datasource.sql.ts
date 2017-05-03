@@ -88,12 +88,11 @@ export class SqlDataSourceImpl extends DataSource {
         let autoinc = "";
         let key = "";
         let values = valuesByTable.get(c)!;
+        let output_columns: string[] = [];
         for (let value of c.values) {
           switch (value.type) {
             case 'autoincrement':
-              if (autoinc)
-                throw new Error(`only one autoincremented column is autorized by insert`);
-              autoinc = value.name; 
+              output_columns.push(value.name); 
               break;
             case 'ref': {
               let tvalues = valuesByTable.get(value.insert!);
@@ -106,10 +105,9 @@ export class SqlDataSourceImpl extends DataSource {
               throw new Error(`unsupported sql-value type: ${value.type}`);
           }
         }
-        let sql_insert = this.maker.insert(c.table, this.maker.values(Array.from(values.keys()), Array.from(values.values())));
-        let result = await transaction.insert(sql_insert); // sequential insertion
-        if (autoinc)
-          values.set(autoinc, result);
+        let sql_insert = this.maker.insert(c.table, this.maker.values(Array.from(values.keys()), Array.from(values.values())), output_columns);
+        let result = await transaction.insert(sql_insert, output_columns); // sequential insertion
+        output_columns.forEach((c, i) => values.set(c, result[i]));
         if (c === idAttr.insert)
           id = mapper.fromDbKey(idAttr.fromDbKey(values.get(idAttr.last().value)));
       }
