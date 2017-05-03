@@ -18,43 +18,38 @@ On cherche uniquement a mapper une base de données existante sur un model Aspec
 
 ## Définition du mappage SQL
 
-La définition du mappage SQL vers Aspects se fait via 3 éléments: 
+La définition du mappage SQL vers Aspects se fait via 5 éléments: 
 
- - sql-mapped-object: définition des attributs de l'objet Aspect ()
- - sql-mapped-attribute: mappage d'un attribut Aspect vers SQL
- - sql-storage: mappage depuis l'id d'un objet aspect vers un dictionnaire attributs/valeurs (ex: une table, un document, ...)
+ - `sql-mapped-object`: définition du mappage d'un objet Aspect
+   - `name`: le nom de l'objet Aspect à mapper
+   - `attribute`: liste d'attributs à mapper (_id et _version compris)
+   - `fromDbKey?: (id) => id`, fonction de transformation de l'id Aspect vers l'id en base pour l'ensemble des attributs,
+   - `toDbKey?: (id) => id`, fonction de transformation de l'id en base vers l'id Aspect pour l'ensemble des attributs,
+ - `sql-mapped-attribute`: mappage d'un attribut Aspect vers SQL
+   - `name`: le nom de l'attribut Aspect à mapper
+   - `insert`: reférence vers l'élément _sql-insert_ correspondant à l'insertion de la ligne qui contient la valeur
+   - `path`: liste d'élément _sql-path_ définissant le chemin depuis l'identifiant jusqu'à la valeur
+   - `fromDbKey?: (id) => id`, fonction de transformation de l'id Aspect vers l'id en base pour cet attribut,
+   - `toDbKey?: (id) => id`, fonction de transformation de l'id en base vers l'id Aspect pour cet attribut,
+   - `fromDb?: (value) => value`, fonction de transformation de la valeur Aspect vers la valeur en base pour cet attribut,
+   - `toDb?: (value) => value`, fonction de transformation de la valeur en base vers la valeur Aspect pour cet attribut,
+ - `sql-path`: chemin depuis un identifiant vers une valeur
+   - `table`: nom de la table SQL
+   - `key`: nom de la colonne à utiliser comme clé
+   - `value`: nom de la colonne à utiliser comme valeur
+   - `where?`: dictionnaire de contraintes à appliquer 
+ - `sql-insert`: définition de l'insertion d'une ligne au sein d'une table (id, autoincrement, valeurs externes)
+   - `table`: nom de la table SQL
+   - `values`: liste d'élément _sql-value_ définissant les valeurs à insérer
+ - `sql-value`: une valeur pour une colonne (autoincrement, reference, primitive)
+   - `name`: nom de la colonne SQL pour la valeur
+   - `type`: type de valeur _autoincrement_, _ref_, _value_
+   - `value?`: 
+     - si type vaut _value_, la valeur.
+     - si type vaut _ref_, le nom de la colonne qui contient la valeur
+   - `insert?`: si type vaut _ref_, reférence vers l'élément _sql-insert_ qui insert la colonne définit par _value_
 
-Les attributs multi-valuées sont automatiquement détectés via le typage de l'objet Aspect et implique que storage est résolu comme étant une liste de documents.
-
-L'ensemble des relations entre les objets est maintenue automatiquement par la DataSource (pour tous les objets) et le ControlCenter (pour les objets chargés)
-
-```ts
-{
-  is: "sql-mapped-object"
-  name: "Aspect class name"
-  attributes: SqlMappedAttribute[]
-},
-{
-  is: "sql-mapped-attribute",
-  storage: SqlStorage, // référence vers la source de données (document, table, ...)
-  path: string, // chemin au sein de la source de données vers la valeur de l'attribute
-  mapToStorage?: (objectValue) => storageValue, // mappage de la valeur aspect vers la valeur en base
-  mapFromStorage?: (storageValue) => objectValue, // mappage depuis la valeur en base vers la valeur aspect
-  where?: Query // si type === "query", la requête DataSource à effectuer. L'élément "=::self::" est prédéfini comme étant l'objet Aspect sur lequel porte la recherche
-  onDelete?: "restrict" | "cascade" | "setnull" | "setdefault" | (versionedObjectToBeDeleted) => Identifier | undefined
-},
-{
-  is: "sql-storage",
-  type: "table" | "document" | "object", // type de la source de données (document, table, obi, ...)
-  idGenerator?: "auto" | "UUID" | (db, versionedObject) => Promise<Identifier>, // méthode de génération de l'identifiant Aspect
-  // ↓ si type === "table" | "document" ↓
-  toStorageKey?: (versionnedObject) => object
-  fromStorageKey?: (object) => Identifier
-  keyPath?: { table: string, columns: { [column: string]: string } }[], // chemin depuis l'objet Aspect vers la source de données (ie. les tables a parcourir depuis la key vers la source de données
-  // ↑                     ↑
-  path?: string; // si type === "document", chemin vers la colonne qui contient le document
-}
-```
+Les attributs multi-valuées sont automatiquement détectés via le typage de l'objet Aspect.
 
 ## Exemples
 
@@ -66,60 +61,23 @@ class Person
   _lastName: string
   _mother: Person
   _father: Person
-  _sons: Person[]
 
-"VersionStorage=": {
-  is: "sql-storage",
-  type: "table",
-  fromStoragePrimaryKey(object) { return `${object.myid}:{object.mytype}` },
-  toStoragePrimaryKey(versionnedObject) { let [id, type] = versionedObject.id().split(':'); return { myid: id, mytype: type }; },
-  keyPath: [
-    { table: "AllVersions", columns: { "id": "myid", "type": "mytype"} }
-  ]
-},
-"Person=": { is: "sql-mapped-object
-  attributes: ["=_version", "=_firstName", "=_lastName", "=_mother", "=_father", "=_sons"],
-  "PersonStorage=": {
-    is: "sql-storage",
-    type: "table",
-    keyPath: { table: "Person", columns: { "id": "_id" } }
-    idGenerator: "autoincrement"
-  },
-  "_version=": {
-    is: "sql-mapped-attribute",
-    storage: "=VersionStorage",
-    path: "version"
-  },
-  "_firstName=": {
-    is: "sql-mapped-attribute",
-    storage: "=PersonStorage",
-    path: "firstName"
-  },
-  "_lastName=": {
-    is: "sql-mapped-attribute",
-    storage: "=PersonStorage",
-    path: "lastName"
-  },
-  "_mother=": {
-    is: "sql-mapped-attribute",
-    storage: "=PersonStorage",
-    path: "mother"
-  },
-  "_father=": {
-    is: "sql-mapped-attribute",
-    storage: "=PersonStorage",
-    path: "father"
-  },
-  "_sons=": {
-    is: "sql-mapped-attribute",
-    where: {
-      $instanceOf: Person,
-      $or: [
-        { _father: { $eq: "=self" } }, 
-        { _mother: { $eq: "=self" } },
-      ]
-    }
-  }
+"Person=": { is: "sql-mapped-object",
+  fromDbKey: id => `${id}:Person`,
+  toDbKey: id => +id.split(':')[0],
+  inserts: [
+    { is: "sql-insert", name: "V", table: "Version", values: [{ is: "sql-value", name: "id"  , type: "autoincrement" }, 
+                                                              { is: "sql-value", name: "type", type: "value", value: "Person" }] },
+    { is: "sql-insert", name: "P", table: "Person" , values: [{ is: "sql-value", name: "id"  , type: "ref", insert: "=V", value: "id" }] },
+  ],
+  attributes: [
+    { is: "sql-mapped-attribute", name: "_id"       , insert: "=P", path: [{ is: "sql-path", table: "People" , key: "id", value: "id"        }] },
+    { is: "sql-mapped-attribute", name: "_version"  , insert: "=V", path: [{ is: "sql-path", table: "Version", key: "id", value: "version"   }] },
+    { is: "sql-mapped-attribute", name: "_firstname", insert: "=P", path: [{ is: "sql-path", table: "People" , key: "id", value: "firstname" }] },
+    { is: "sql-mapped-attribute", name: "_lastname" , insert: "=P", path: [{ is: "sql-path", table: "People" , key: "id", value: "lastname"  }] },
+    { is: "sql-mapped-attribute", name: "_mother"   , insert: "=P", path: [{ is: "sql-path", table: "People" , key: "id", value: "mother"    }] },
+    { is: "sql-mapped-attribute", name: "_father"   , insert: "=P", path: [{ is: "sql-path", table: "People" , key: "id", value: "father"    }] },
+  ],
 }
 ```
 
@@ -136,30 +94,32 @@ class Cat
   _name: string
   _owner: Person
 
-"Person=": { is: "sql-mapped-object
-  attributes: ["=_version", "=_firstName", "=_lastName", "=_cats"],
-  "PersonStorage=": {
-    is: "sql-storage",
-    type: "table",
-    keyPath: { table: "Person", columns: { "id": "_id" } },
-    idGenerator: "autoincrement",
-  },
-  "_version="  : { is: "sql-mapped-attribute", storage: "=PersonStorage", path: "version"   },
-  "_firstName=": { is: "sql-mapped-attribute", storage: "=PersonStorage", path: "firstName" },
-  "_lastName=" : { is: "sql-mapped-attribute", storage: "=PersonStorage", path: "lastName"  },
-  "_cats="     : { is: "sql-mapped-attribute", where: { $instanceOf: Cat, _owner: { $eq: "=self" } } },
-}
-"Cat=": { is: "sql-mapped-object
-  attributes: ["=_version", "=_name", "=_owner"],
-  "CatStorage=": {
-    is: "sql-storage",
-    type: "table",
-    keyPath: { table: "Cat", columns: { "id": "_id" } },
-    idGenerator: "autoincrement"
-  },
-  "_version=" : { is: "sql-mapped-attribute", storage: "=CatStorage", path: "version" },
-  "_name="    : { is: "sql-mapped-attribute", storage: "=CatStorage", path: "name"    },
-  "_owner="   : { is: "sql-mapped-attribute", storage: "=CatStorage", path: "owner"   },
+"Person=": { is: "sql-mapped-object",
+  fromDbKey: (id) => `${id}:Person`,
+  toDbKey: id => +id.split(':')[0],
+  inserts: [
+    { is: "sql-insert", name: "P", table: "Person" , values: [{ is: "sql-value", name: "id"  , type: "autoincrement" }] },
+  ],
+  attributes: [
+    { is: "sql-mapped-attribute", name: "_id"       , insert: "=P", path: [{ is: "sql-path", table: "People", key: "id", value: "id"        }] },
+    { is: "sql-mapped-attribute", name: "_version"  , insert: "=P", path: [{ is: "sql-path", table: "People", key: "id", value: "version"   }] },
+    { is: "sql-mapped-attribute", name: "_firstname", insert: "=P", path: [{ is: "sql-path", table: "People", key: "id", value: "firstname" }] },
+    { is: "sql-mapped-attribute", name: "_lastname" , insert: "=P", path: [{ is: "sql-path", table: "People", key: "id", value: "lastname"  }] },
+    { is: "sql-mapped-attribute", name: "_cats"     ,             , path: [{ is: "sql-path", table: "Cat"   , key: "owner", value: "owner"  }] },
+  ],
+},
+"Cat=": { is: "sql-mapped-object",
+  fromDbKey: id => `${id}:Cat`,
+  toDbKey: id => +id.split(':')[0],
+  inserts: [
+    { is: "sql-insert", name: "C", table: "Cat" , values: [{ is: "sql-value", name: "id"  , type: "autoincrement" }] },
+  ],
+  attributes: [
+    { is: "sql-mapped-attribute", name: "_id"     , insert: "=C", path: [{ is: "sql-path", table: "Cat", key: "id", value: "id"      }] },
+    { is: "sql-mapped-attribute", name: "_version", insert: "=C", path: [{ is: "sql-path", table: "Cat", key: "id", value: "version" }] },
+    { is: "sql-mapped-attribute", name: "_name"   , insert: "=C", path: [{ is: "sql-path", table: "Cat", key: "id", value: "name"    }] },
+    { is: "sql-mapped-attribute", name: "_owner"  , insert: "=C", path: [{ is: "sql-path", table: "Cat", key: "id", value: "owner"   }] },
+  ],
 }
 ```
 
@@ -175,39 +135,32 @@ class Cat
   _name: string
   _owners: Person[]
 
-"Cat2PersonStorage=": {
-  is: "sql-storage",
-  type: "table",
-  keyPath: { table: "CatPerson", columns: { "cat": "_id" } }
+"R=": { is: "sql-insert", table: "CatPerson", values: []  }
+"Person=": { is: "sql-mapped-object",
+  fromDbKey: (id) => `${id}:Person`,
+  toDbKey: id => +id.split(':')[0],
+  inserts: [
+    { is: "sql-insert", name: "P", table: "Person", values: [{ is: "sql-value", name: "id"  , type: "autoincrement" }] },
+  ],
+  attributes: [
+    { is: "sql-mapped-attribute", name: "_id"       , insert: "=P", path: [{ is: "sql-path", table: "People"   , key: "id", value: "id"        }] },
+    { is: "sql-mapped-attribute", name: "_version"  , insert: "=P", path: [{ is: "sql-path", table: "People"   , key: "id", value: "version"   }] },
+    { is: "sql-mapped-attribute", name: "_firstname", insert: "=P", path: [{ is: "sql-path", table: "People"   , key: "id", value: "firstname" }] },
+    { is: "sql-mapped-attribute", name: "_lastname" , insert: "=P", path: [{ is: "sql-path", table: "People"   , key: "id", value: "lastname"  }] },
+    { is: "sql-mapped-attribute", name: "_cats"     , insert: "=R", path: [{ is: "sql-path", table: "CatPerson", key: "owner", value: "cat"    }] },
+  ],
 },
-"Person2CatStorage=": {
-  is: "sql-storage",
-  type: "table",
-  keyPath: { table: "CatPerson", columns: { "owner": "_id" } }
-},
-"Person=": { is: "sql-mapped-object
-  attributes: ["=_version", "=_firstName", "=_lastName", "=_cats"],
-  "PersonStorage=": {
-    is: "sql-storage",
-    type: "table",
-    keyPath: { table: "Person", columns: { "id": "_id" } },
-    idGenerator: "autoincrement",
-  },
-  "_version="  : { is: "sql-mapped-attribute", storage: "=PersonStorage"    , path: "version"   },
-  "_firstName=": { is: "sql-mapped-attribute", storage: "=PersonStorage"    , path: "firstName" },
-  "_lastName=" : { is: "sql-mapped-attribute", storage: "=PersonStorage"    , path: "lastName"  },
-  "_cats="     : { is: "sql-mapped-attribute", storage: "=Person2CatStorage", path: "cat"       },
-}
-"Cat=": { is: "sql-mapped-object
-  attributes: ["=_version", "=_name", "=_owner"],
-  "CatStorage=": {
-    is: "sql-storage",
-    type: "table",
-    keyPath: { table: "Cat", columns: { "id": "_id" } },
-    idGenerator: "autoincrement"
-  },
-  "_version=" : { is: "sql-mapped-attribute", storage: "=CatStorage"       , path: "version" },
-  "_name="    : { is: "sql-mapped-attribute", storage: "=CatStorage"       , path: "name"    },
-  "_owners="  : { is: "sql-mapped-attribute", storage: "=Cat2PersonStorage", path: "owner"   },
+"Cat=": { is: "sql-mapped-object",
+  fromDbKey: id => `${id}:Cat`,
+  toDbKey: id => +id.split(':')[0],
+  inserts: [
+    { is: "sql-insert", name: "C", table: "Cat", values: [{ is: "sql-value", name: "id"  , type: "autoincrement" }] },
+  ],
+  attributes: [
+    { is: "sql-mapped-attribute", name: "_id"     , insert: "=C", path: [{ is: "sql-path", table: "Cat"      , key: "id", value: "id"      }] },
+    { is: "sql-mapped-attribute", name: "_version", insert: "=C", path: [{ is: "sql-path", table: "Cat"      , key: "id", value: "version" }] },
+    { is: "sql-mapped-attribute", name: "_name"   , insert: "=C", path: [{ is: "sql-path", table: "Cat"      , key: "id", value: "name"    }] },
+    { is: "sql-mapped-attribute", name: "_owners" , insert: "=R", path: [{ is: "sql-path", table: "CatPerson", key: "cat", value: "owner"  }] },
+  ],
 }
 ```
