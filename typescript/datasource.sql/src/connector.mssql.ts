@@ -5,6 +5,11 @@ function trace<T extends SqlBinding | string>(sql: T) : T {
   return sql;
 }
 
+class MSSQLMaker extends SqlMaker {
+  quote(value: string) {
+    return `[${value}]`;
+  }
+}
 function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
   let TYPES = tedious.TYPES;
   let request = new tedious.Request(sql.sql, cb);
@@ -48,6 +53,7 @@ export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
     encrypt?: boolean,
   },
 }, { connection: any, tedious: any }>({
+  maker: new MSSQLMaker(),
   create(tedious, options) {
     return new Promise((resolve, reject) => {
       let db = { connection: new tedious.Connection(options), tedious: tedious };

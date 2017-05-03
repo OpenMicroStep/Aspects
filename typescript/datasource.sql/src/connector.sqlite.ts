@@ -6,6 +6,7 @@ function trace<T extends SqlBinding | string>(sql: T) : T {
 }
 
 export const SqliteDBConnectorFactory = DBConnector.createSimple<any, { filename: string, mode?: any }, any>({
+  maker: new SqlMaker(),
   create(sqlite3, { filename, mode }) {
     if (mode === undefined)
       mode = sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE;

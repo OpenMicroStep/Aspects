@@ -1,4 +1,5 @@
 export * from './pool';
+export * from './maker';
 export * from './connector';
 export * from './datasource.sql';
 export * from './connector.sqlite';

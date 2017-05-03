@@ -4,11 +4,16 @@ function trace<T extends SqlBinding | string>(sql: T) : T {
 //  console.info(sql);
   return sql;
 }
-
+class OracleSqlMaker extends SqlMaker {
+  quote(value: string) {
+    return `"${value.replace(/`/g, '""')}"`;
+  }
+}
 export const OracleDBConnectorFactory = DBConnector.createSimple<any, { 
   connectString: string,
   user: string, password?: string
 }, any>({
+  maker: new OracleSqlMaker(),
   create(oracledb, options) {
     return oracledb.getConnection(options);
   },

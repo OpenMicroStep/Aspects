@@ -6,6 +6,7 @@ function trace<T extends SqlBinding | string>(sql: T) : T {
 }
 
 export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: string, user: string, password: string, database: string }, any>({
+  maker: new SqlMaker(),
   create(mysql2, options) {
     return new Promise((resolve, reject) => {
       let db = mysql2.createConnection(options);

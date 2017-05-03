@@ -4,12 +4,17 @@ function trace<T extends SqlBinding | string>(sql: T) : T {
 //  console.info(sql);
   return sql;
 }
-
+class PostgresSqlMaker extends SqlMaker {
+  quote(value: string) {
+    return `"${value.replace(/`/g, '""')}"`;
+  }
+}
 export const PostgresDBConnectorFactory = DBConnector.createSimple<any, { 
   host: string, port?: number, ssl?: boolean,
   user: string, password?: string, database: string,
   application_name?: string,
 }, any>({
+  maker: new PostgresSqlMaker(),
   create(pg, options) {
     return new Promise((resolve, reject) => {
       let db = new pg.Client(options);
