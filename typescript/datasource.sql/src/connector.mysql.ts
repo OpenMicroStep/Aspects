@@ -46,9 +46,17 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
   },
   run(mysql2, db, sql: SqlBinding) : Promise<any> {
     return new Promise<any>((resolve, reject) => {
-      db.execute(sql.sql, sql.bind, function (err, rows) {
-        err ? reject(err) : resolve();
-      });
+      trace(sql);
+      if (sql.bind.length > 0) {
+        db.execute(sql.sql, sql.bind, function (err, rows) {
+          err ? reject(err) : resolve();
+        });
+      }
+      else {
+        db.query(sql.sql, function (err, rows) {
+          err ? reject(err) : resolve();
+        });
+      }
     });
   },
   beginTransaction(mysql2, db): Promise<void> {

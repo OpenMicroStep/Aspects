@@ -7,6 +7,7 @@ import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 const sqlite3 = require('sqlite3').verbose();
+const mysql2 = require('mysql2');
 
 function fromDbKeyPeople(id) { return `${id}:People`; }
 function fromDbKeyCar(id)    { return `${id}:Car`   ; }
@@ -80,7 +81,7 @@ export const tests =
 [
   { name: "sqlite", tests: createTests(async function sqliteCC(flux) {
     const connector = SqliteDBConnectorFactory(sqlite3, { filename: ':memory:' }, { max: 1 });
-    await connector.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` DATETIME)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `Car` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `model` VARCHAR(255), `owner` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
@@ -88,4 +89,18 @@ export const tests =
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
   }) },
+  { name: "mysql", tests: createTests(async function mysqlCC(flux) {
+    const connector = MySQLDBConnectorFactory(mysql2, { host: 'localhost', user: 'root', password: "my-secret-pw", database: "aspects" }, { max: 1 });
+    await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
+    await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
+    // FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE CASCADE
+    await connector.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY AUTO_INCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTO_INCREMENT, `idVersion` INTEGER, `name` VARCHAR(255), FOREIGN KEY (idVersion) REFERENCES Version(id))', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY, `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` BIGINT, FOREIGN KEY (id) REFERENCES Resource(id))', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE `Car` (`id` INTEGER PRIMARY KEY, `model` VARCHAR(255), `owner` INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (owner) REFERENCES People(id))', bind: [] });
+    flux.context.connector = connector;
+    flux.setFirstElements([createSqlControlCenter]);
+    flux.continue();
+  }) }
 ];

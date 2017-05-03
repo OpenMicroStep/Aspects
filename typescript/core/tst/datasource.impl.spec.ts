@@ -239,6 +239,6 @@ export function createTests(createControlCenter: (flux) => void) {
   function insert1k_1by1Seq(flux) { runWithNewCC(flux, f => insert1by1SeqWithCC(f, 2)); }
   function insert1k_1by1Par(flux) { runWithNewCC(flux, f => insert1by1ParWithCC(f, 2)); }
   function relations(flux) { runWithNewCC(flux, relationsWithCC); }
-  return [basics, relations]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
+  return [basics, relations, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
 }
 

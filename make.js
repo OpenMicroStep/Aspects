@@ -171,7 +171,8 @@ module.exports =  {
       interfaces: ["=Files:datasource.sql:tst ? interface"],
       npmPackage: [{ is: "component",
         "dependencies": [{ is: "component",
-          "sqlite3": "^3.1.8"
+          "sqlite3": "^3.1.8",
+          "mysql2": "^1.2.0",
         }],
       }],
     },
