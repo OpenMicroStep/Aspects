@@ -1,5 +1,5 @@
 import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
-import {SequelizeDataSource, SequelizeDataSourceImpl, SqlMappedObject, SqlMappedAttribute, DBConnector, loadSqlMappers, SqlMaker, Pool, SqliteDBConnector} from '@openmicrostep/aspects.sql';
+import {SqlDataSource, SqlMappedObject, SqlMappedAttribute, DBConnector, loadSqlMappers, SqliteDBConnectorFactory} from '@openmicrostep/aspects.sql';
 import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -9,7 +9,7 @@ function fromDbKeyPeople(id) { return `${id}:People`; }
 function fromDbKeyCar(id)    { return `${id}:Car`   ; }
 function toDBKey(id) { return +id.split(':')[0]; }
 
-export const name = "SequelizeDataSource";
+export const name = "SqlDataSource";
 export const tests = 
 [
   { name: "sqlite", tests: createTests(function createSqliteControlCenter(flux) {
@@ -56,30 +56,31 @@ export const tests =
         ]
       }
     });
-    const pool = new Pool(SqliteDBConnector.provider(sqlite3, ':memory:'));
+    const connector = SqliteDBConnectorFactory(sqlite3, { filename: ':memory:' }, { max: 1 });
 
     let cc = new ControlCenter();
     let C = Car.installAspect(cc, 'test1');
     let P = People.installAspect(cc, 'test1');
-    let DB = SequelizeDataSource.installAspect(cc, "server");
+    let DB = SqlDataSource.installAspect(cc, "server");
     let db = new DB();
     let mdb = db as any;
     mdb.mappers = mappers;
-    mdb.pool = pool;
-    mdb.maker = new SqlMaker();
+    mdb.connector = connector;
+    mdb.maker = connector.maker;
     Object.assign(flux.context, {
       Car: C,
       People: P,
       db: db,
       cc: cc
     });
-    pool.scoped(async db => {
+    (async db => {
+      console.info("init");
       await db.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
       await db.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
       await db.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` DATETIME)', bind: [] });
       await db.unsafeRun({ sql: 'CREATE TABLE `Car` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `model` VARCHAR(255), `owner` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
       flux.continue();
-    });
+    })(connector).catch(err => console.info(err));
   }) }
 ];
 

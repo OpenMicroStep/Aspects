@@ -6,8 +6,8 @@ export * from './mapper';
 import {SqlQuery, mapValue} from './query';
 import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, Pool} from './index';
 
-export class SequelizeDataSourceImpl extends DataSource {
-  pool: Pool<DBConnector>;
+export class SqlDataSourceImpl extends DataSource {
+  connector: DBConnector;
   mappers: { [s: string] : SqlMappedObject };
   maker: SqlMaker;
 
@@ -133,12 +133,12 @@ export class SequelizeDataSourceImpl extends DataSource {
 
   implQuery(sets: ObjectSet[]): Promise<{ [k: string]: VersionedObject[] }> {
     let ret = {};
-    return this.pool.scoped(db => this.scoped(component => 
+    return this.scoped(component => 
       Promise.all(sets
         .filter(s => s.name)
-        .map(s => this.execute(db, s, component)
+        .map(s => this.execute(this.connector, s, component)
         .then(obs => ret[s.name!] = obs))
-      ).then(() => ret)));
+      ).then(() => ret));
   }
 
   async implLoad({objects, scope} : {
@@ -161,29 +161,27 @@ export class SequelizeDataSourceImpl extends DataSource {
       new DataSourceInternal.ConstraintOnValue(ConstraintType.In, set, undefined, list);
       sets.push(set);
     });
-    let results = await this.pool.scoped(db => this.scoped(component => Promise.all(sets.map(s => this.execute(db, s, component)))));
+    let results = await this.scoped(component => Promise.all(sets.map(s => this.execute(this.connector, s, component))));
     return ([] as VersionedObject[]).concat(...results);
   }
 
-  implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
-    return this.pool.scoped(async (db) => {
-      let tr = await db.transaction();
-      let versions: { _id: Identifier, _version: number }[] = [];
-      try {
-        for (let obj of objects)
-          versions.push(await this.save(tr, obj));
-        await tr.commit();
-      } catch(e) {
-        await tr.rollback();
-      }
-      versions.forEach((v, i) => {
-        let manager = objects[i].manager();
-        manager.setId(v._id);
-        manager.setVersion(v._version);
-      });
-      return objects;
+  async implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
+    let tr = await this.connector.transaction();
+    let versions: { _id: Identifier, _version: number }[] = [];
+    try {
+      for (let obj of objects)
+        versions.push(await this.save(tr, obj));
+      await tr.commit();
+    } catch(e) {
+      await tr.rollback();
+    }
+    versions.forEach((v, i) => {
+      let manager = objects[i].manager();
+      manager.setId(v._id);
+      manager.setVersion(v._version);
     });
+    return objects;
   }
 }
 
-export const SequelizeDataSource = VersionedObject.cluster(SequelizeDataSourceImpl, DataSource);
+export const SqlDataSource = VersionedObject.cluster(SqlDataSourceImpl, DataSource);

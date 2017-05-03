@@ -20,7 +20,7 @@ export class Pool<T> implements Pool.Protocol<T> {
   private _queue: Queued<T>[] = [];
   private _acquiredResources: Map<T, Resource<T>>  = new Map();
   private _freeResources: Resource<T>[]  = [];
-  constructor(private _provider: { create(): Promise<T>, destroy(t: T): void, valid?(t: T): boolean }, config: Partial<Pool.Config> = defaultPoolConfig) {
+  constructor(private _provider: Pool.Provider<T>, config: Partial<Pool.Config> = defaultPoolConfig) {
     this.config = { ...defaultPoolConfig, ...config };
   }
 
@@ -102,6 +102,11 @@ export class Pool<T> implements Pool.Protocol<T> {
 }
 
 export namespace Pool {
+  export interface Provider<T> {
+    create(): Promise<T>;
+    destroy(t: T): void;
+    valid?(t: T): boolean
+  }
   export interface Protocol<T> {
     acquire() : Promise<T>;
     release(t: T);
