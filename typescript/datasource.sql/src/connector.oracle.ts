@@ -33,7 +33,15 @@ export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   select(oracledb, db, sql_select: SqlBinding) : Promise<object[]> {
     return new Promise<any>((resolve, reject) => {
       trace(sql_select);
-      db.execute(sql_select.sql, sql_select.bind, (err, result) => err ? reject(err) : resolve(result.rows));
+      db.execute(sql_select.sql, sql_select.bind, (err, result) => { 
+        if (err) return reject(err);
+        let rows = result.rows.map(row => {
+          let r = {};
+          row.map((v, i) => r[result.metaData[i].name] = v);
+          return r;
+        });
+        resolve(rows);
+      });
     });
   },
   update(oracledb, db, sql_update: SqlBinding) : Promise<number> {
@@ -55,11 +63,12 @@ export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   },
   run(oracledb, db, sql: SqlBinding) : Promise<any> {
     return new Promise<any>((resolve, reject) => {
+      trace(sql);
       db.execute(sql.sql, sql.bind, (err, result) => err ? reject(err) : resolve());
     });
   },
   beginTransaction(oracledb, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.execute(trace("START TRANSACTION"), (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.execute(trace("SET TRANSACTION READ WRITE"), [], (err) => err ? reject(err) : resolve()) });
   },
   commit(oracledb, db): Promise<void> {
     trace("commit()"); return db.commit();

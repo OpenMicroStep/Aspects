@@ -175,6 +175,7 @@ module.exports =  {
           "mysql2": "^1.2.0",
           "pg": "^6.1.5",
           "tedious": "^2.0.0",
+          "oracledb": "^1.13.1",
         }],
       }],
     },

@@ -1,15 +1,11 @@
 import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
 import {
   SqlDataSource, SqlMappedObject, SqlMappedAttribute, DBConnector, loadSqlMappers, 
-  SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory,
+  SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory, OracleDBConnectorFactory,
 } from '@openmicrostep/aspects.sql';
 import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
-const sqlite3 = require('sqlite3').verbose();
-const mysql2 = require('mysql2');
-const pg = require('pg');
-const tedious = require('tedious');
 
 function fromDbKeyPeople(id) { return `${id}:People`; }
 function fromDbKeyCar(id)    { return `${id}:Car`   ; }
@@ -87,6 +83,7 @@ export const name = "SqlDataSource";
 export const tests = 
 [
   { name: "sqlite (npm sqlite3)", tests: createTests(async function sqliteCC(flux) {
+    const sqlite3 = require('sqlite3').verbose();
     const connector = SqliteDBConnectorFactory(sqlite3, { filename: ':memory:' }, { max: 1 });
     await connector.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
@@ -97,6 +94,7 @@ export const tests =
     flux.continue();
   }, destroy) },
   { name: "mysql (npm mysql2)", tests: createTests(async function mysqlCC(flux) {
+    const mysql2 = require('mysql2');
     const connector = MySQLDBConnectorFactory(mysql2, { host: 'localhost', user: 'root', password: "my-secret-pw", database: "" }, { max: 10 });
     await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
@@ -110,6 +108,7 @@ export const tests =
     flux.continue();
   }, destroy) },
   { name: "postgres (npm pg)", tests: createTests(async function postgresCC(flux) {
+    const pg = require('pg');
     const init = PostgresDBConnectorFactory(pg, { host: 'localhost', user: 'postgres', password: "my-secret-pw", database: "postgres" }, { max: 1 });
     await init.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await init.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
@@ -124,7 +123,8 @@ export const tests =
     flux.continue();
   }, destroy) },
   { name: "mssql (npm tedious)", tests: createTests(async function mssqlCC(flux) {
-    const connector = MSSQLDBConnectorFactory(tedious, { server: 'localhost', userName: 'sa', password: "7wnjijM9JihtKok4RC6" }, { max: 1 });
+    const tedious = require('tedious');
+    const connector = MSSQLDBConnectorFactory(tedious, { server: 'localhost', userName: 'sa', password: "7wnjijM9JihtKok4RC6" }, { max: 10 });
     await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
@@ -136,4 +136,25 @@ export const tests =
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
   }, destroy) }
+  { name: "oracle (npm oracledb)", tests: createTests(async function oracleCC(flux) {
+    const oracledb = require('oracledb');
+    const connector = OracleDBConnectorFactory(oracledb, { connectString: '(DESCRIPTION = (ADDRESS_LIST = (ADDRESS = (PROTOCOL = TCP)(HOST = 127.0.0.1)(PORT = 1521)))(CONNECT_DATA = (SERVICE_NAME = XE)))', user: 'system', password: "oracle" }, { max: 1 });
+    await connector.unsafeRun({ sql: 'DROP TABLE "People" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+    await connector.unsafeRun({ sql: 'DROP TABLE "Car" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+    await connector.unsafeRun({ sql: 'DROP TABLE "Version" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+    await connector.unsafeRun({ sql: 'DROP TABLE "Resource" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+    await connector.unsafeRun({ sql: 'DROP SEQUENCE VersionSeq', bind: [] }).catch(err => { console.info(err); });
+    await connector.unsafeRun({ sql: 'DROP SEQUENCE ResourceSeq', bind: [] }).catch(err => { console.info(err); });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" INTEGER PRIMARY KEY NOT NULL, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE SEQUENCE VersionSeq START WITH 1', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER VersionAID BEFORE INSERT ON "Version"\nFOR EACH ROW\nBEGIN\nSELECT VersionSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" INTEGER PRIMARY KEY NOT NULL, "idVersion" INTEGER, "name" VARCHAR(255), FOREIGN KEY ("idVersion") REFERENCES "Version"("id"))', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE SEQUENCE ResourceSeq START WITH 1', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER ResourceAID BEFORE INSERT ON "Resource"\nFOR EACH ROW\nBEGIN\nSELECT ResourceSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY, "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" NUMBER(19, 0), FOREIGN KEY ("id") REFERENCES "Resource"("id"))', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY, "model" VARCHAR(255), "owner" INTEGER, FOREIGN KEY ("id") REFERENCES "Resource"("id"), FOREIGN KEY ("owner") REFERENCES "People"("id"))', bind: [] });
+    flux.context.connector = connector;
+    flux.setFirstElements([createSqlControlCenter]);
+    flux.continue();
+  }, destroy) },
 ];
