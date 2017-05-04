@@ -40,12 +40,14 @@ function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
         break;
       }
       case 'boolean': type = TYPES.Bit; break;
-      case 'string': type = TYPES.Text; break;
+      case 'string': type = TYPES.VarChar; break;
       case 'object': {
         if (bind instanceof Date) type = TYPES.DateTime;
-        else if (bind instanceof Buffer) type = TYPES.Binary;
+        else if (bind instanceof Buffer) type = TYPES.VarBinary;
+        else if (bind === null) type = TYPES.Null;
         break;
       }
+      case 'undefined': type = TYPES.Null; bind = null; break;
     }
     if (!type)
       throw new Error(`unsupported binding type: ${typeof bind}`);
@@ -60,8 +62,9 @@ export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
   options?: { 
     port?: number, 
     instanceName?: string, 
-    database: string,
+    database?: string,
     encrypt?: boolean,
+    useColumnNames?: false
   },
 }, any>({
   maker: new MSSQLMaker(),
@@ -81,36 +84,39 @@ export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
     return new Promise<any>((resolve, reject) => {
       trace(sql_select);
       let rows = [] as object[];
-      let req = request(db.tedious, sql_select, (err, rowCount) => err ? reject(err) : resolve(rows));
-      req.on('row', row => rows.push(row));
-      db.execSql(request);
+      let req = request(tedious, sql_select, (err, rowCount) => err ? reject(err) : resolve(rows));
+      req.on('row', row => {
+        let r = {};
+        row.map(c => r[c.metadata.colName] = c.value);
+        rows.push(r)
+      });
+      db.execSql(req);
     });
   },
   update(tedious, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
       trace(sql_update);
-      let req = request(db.tedious, sql_update, (err, rowCount) => err ? reject(err) : resolve(rowCount));
-      db.execSql(request);
+      let req = request(tedious, sql_update, (err, rowCount) => err ? reject(err) : resolve(rowCount));
+      db.execSql(req);
     });
   },
   insert(tedious, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     return new Promise<any>((resolve, reject) => {
       trace(sql_insert);
       let ret;
-      let req = request(db.tedious, sql_insert, (err, rowCount) => {
+      let req = request(tedious, sql_insert, (err, rowCount) => {
         if (err) reject(err);
         else if (!ret && output_columns.length > 0) reject(new Error(`output columns not complete`));
         else resolve(ret || [])
       });
-      output_columns.forEach(c => req.addOutputParameter(c, tedious.TYPES.Int));
-      req.on('row', r => ret = output_columns.map(c => r[c]));
-      db.execSql(request);
+      req.on('row', r => ret = output_columns.map((c, i) => r[i].value));
+      db.execSql(req);
     });
   },
   run(tedious, db, sql: SqlBinding) : Promise<any> {
     return new Promise<any>((resolve, reject) => {
       let req = request(tedious, sql, (err, rowCount) => err ? reject(err) : resolve());
-      db.execSql(request);
+      db.execSql(req);
     });
   },
   beginTransaction(tedious, db): Promise<void> {

@@ -16,6 +16,7 @@ type Queued<T> = {
 
 export class Pool<T> implements Pool.Protocol<T> {
   config: Pool.Config;
+  private _open = true;
   private _counter = 0;
   private _queue: Queued<T>[] = [];
   private _acquiredResources: Map<T, Resource<T>>  = new Map();
@@ -32,6 +33,8 @@ export class Pool<T> implements Pool.Protocol<T> {
   }
 
   acquire(priority: number = 0) : Promise<T> {
+    if (!this._open) return Promise.reject(new Error(`cannot acquire on closed pool`));
+
     if (this._freeResources.length) {
       let r = this._freeResources.pop()!;
       r.usages++;
@@ -51,6 +54,16 @@ export class Pool<T> implements Pool.Protocol<T> {
     }
   }
 
+  close() {
+    if (!this._open) return;
+
+    this._open = false;
+    this._queue.forEach(q => q.reject(new Error(`cannot acquire on closed pool`)));
+    this._freeResources.forEach(r => this._destroy(r));
+    this._queue = [];
+    this._freeResources = [];
+  }
+
   size() : number {
     return this._counter;
   }
@@ -68,6 +81,8 @@ export class Pool<T> implements Pool.Protocol<T> {
   }
 
   private _dispatch(r: Resource<T>) {
+    if (!this._open) return this._destroy(r);
+
     if (this._provider.valid && !this._provider.valid(r.t)) {
       this._destroy(r);
     } else if (this._queue.length) {
@@ -84,6 +99,7 @@ export class Pool<T> implements Pool.Protocol<T> {
     let r = this._acquiredResources.get(t);
     if (!r)
       throw new Error(`released resource is not owned & acquired by this pool`);
+    this._acquiredResources.delete(t);
     return r;
   }
 

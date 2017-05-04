@@ -9,6 +9,7 @@ export interface DBConnector {
   select(sql_select: SqlBinding) : Promise<object[]>;
   update(sql_update: SqlBinding) : Promise<number>;
   insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
+  close(): void;
 }
 export interface DBConnectorTransaction {
   select(sql_select: SqlBinding) : Promise<object[]>;
@@ -79,6 +80,10 @@ export namespace DBConnector {
       select(sql_select: SqlBinding) : Promise<object[]> { return this.pool.scoped(db => definition.select(this.lib, db, definition.transform(sql_select))); }
       update(sql_update: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.update(this.lib, db, definition.transform(sql_update))); }
       insert(sql_insert: SqlBinding, out: string[])      { return this.pool.scoped(db => definition.insert(this.lib, db, definition.transform(sql_insert), out)); }
+
+      close() {
+        this.pool.close();
+      }
     }
 
     return function createPool(lib: LIB, options: OPTIONS, config?: Partial<Pool.Config>) : DBConnector {
