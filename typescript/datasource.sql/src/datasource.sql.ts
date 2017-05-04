@@ -170,15 +170,17 @@ export class SqlDataSourceImpl extends DataSource {
       for (let obj of objects)
         versions.push(await this.save(tr, obj));
       await tr.commit();
+      versions.forEach((v, i) => {
+        let manager = objects[i].manager();
+        manager.setId(v._id);
+        manager.setVersion(v._version);
+      });
+      return objects;
     } catch(e) {
       await tr.rollback();
+      // TODO: set oldVersion attributes for merging
+      return Promise.reject(e);
     }
-    versions.forEach((v, i) => {
-      let manager = objects[i].manager();
-      manager.setId(v._id);
-      manager.setVersion(v._version);
-    });
-    return objects;
   }
 }
 
