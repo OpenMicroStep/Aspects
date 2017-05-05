@@ -187,12 +187,11 @@ function insert1by1ParWithCC(flux, nb) {
   let {db} = flux.context as Context;
   flux.setFirstElements([
     f => createWithCC(f, nb),
-    f => {
+    async f => {
       let objects: VersionedObject[] = f.context.objects;
-      Promise.all(objects.map(o => db.farPromise('rawSave', [o]).then(e => e.result()[0]))).then((results) => {
-        assert.sameMembers(results, objects);
-        f.continue();
-      });
+      let results = await Promise.all(objects.map(o => db.farPromise('rawSave', [o]).then(e => e.result()[0])))
+      assert.sameMembers(results, objects);
+      f.continue();
     }
   ])
   flux.continue();
