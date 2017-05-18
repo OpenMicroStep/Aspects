@@ -8,7 +8,7 @@ Element.load(reporter, {
     components: [{
       is: "component", name: "target",
       type: "javascript", compiler: "aspects", packager: "npm",
-      tsConfig: [{ is: "component",
+      tsConfig: { is: "component",
         "target": "es6",
         "declaration": true,
         "sourceMap": true,
@@ -21,11 +21,11 @@ Element.load(reporter, {
         "noImplicitReturns": true,
         "module": "commonjs",
         "lib": ["es6", "dom"]
-      }]
+      }
     }, {
       is: "component", name: "angular",
-      npmPackage: [{ is: "component",
-        dependencies: [{ is: "component",
+      npmPackage: { is: "component",
+        dependencies: { is: "component",
           "@angular/common": "~4.0.0",
           "@angular/compiler": "~4.0.0",
           "@angular/core": "~4.0.0",
@@ -40,18 +40,18 @@ Element.load(reporter, {
           "core-js": "^2.4.1",
           "rxjs": "5.0.1",
           "zone.js": "^0.8.4",
-        }],
-      }]
+        },
+      }
     }, {
       is: "component", name: "aspects",
-      npmPackage: [{ is: "component",
-        dependencies: [{ is: "component",
+      npmPackage: { is: "component",
+        dependencies: { is: "component",
           "@openmicrostep/mstools": "^1.0.2",
           "@openmicrostep/async": "^0.1.1",
           "@openmicrostep/aspects": "^0.4.0",
           "@openmicrostep/aspects.xhr": "^0.4.0",
-        }],
-      }],
+        },
+      },
     }],
   },
   "openms.aspects.node=": {
@@ -59,7 +59,7 @@ Element.load(reporter, {
     components: [{
       is: "component", name: "target",
       type: "javascript", compiler: "aspects", packager: "npm",
-      tsConfig: [{ is: "component",
+      tsConfig: { is: "component",
         "target": "es6",
         "declaration": true,
         "sourceMap": true,
@@ -72,34 +72,34 @@ Element.load(reporter, {
         "lib": ["es6"],
         "module": "commonjs",
         "types": ["node"]
-      }]
+      }
     }, {
       is: "component", name: "express",
-      npmPackage: [{ is: "component",
-        dependencies: [{ is: "component",
+      npmPackage: { is: "component",
+        dependencies: { is: "component",
           "@openmicrostep/mstools": "^1.0.2",
           "@openmicrostep/async": "^0.1.0",
           "express": "^4.14.0",
           "body-parser": "^1.15.2",
           "express-serve-static-core": "^0.1.1",
           "source-map-support": "^0.4.11",
-        }],
-        devDependencies: [{ is: "component",
+        },
+        devDependencies: { is: "component",
           "@types/express": "^4.0.34",
           "@types/node": "^4.0.30",
-        }],
-      }]
+        },
+      }
     }, {
       is: "component", name: "aspects",
-      npmPackage: [{ is: "component",
-        dependencies: [{ is: "component",
+      npmPackage: { is: "component",
+        dependencies: { is: "component",
           "@openmicrostep/mstools": "^1.0.2",
           "@openmicrostep/async": "^0.1.0",
           "@openmicrostep/aspects": "^0.4.0",
           "@openmicrostep/aspects.express": "^0.4.0",
           "@openmicrostep/aspects.sql": "^0.4.0",
-        }],
-      }],
+        },
+      },
     }],
   },
   "openms.aspects.angular.dev=": {

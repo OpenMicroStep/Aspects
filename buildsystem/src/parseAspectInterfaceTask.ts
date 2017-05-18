@@ -1,28 +1,22 @@
 import {
-  Element, ElementDefinition,
+  Element, ElementDefinition, ComponentElement,
   File, Graph, InOutTask, Directory, Step
 } from '@openmicrostep/msbuildsystem.core';
 import *  as path from 'path';
 import { AspectRootElement, parseInterface, elementFactories } from './index';
 
-export type InterfaceFileGroup = {
-    values: File[];
-    ext: {
-        header: string;
-        customHeader: string;
-    };
-}
+export type InterfaceFileGroup = ComponentElement.Group<File, { header: string; customHeader: string; }>;
 
 export class ParseAspectInterfaceTask extends InOutTask {
   constructor(graph: Graph, public src: InterfaceFileGroup, public dest: File) {
-    super({ type: "aspect parser", name: "interfaces" }, graph, src.values, [dest]);
+    super({ type: "aspect parser", name: "interfaces" }, graph, src.elements, [dest]);
   }
 
   uniqueKey() {
-    return { ...super.uniqueKey(), ext: this.src.ext };
+    return { ...super.uniqueKey(), customHeader: this.src.customHeader, header: this.src.header };
   }
   
-  run(step: Step<{}>) {
+  do_build(step: Step<{}>) {
     let root = new AspectRootElement('root', 'root', null);
     step.setFirstElements([
       this.inputFiles.map(inputFile => (step: Step<{}>) => {
@@ -40,8 +34,8 @@ export class ParseAspectInterfaceTask extends InOutTask {
         });
       }),
       (step: Step<{}>) => {
-        let r = this.src.ext.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
-        r += `\n${this.src.ext.header}\n`;
+        let r = this.src.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
+        r += `\n${this.src.header}\n`;
         root.__classes.forEach(cls => {
           r += cls.__decl();
         });

@@ -9,8 +9,8 @@ function test_parse(f: Flux<RunnerContext>, file: string) {
   let w = Workspace.createTemporary();
   let g = new RootGraph(w);
   let task = new ParseAspectInterfaceTask(g, {
-    values: [File.getShared(path.join(__dirname, `data/${file}.md`), true)],
-    ext: { header: '', customHeader: '' }
+    elements: [File.getShared(path.join(__dirname, `data/${file}.md`), true)],
+    header: '', customHeader: ''
   }, File.getShared(path.join(w.directory, `${file}/aspects.interfaces.ts`)));
   let runner = new Runner(g, 'build');
   runner.on('taskend', (ctx) => {

@@ -1,5 +1,5 @@
 import {
-  resolver, FileElement, File, Reporter, AttributeTypes, AssociateElement,
+  FileElement, File, Reporter, AttributeTypes as V, ComponentElement,
 } from '@openmicrostep/msbuildsystem.core';
 import { JSTarget, JSCompilers } from '@openmicrostep/msbuildsystem.js';
 import { TypescriptCompiler } from '@openmicrostep/msbuildsystem.js.typescript';
@@ -7,21 +7,13 @@ import *  as path from 'path';
 import { ParseAspectInterfaceTask, InterfaceFileGroup } from './index';
 
 
-@JSCompilers.declare(['aspects'])
 export class AspectTypescriptCompiler extends TypescriptCompiler {
   constructor(graph: JSTarget) {
     super(graph);
     this.name.name = "aspects";
   }
 
-  @resolver(AssociateElement.groupValidator(FileElement.validateFile, {
-    header:       { validator: AttributeTypes.validateString, default: "" },
-    customHeader: { validator: AttributeTypes.validateString, default: "" }
-  }))
   interfaces: InterfaceFileGroup[] = [];
-
-  @resolver(AttributeTypes.validateString)
-  aspect: string = "";
 
   parsers: ParseAspectInterfaceTask[];
 
@@ -32,3 +24,11 @@ export class AspectTypescriptCompiler extends TypescriptCompiler {
     this.parsers.forEach(p => this.tsc.addDependency(p));
   }
 }
+JSCompilers.register(['aspects'], AspectTypescriptCompiler, {
+  interfaces: V.defaultsTo(ComponentElement.groupValidator(
+    FileElement.validateFile, {
+      header:       V.defaultsTo(V.validateString , ""),
+      customHeader: V.defaultsTo(V.validateString , ""),
+    }), []),
+    
+});

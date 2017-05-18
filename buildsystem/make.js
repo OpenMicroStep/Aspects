@@ -15,12 +15,24 @@ module.exports =  {
         ]}
       ]}
   ]},
+  'base=': {
+    is: 'component',
+    npmPackage: { is: "component",
+      "version": "0.5.2",
+      "main": "index.js",
+      "typings": "index.d.ts",
+      devDependencies: { is: "component",
+        "@types/node": "^4.0.30"
+      }
+    },
+    components: ['=::core::'],
+  },
   "typescript targets=": { is: 'group',
     'bs aspects=': {
       is: 'target',
       outputName: '@openmicrostep/msbuildsystem.aspects',
       environments: ["=envs:node"],
-      components: ['=::core::cfg:module', '=::core::', '=::typescript::', '=::js::'],
+      components: ['=::core::cfg:module', '=base', '=::typescript::', '=::js::'],
       targets: ['core', 'typescript'],
       files: ['=Files:buildsystem:src ? tsc'],
     },
@@ -28,10 +40,10 @@ module.exports =  {
       is: 'target',
       outputName: '@openmicrostep/msbuildsystem.aspects.tests',
       environments: ["=envs:node"],
-      components: ['=::core::cfg:tests', '=::core::', '=::bs aspects::'],
+      components: ['=::core::cfg:tests', '=base', '=::bs aspects::'],
       targets: ['bs aspects'],
       files: ['=Files:buildsystem:tst ? tsc'],
-      copyFiles: [{ is: "associate", elements: ['=Files:buildsystem:tst ? rsc'], dest: 'data/', expand: true }]
+      copyFiles: [{ is: "group", elements: ['=Files:buildsystem:tst ? rsc'], dest: 'data/', expand: true }]
     }
   }
 };
