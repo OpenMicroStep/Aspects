@@ -20,7 +20,7 @@ export class SqlMaker {
       sql += `\n${join_sqls(sql_joins, '\n')}`;
       push_bindings(bind, sql_from);
     }
-    if (sql_where) {
+    if (sql_where && sql_where.sql) {
       sql += `\nWHERE ${sql_where.sql}`;
       bind.push(...sql_where.bind);
     }
@@ -31,9 +31,13 @@ export class SqlMaker {
 
   update(table: string, sql_set: SqlBinding[], sql_where: SqlBinding) : SqlBinding {
     return {
-      sql: `UPDATE ${this.quote(table)} SET ${sql_set.map(s => s.sql).join(',')} WHERE ${sql_where.sql}`,
+      sql: `UPDATE ${this.quote(table)} SET ${sql_set.map(s => s.sql).join(',')} ${this._where(sql_where)}`,
       bind: [...([] as SqlBinding[]).concat(...sql_set.map(s => s.bind)), ...sql_where.bind]
     }
+  }
+
+  _where(sql_where: SqlBinding) : string {
+    return sql_where.sql ? `WHERE ${sql_where.sql}` : '';
   }
 
   values(columns: string[], values: any[]) : SqlBinding[] {
@@ -82,6 +86,8 @@ export class SqlMaker {
   }
 
   _conditions(conditions: SqlBinding[], sql_op: string) : SqlBinding {
+    if (conditions.length === 0)
+      return { sql: '', bind: [] };
     if (conditions.length === 1)
       return conditions[0];
     let sql = "(";
