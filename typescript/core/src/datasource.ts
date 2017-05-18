@@ -549,8 +549,8 @@ export namespace DataSourceInternal {
       if (key.startsWith('$')) {
         // key is an operator
         let o = operatorsOnSet[key];
-        if (!o)
-          throw new Error(`operator ${key} not found`);
+        if (o === undefined)
+          throw new Error(`operator on set ${key} not found`);
         o(this, set, elements, out, value);
       }
       else if (key.startsWith('=')) {
@@ -586,8 +586,8 @@ export namespace DataSourceInternal {
             }
             else {
               let o = operatorsOnValue[key];
-              if (!o) 
-                throw new Error(`operator '${key}' not found`);
+              if (o === undefined) 
+                throw new Error(`operator on value '${key}' not found`);
               new ConstraintOnValue(o, set, attribute, v);
             }
           }
