@@ -1,3 +1,5 @@
+const version = require('child_process').execSync('git describe --always').toString().trim();
+
 module.exports =  {
   is: "project",
   name: "Aspects Buildsystem module",
@@ -18,7 +20,7 @@ module.exports =  {
   'base=': {
     is: 'component',
     npmPackage: { is: "component",
-      "version": "0.5.2",
+      "version": version,
       "main": "index.js",
       "typings": "index.d.ts",
       devDependencies: { is: "component",
