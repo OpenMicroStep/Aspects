@@ -77,6 +77,15 @@ function basicsWithCC(flux) {
       });
     },
     f => {
+      db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _name: { $ne: "Peugeot" } } }).then((envelop) => {
+        let res = envelop.result();
+        assert.sameMembers(res['cars'], [c0, c1]);
+        let lc2 = res['cars'][0];
+        assert.isNotTrue(lc2.manager().hasChanges());
+        f.continue();
+      });
+    },
+    f => {
       db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, $in: [c2] } }).then((envelop) => {
         assert.sameMembers(envelop.result()['cars'], [c2]);
         f.continue();

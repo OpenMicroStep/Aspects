@@ -413,7 +413,7 @@ export namespace DataSourceInternal {
   
   const operatorsBetweenSet: { [s: string]: ConstraintBetweenSetTypes; } = {
     $eq: ConstraintType.Equal,
-    $neq: ConstraintType.NotEqual,
+    $ne: ConstraintType.NotEqual,
     $gt: ConstraintType.GreaterThan,
     $gte: ConstraintType.GreaterThanOrEqual,
     $lt: ConstraintType.LessThan,
@@ -421,7 +421,7 @@ export namespace DataSourceInternal {
   };
   const operatorsOnValue: { [s: string]: ConstraintOnValueTypes; } = {
     $eq: ConstraintType.Equal,
-    $neq: ConstraintType.NotEqual,
+    $ne: ConstraintType.NotEqual,
     $gt: ConstraintType.GreaterThan,
     $gte: ConstraintType.GreaterThanOrEqual,
     $lt: ConstraintType.LessThan,
