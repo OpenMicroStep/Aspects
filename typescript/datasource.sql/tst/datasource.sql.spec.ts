@@ -135,7 +135,7 @@ export const tests =
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
-  }, destroy) }
+  }, destroy) },
   { name: "oracle (npm oracledb)", tests: createTests(async function oracleCC(flux) {
     const oracledb = require('oracledb');
     const connector = OracleDBConnectorFactory(oracledb, { connectString: '(DESCRIPTION = (ADDRESS_LIST = (ADDRESS = (PROTOCOL = TCP)(HOST = 127.0.0.1)(PORT = 1521)))(CONNECT_DATA = (SERVICE_NAME = XE)))', user: 'system', password: "oracle" }, { max: 1 });
