@@ -106,7 +106,85 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
 });
 
 export namespace DataSourceInternal {
+  type Solution = {
+    partial: Set<VersionedObject>,
+    full: Set<VersionedObject> | undefined,
+  };
+  class FilterContext {
+    _resolution = new Map<ObjectSet, Solution>();
+    constructor(public objects: VersionedObject[] = []) {}
+
+    solution(set: ObjectSet) {
+      let s = this._resolution.get(set)!
+      if (!s) {
+        s = {
+          partial: this.solvePartial(set),
+          full: undefined,
+        };
+        this._resolution.set(set, s);
+      }
+      return s;
+    }
+
+    passType(c: ConstraintOnType, object: VersionedObject) {
+      switch(c.type) {
+        case ConstraintType.In: return this.solveFull(c.value as ObjectSet).has(object);
+        case ConstraintType.Union: return (c.value as ObjectSet[]).some(set => this.solveFull(set).has(object));
+        case ConstraintType.InstanceOf: return object instanceof (c.value as Function);
+        case ConstraintType.MemberOf: return object.constructor === (c.value as Function);
+        case ConstraintType.ElementOf: return this.solveFull(c.value as ObjectSet).has(object);
+      }
+      throw new Error(`Unsupported on type constraint ${ConstraintType[c.type as any]}`);
+    }
+
+    solvePartial(set: ObjectSet) : Set<VersionedObject> {
+      let ret = new Set<VersionedObject>();
+      for (let object of this.objects) {
+        let ok = 
+          set.constraintsOnType.every(c => this.passType(c, object)) && 
+          set.constraintsOnValue.every(c => {
+            if (c.attribute)
+              return object.manager().hasAttributeValue(c.attribute as keyof VersionedObject) ? c.pass(object[c.attribute], c.value) : false;
+            return c.pass(object, c.value);
+          });
+        if (ok)
+          ret.add(object);
+      }
+      return ret;
+    }
+
+    solveFull(set: ObjectSet, solution?: Solution) : Set<VersionedObject> {
+      if (!solution)
+        solution = this.solution(set);
+      if (!solution.full) {
+        if (set.constraintsBetweenSet.length > 0) {
+          let variables = set.variables();
+          for (let object of solution.partial) {
+            for (let [oppositeSet, variable] of variables.entries()) {
+              let oppositeObjects = this.solution(oppositeSet).partial;
+              let ok = oppositeObjects.size > 0;
+              for (let oppositeObject of oppositeObjects) {
+                ok = true;
+                for (let c of variable) {
+                  if (!(ok = c.pass(set === c.set ? object : oppositeObject, set === c.set ? oppositeObject : object)))
+                    break;
+                }
+                if (ok)
+                  break;
+              }
+              if (!ok)
+                solution.partial.delete(object);
+            }
+          }
+        }
+        solution.full = solution.partial;
+      }
+      return solution.full;
+    }
+  
+  };
   export class ObjectSet {
+    _name: string;
     name?: string = undefined;
     scope?: string[] = undefined;
     sort?: string[] = undefined;
@@ -114,17 +192,16 @@ export namespace DataSourceInternal {
     constraintsOnValue: ConstraintOnValue[] = [];
     constraintsBetweenSet: ConstraintBetweenSet[] = [];
 
-    filter(objects: VersionedObject[]): VersionedObject[] {
-      return objects.filter(o => this.pass(o));
-    }
-    
-    pass(object: VersionedObject): boolean {
-      return this.constraintsOnType.every(c => c.pass(object)) &&
-             this.constraintsOnValue.every(c => {
-               if (c.attribute)
-                  return object.manager().hasAttributeValue(c.attribute as keyof VersionedObject) ? c.pass(object[c.attribute], c.value) : false;
-                return c.pass(object, c.value);
-             });
+    variables() {
+      let variables = new Map<ObjectSet, ConstraintBetweenSet[]>();
+      for (let c of this.constraintsBetweenSet) {
+        let otherSet = c.oppositeSet(this);
+        let constraints = variables.get(otherSet);
+        if (!constraints)
+          variables.set(otherSet, constraints = []);
+        constraints.push(c);
+      }
+      return variables;
     }
   }
 
@@ -231,17 +308,6 @@ export namespace DataSourceInternal {
       this.value = value;
       set.constraintsOnType.push(this);
     }
-    
-    pass(object: VersionedObject) {
-      switch(this.type) {
-        case ConstraintType.In: return (this.value as ObjectSet).pass(object);
-        case ConstraintType.Union: return (this.value as ObjectSet[]).some(set => set.pass(object));
-        case ConstraintType.InstanceOf: return object instanceof (this.value as Function);
-        case ConstraintType.MemberOf: return object.constructor === (this.value as Function);
-        case ConstraintType.ElementOf: return (this.value as ObjectSet).pass(object);
-      }
-      throw new Error(`Unsupported on type constraint ${ConstraintType[this.type as any]}`);
-    }
   }
 
   export class ConstraintBetweenSet extends Constraint {
@@ -262,7 +328,7 @@ export namespace DataSourceInternal {
       if (this.attribute && !object.manager().hasAttributeValue(this.attribute as keyof VersionedObject)) return false;
       if (this.otherAttribute && !otherObject.manager().hasAttributeValue(this.otherAttribute as keyof VersionedObject)) return false;
       let left = this.attribute ? object[this.attribute] : object;
-      let right = this.otherAttribute ? otherObject[this.otherAttribute] : object;
+      let right = this.otherAttribute ? otherObject[this.otherAttribute] : otherObject;
       switch(this.type) {
         case ConstraintType.Equal: return map(left) === map(right);
         case ConstraintType.NotEqual: return map(left) !== map(right);
@@ -623,7 +689,8 @@ export namespace DataSourceInternal {
   export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[]) : VersionedObject[] {
     let context = new ParseContext([], new ParseStack(where));
     let set = context.parseSet(where);
-    return set.filter(objects);
+    let sctx = new FilterContext(objects);
+    return [...sctx.solveFull(set)];
   }
 
   export function applyRequest(request: Request, objects: VersionedObject[]) : { [s: string]: VersionedObject[] } {
@@ -639,18 +706,12 @@ export namespace DataSourceInternal {
   export function applySets(sets: ObjectSet[], objects: VersionedObject[], namedOnly?: boolean): Map<ObjectSet, VersionedObject[]>
   export function applySets(sets: ObjectSet[], objects: VersionedObject[], namedOnly = true): Map<ObjectSet, VersionedObject[]> {
     let ret = new Map<ObjectSet, VersionedObject[]>();
-    let map = new Map<ObjectSet, VersionedObject[]>();
-    sets.forEach(set => map.set(set, set.filter(objects)));
-    map.forEach((tvPass, set) => {
+    let sctx = new FilterContext(objects);
+    for (let set of sets) {
       if (set.name || !namedOnly) {
-        for (let c of set.constraintsBetweenSet) {
-          let oset = c.oppositeSet(set);
-          let oobjs = map.get(oset)!
-          tvPass = tvPass.filter(o => oobjs.some(oo => c.pass(c.set === set ? o : oo, c.set === set ? oo : o)));
-        }
-        ret.set(set, tvPass);
+        ret.set(set, [...sctx.solveFull(set)]);
       }
-    });
+    }
     return ret;
   }
 }

@@ -100,6 +100,45 @@ function persons_and_their_cars() {
   assert.deepEqual(sets, expected);
 }
 
+function persons_with_cars_sets(): DataSourceInternal.ObjectSet[] {
+  let p = new DataSourceInternal.ObjectSet();
+
+  let P = new DataSourceInternal.ObjectSet();
+  new DataSourceInternal.ConstraintOnType(ConstraintType.InstanceOf, P, People);
+
+  new DataSourceInternal.ConstraintOnType(ConstraintType.ElementOf, p, P);
+
+  let C = new DataSourceInternal.ObjectSet();
+  new DataSourceInternal.ConstraintOnType(ConstraintType.InstanceOf, C, Car);
+
+  let c = new DataSourceInternal.ObjectSet();
+  new DataSourceInternal.ConstraintOnType(ConstraintType.ElementOf, c, C);
+
+  new DataSourceInternal.ConstraintBetweenSet(ConstraintType.Equal, c, "_owner", p, undefined);
+
+  p.name = "persons1";
+  p.scope = ['_name', '_owner', '_model'];
+
+  return [p, P, c, C];
+}
+function persons_with_cars() {
+  let sets = DataSourceInternal.parseRequest({
+    "C=": { $instanceOf: Car },
+    "P=": { $instanceOf: People },
+    "persons1=": {
+      $out: "=p",
+      "p=": { $elementOf: "=P" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    name: "persons1",
+    where: "=persons1",
+    scope: ['_name', '_owner', '_model'],
+  });
+  let expected = persons_with_cars_sets();
+  sets.forEach(s => assert.instanceOf(s, DataSourceInternal.ObjectSet));
+  assert.deepEqual(sets, expected);
+}
 
 function persons_with_cars_and_their_cars_sets(): DataSourceInternal.ObjectSet[] {
   let cars = new DataSourceInternal.ObjectSet();
@@ -217,6 +256,7 @@ export const tests = { name: 'DataSource', tests: [
   simple_resources,
   multi_resources,
   set_resources,
+  persons_with_cars,
   persons_and_their_cars,
   persons_with_cars_and_their_cars,
   applyWhere,

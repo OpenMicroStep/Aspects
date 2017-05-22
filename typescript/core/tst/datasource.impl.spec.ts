@@ -121,17 +121,19 @@ function relationsWithCC(flux) {
   let c0 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 3" });
   let c1 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 2" });
   let c2 = Object.assign(new Car(), { _name: "Peugeot", _model: "3008 DKR" });
-  let p0 = Object.assign(new People(), { _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons", _birthDate: new Date() });
-  let p1 = Object.assign(new People(), { _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons", _birthDate: new Date(0) });
+  let c3 = Object.assign(new Car(), { _name: "Peugeot", _model: "4008 DKR" });
+  let p0 = Object.assign(new People(), { _name: "Lisa Simpsons" , _firstname: "Lisa" , _lastname: "Simpsons", _birthDate: new Date() });
+  let p1 = Object.assign(new People(), { _name: "Bart Simpsons" , _firstname: "Bart" , _lastname: "Simpsons", _birthDate: new Date(0) });
+  let p2 = Object.assign(new People(), { _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: new Date() });
   flux.setFirstElements([
     f => {
       cc.registerComponent(component);
-      cc.registerObjects(component, [c0, c1, c2, p0, p1]);
+      cc.registerObjects(component, [c0, c1, c2, c3, p0, p1, p2]);
       f.continue();
     },
     f => {
-      db.farPromise('rawSave', [c0, c1, c2, p0, p1]).then(envelop => { 
-        assert.sameMembers(envelop.result(), [c0, c1, c2, p0, p1]);
+      db.farPromise('rawSave', [c0, c1, c2, c3, p0, p1, p2]).then(envelop => { 
+        assert.sameMembers(envelop.result(), [c0, c1, c2, c3, p0, p1, p2]);
         f.continue(); 
       });
     },
@@ -139,19 +141,29 @@ function relationsWithCC(flux) {
       assert.equal(c0.manager().hasChanges(), false);
       c0._owner = p0;
       assert.equal(c0.manager().hasChanges(), true);
-      db.farPromise('rawSave', [c0]).then((envelop) => {
-        assert.sameMembers(envelop.result(), [c0]);
+      assert.equal(c1.manager().hasChanges(), false);
+      c1._owner = p0;
+      assert.equal(c1.manager().hasChanges(), true);
+      c2._owner = p1;
+      db.farPromise('rawSave', [c0, c1, c2]).then((envelop) => {
+        assert.sameMembers(envelop.result(), [c0, c1, c2]);
         assert.equal(c0.version(), 1);
         assert.equal(c0.manager().hasChanges(), false);
         assert.equal(c0._owner, p0);
+
+        assert.equal(c1.version(), 1);
+        assert.equal(c1.manager().hasChanges(), false);
+        assert.equal(c1._owner, p0);
         f.continue();
       });
     },
     f => {
+      let c0_id = c0.id()
+      let p0_id = p0.id()
       cc.unregisterObjects(component, [c0, p0]);
       db.farPromise('rawQuery', { results: [
-        { name: "cars"   , where: { $instanceOf: Car   , _owner: p0   }, scope: ['_name', '_owner', '_model']             },
-        { name: "peoples", where: { $instanceOf: People, _id: p0.id() }, scope: ['_firstname', '_lastname', '_birthDate'] },
+        { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0_id }, scope: ['_name', '_owner', '_model']             },
+        { name: "peoples", where: { $instanceOf: People            , _id: p0_id }, scope: ['_firstname', '_lastname', '_birthDate'] },
       ]}).then((envelop) => {
         let cars = envelop.result()['cars'];
         let peoples = envelop.result()['peoples'];
@@ -177,7 +189,65 @@ function relationsWithCC(flux) {
       });
     },
     f => {
-      cc.unregisterObjects(component, [c0, c1, c2, p0, p1]);
+      db.farPromise('rawQuery', { // All persons with a car and their cars
+        "C=": { $instanceOf: Car },
+        "P=": { $instanceOf: People },
+        "persons1=": {
+          $out: "=p",
+          "p=": { $elementOf: "=P" },
+          "c=": { $elementOf: "=C" },
+          "=c._owner": { $eq: "=p" },
+        },
+        "persons2=": { $intersection: ["=C:_owner", "=P"] },
+        "cars1=": {
+          $out: "=c",
+          "p=": { $elementOf: "=P" },
+          "c=": { $elementOf: "=C" },
+          "=c._owner": { $eq: "=p" },
+        },
+        "cars2=": {
+          $out: "=c",
+          "p=": { $elementOf: "=persons1" },
+          "c=": { $elementOf: "=C" },
+          "=c._owner": { $eq: "=p" },
+        },
+        results: [
+          { name: "peoples1", where: "=persons1", scope: ['_name', '_owner', '_model']             },
+          { name: "peoples2", where: "=persons2", scope: ['_name', '_owner', '_model']             },
+          { name: "cars1"   , where: "=cars1"   , scope: ['_firstname', '_lastname', '_birthDate'] },
+          { name: "cars2"   , where: "=cars2"   , scope: ['_firstname', '_lastname', '_birthDate'] },
+        ]
+      }).then((envelop) => {
+        let { peoples1, peoples2, cars1, cars2 } = envelop.result();
+        assert.sameMembers(peoples1, [p0, p1]);
+        assert.sameMembers(peoples2, [p0, p1]);
+        assert.sameMembers(cars1  , [c0, c1, c2]);
+        assert.sameMembers(cars2  , [c0, c1, c2]);
+        f.continue();
+      });
+    },
+    f => {
+      db.farPromise('rawQuery', { // Cars where the owner has another car
+        "C=": { $instanceOf: Car },
+        "P=": { $instanceOf: People },
+        "cars=": {
+          $out: "=c1",
+          "c1=": { $elementOf: "=C" },
+          "c2=": { $elementOf: "=C" },
+          "=c1._owner": { $eq: "=c2._owner" },
+          "=c1": { $ne: "=c2" },
+        },
+        results: [
+          { name: "cars", where: "=cars", scope: ['_firstname', '_lastname', '_birthDate'] },
+        ]
+      }).then((envelop) => {
+        let { cars } = envelop.result();
+        assert.sameMembers(cars, [c0, c1]);
+        f.continue();
+      });
+    },
+    f => {
+      cc.unregisterObjects(component, [c0, c1, c2, c3, p0, p1, p2]);
       cc.unregisterComponent(component);
       f.continue();
     }
@@ -258,12 +328,13 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
   }
 
   function basics(flux) { runWithNewCC(flux, basicsWithCC); }
+  function relations(flux) { runWithNewCC(flux, relationsWithCC); }
+
   function create1k(flux) { runWithNewCC(flux, f => createWithCC(f, 1000)); }
   function insert100(flux) { runWithNewCC(flux, f => insertWithCC(f, 100)); }
   function insert1k(flux) { runWithNewCC(flux, f => insertWithCC(f, 1000)); }
   function insert1k_1by1Seq(flux) { runWithNewCC(flux, f => insert1by1SeqWithCC(f, 2)); }
   function insert1k_1by1Par(flux) { runWithNewCC(flux, f => insert1by1ParWithCC(f, 2)); }
-  function relations(flux) { runWithNewCC(flux, relationsWithCC); }
   return [basics, relations]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
 }
 
