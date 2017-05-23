@@ -1,4 +1,4 @@
-const version = require('child_process').execSync('git describe --always').toString().trim();
+const version = require('child_process').execSync('git describe --always', { cwd: __dirname }).toString().trim();
 
 module.exports =  {
   is: "project",
