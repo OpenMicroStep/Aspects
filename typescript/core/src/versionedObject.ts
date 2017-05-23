@@ -390,6 +390,10 @@ export class VersionedObjectManager<T extends VersionedObject> {
       return this._localAttributes.get(attribute);
     if (this._versionAttributes.has(attribute))
       return this._versionAttributes.get(attribute);
+    if (attribute === "_id")
+      return this.id();
+    if (attribute === "_version")
+      return this.version();
     if (this._oldVersionAttributes.has(attribute))
       throw new Error(`attribute '${attribute}' is unaccessible due to version change`);
     throw new Error(`attribute '${attribute}' is unaccessible and never was`);
