@@ -1,4 +1,4 @@
-import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, createAspect, addIsEqualSupport, addReplaceInGraphSupport, replaceInGraph} from './core';
+import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, addIsEqualSupport, addReplaceInGraphSupport, replaceInGraph} from './core';
 import { Flux } from '@openmicrostep/async';
 import {MSTE} from '@openmicrostep/mstools';
 import * as Immutable from 'immutable';
@@ -490,7 +490,7 @@ export class VersionedObject implements MSTE.Decodable {
         Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
       }
       static installAspect(on: ControlCenter, name: string): { new(): VersionedObject } {
-        return createAspect(on, name, this);
+        return on.cache().createAspect(on, name, this);
       }
       static __c() {}
       static __i() {}
@@ -501,7 +501,7 @@ export class VersionedObject implements MSTE.Decodable {
     c.parent = parent;
     c.definition = Object.assign({}, parent.definition, { name: cstor.name });
     c.installAspect = function(this: VersionedObjectConstructor<VersionedObject>, on: ControlCenter, name: string) : { new(): VersionedObject } {
-      return createAspect(on, name, this);
+      return on.cache().createAspect(on, name, this);
     };
     return cstor as P;
   }

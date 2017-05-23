@@ -1,4 +1,7 @@
-import {FarTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Invocation, InvocationState, DataSource, Aspect} from './core';
+import {
+  FarTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Invocation, InvocationState, DataSource, 
+  Aspect, AspectCache,
+} from './core';
 
 export type Identifier = string | number;
 export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, arg: A) => R | Promise<R | Invocation<P, R>>);
@@ -12,8 +15,13 @@ export class ControlCenter {
   _objects = new Map<Identifier, { object: VersionedObject, components: Set<AComponent> }>();
   _components = new Set<AComponent>();
   _aspects = new Map<string, Aspect.Constructor>();
+  _cache: AspectCache;
 
-  constructor() {}
+  static readonly globalCache = new AspectCache();
+
+  constructor(cache: AspectCache = ControlCenter.globalCache) {
+    this._cache = cache;
+  }
   /// events
   notificationCenter() { return this._notificationCenter; }
 
@@ -80,6 +88,9 @@ export class ControlCenter {
   }
 
   /// category VersionedObject
+  cache() {
+    return this._cache;
+  }
   aspect(name: string) {
     return this._aspects.get(name);
   }
