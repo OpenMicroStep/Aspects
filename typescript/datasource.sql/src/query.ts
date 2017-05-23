@@ -204,7 +204,6 @@ export class SqlQuery {
     let attributes = ["_id", "_version", ...scope];
     let columns: string[] = this.sql_columns(ctx, attributes);
     let query = ctx.maker.select(columns, this.sql_from(ctx), [], this.sql_where(ctx));
-    console.info(`SQL ${query.sql}`, query.bind);
     let rows = await db.select(query);
     let ret: VersionedObject[] = [];
     for (let row of rows) {

@@ -1,10 +1,5 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
-function trace<T extends SqlBinding | string>(sql: T) : T {
-//  console.info(sql);
-  return sql;
-}
-
 export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: string, user: string, password: string, database: string }, any>({
   maker: new SqlMaker(),
   create(mysql2, options) {
@@ -20,7 +15,6 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
   },
   select(mysql2, db, sql_select: SqlBinding) : Promise<object[]> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_select);
       db.execute(sql_select.sql, sql_select.bind, function (err, results: object[], fields) {
         err ? reject(err) : resolve(results ? results : []);
       });
@@ -28,7 +22,6 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
   },
   update(mysql2, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       db.execute(sql_update.sql, sql_update.bind, function (err, results, fields) {
         err ? reject(err) : resolve(results.affectedRows);
       });
@@ -36,7 +29,6 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
   },
   delete(mysql2, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       db.execute(sql_update.sql, sql_update.bind, function (err, results, fields) {
         err ? reject(err) : resolve(results.affectedRows);
       });
@@ -46,7 +38,6 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
     if (output_columns.length > 1)
       return Promise.reject(new Error(`MySQL doesn't support multiple output columns`));
     return new Promise<any>((resolve, reject) => {
-      trace(sql_insert);
       db.execute(sql_insert.sql, sql_insert.bind, function (err, results, fields) {
         err ? reject(err) : resolve(output_columns.length > 0 ? [results.insertId] : []);
       });
@@ -54,7 +45,6 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
   },
   run(mysql2, db, sql: SqlBinding) : Promise<any> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql);
       if (sql.bind.length > 0) {
         db.execute(sql.sql, sql.bind, function (err, rows) {
           err ? reject(err) : resolve();
@@ -68,13 +58,13 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
     });
   },
   beginTransaction(mysql2, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { trace("beginTransaction()"); db.beginTransaction((err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.beginTransaction((err) => err ? reject(err) : resolve()) });
   },
   commit(mysql2, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { trace("commit()"); db.commit((err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.commit((err) => err ? reject(err) : resolve()) });
   },
   rollback(mysql2, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { trace("rollback()"); db.rollback((err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.rollback((err) => err ? reject(err) : resolve()) });
   },
   transform: DBConnector.transformPass,
 });

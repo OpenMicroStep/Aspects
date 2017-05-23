@@ -1,9 +1,5 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
-function trace<T extends SqlBinding | string>(sql: T) : T {
-//  console.info(sql);
-  return sql;
-}
 class PostgresSqlMaker extends SqlMaker {
   quote(value: string) {
     return `"${value.replace(/`/g, '""')}"`;
@@ -43,7 +39,6 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   },
   select(pg, db, sql_select: SqlBinding) : Promise<object[]> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_select);
       db.query(sql_select.sql, sql_select.bind, function (err, result) {
         err ? reject(err) : resolve(result.rows);
       });
@@ -51,7 +46,6 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   },
   update(pg, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       db.query(sql_update.sql, sql_update.bind, function (err, result) {
         err ? reject(err) : resolve(result.rowCount);
       });
@@ -59,7 +53,6 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   },
   delete(pg, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       db.query(sql_update.sql, sql_update.bind, function (err, result) {
         err ? reject(err) : resolve(result.rowCount);
       });
@@ -67,7 +60,6 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   },
   insert(pg, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_insert);
       db.query(sql_insert.sql, sql_insert.bind, function (err, result) {
         err ? reject(err) : resolve(output_columns.map(c => result.rows[0][c]));
       });
@@ -75,20 +67,19 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   },
   run(pg, db, sql: SqlBinding) : Promise<any> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql);
       db.query(sql.sql, sql.bind, function (err, rows) {
         err ? reject(err) : resolve();
       });
     });
   },
   beginTransaction(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query(trace("BEGIN"), (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.query("BEGIN", (err) => err ? reject(err) : resolve()) });
   },
   commit(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query(trace("COMMIT"), (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.query("COMMIT", (err) => err ? reject(err) : resolve()) });
   },
   rollback(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query(trace("ROLLBACK"), (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.query("ROLLBACK", (err) => err ? reject(err) : resolve()) });
   },
   transform(sql) { return DBConnector.transformBindings(sql, idx => `$${idx + 1}`); },
 });

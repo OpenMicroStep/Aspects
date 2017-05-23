@@ -1,10 +1,5 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
-function trace<T extends SqlBinding | string>(sql: T) : T {
-//  console.info(sql);
-  return sql;
-}
-
 class MSSQLMaker extends SqlMaker {
   quote(value: string) {
     return `[${value}]`;
@@ -82,7 +77,6 @@ export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
   },
   select(tedious, db, sql_select: SqlBinding) : Promise<object[]> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_select);
       let rows = [] as object[];
       let req = request(tedious, sql_select, (err, rowCount) => err ? reject(err) : resolve(rows));
       req.on('row', row => {
@@ -95,21 +89,18 @@ export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
   },
   update(tedious, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       let req = request(tedious, sql_update, (err, rowCount) => err ? reject(err) : resolve(rowCount));
       db.execSql(req);
     });
   },
   delete(tedious, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       let req = request(tedious, sql_update, (err, rowCount) => err ? reject(err) : resolve(rowCount));
       db.execSql(req);
     });
   },
   insert(tedious, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_insert);
       let ret;
       let req = request(tedious, sql_insert, (err, rowCount) => {
         if (err) reject(err);
@@ -127,13 +118,13 @@ export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
     });
   },
   beginTransaction(tedious, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { trace("beginTransaction()"); db.beginTransaction((err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.beginTransaction((err) => err ? reject(err) : resolve()) });
   },
   commit(tedious, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { trace("commitTransaction()"); db.commitTransaction((err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.commitTransaction((err) => err ? reject(err) : resolve()) });
   },
   rollback(tedious, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { trace("rollbackTransaction()"); db.rollbackTransaction((err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.rollbackTransaction((err) => err ? reject(err) : resolve()) });
   },
   transform(sql) { return DBConnector.transformBindings(sql, idx => `@${idx}`); },
 });

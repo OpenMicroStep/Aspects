@@ -1,9 +1,5 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
-function trace<T extends SqlBinding | string>(sql: T) : T {
-//  console.info(sql);
-  return sql;
-}
 class OracleSqlMaker extends SqlMaker {
   quote(value: string) {
     return `"${value.replace(/`/g, '""')}"`;
@@ -32,7 +28,6 @@ export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   },
   select(oracledb, db, sql_select: SqlBinding) : Promise<object[]> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_select);
       db.execute(sql_select.sql, sql_select.bind, (err, result) => { 
         if (err) return reject(err);
         let rows = result.rows.map(row => {
@@ -46,19 +41,16 @@ export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   },
   update(oracledb, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       db.execute(sql_update.sql, sql_update.bind, (err, result) => err ? reject(err) : resolve(result.rowsAffected));
     });
   },
   delete(oracledb, db, sql_update: SqlBinding) : Promise<number> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_update);
       db.execute(sql_update.sql, sql_update.bind, (err, result) => err ? reject(err) : resolve(result.rowsAffected));
     });
   },
   insert(oracledb, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql_insert);
       let bind: object = {};
       sql_insert.bind.forEach((v, i) => bind[`i${i}`] = v);
       output_columns.forEach((v, i) => bind[`r${i}`] = { type: oracledb.NUMBER, dir: oracledb.BIND_OUT });
@@ -69,18 +61,17 @@ export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   },
   run(oracledb, db, sql: SqlBinding) : Promise<any> {
     return new Promise<any>((resolve, reject) => {
-      trace(sql);
       db.execute(sql.sql, sql.bind, (err, result) => err ? reject(err) : resolve());
     });
   },
   beginTransaction(oracledb, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.execute(trace("SET TRANSACTION READ WRITE"), [], (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.execute("SET TRANSACTION READ WRITE", [], (err) => err ? reject(err) : resolve()) });
   },
   commit(oracledb, db): Promise<void> {
-    trace("commit()"); return db.commit();
+    return db.commit();
   },
   rollback(oracledb, db): Promise<void> {
-    trace("rollback()"); return db.rollback();
+    return db.rollback();
   },
   transform(sql) { return DBConnector.transformBindings(sql, idx => `:i${idx}`); },
 });

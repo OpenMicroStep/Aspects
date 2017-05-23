@@ -46,7 +46,7 @@ export namespace DBConnector {
       lib: LIB;
       db: DB | undefined;
       pool: Pool<DB> | undefined;
-      constructor(lib: LIB, db: DB, pool: Pool<DB>) {
+      constructor(lib: LIB, db: DB, pool: Pool<DB>, private _t: (sql: SqlBinding) => SqlBinding) {
         this.lib = lib;
         this.db = db;
         this.pool = pool;
@@ -57,12 +57,12 @@ export namespace DBConnector {
           return Promise.reject(`cannot use transaction after commit or rollback`);
         return undefined;
       }
-      select(sql_select: SqlBinding) : Promise<object[]> { return this._check() || definition.select(this.lib, this.db!, definition.transform(sql_select)); }
-      insert(sql_insert: SqlBinding, out: string[])      { return this._check() || definition.insert(this.lib, this.db!, definition.transform(sql_insert), out); }
-      update(sql_update: SqlBinding) : Promise<number>   { return this._check() || definition.update(this.lib, this.db!, definition.transform(sql_update)); }
-      delete(sql_delete: SqlBinding) : Promise<number>   { return this._check() || definition.delete(this.lib, this.db!, definition.transform(sql_delete)); }
-      commit() : Promise<void>   { return this._check() || this._endTransaction(definition.commit(this.lib, this.db!));   }
-      rollback() : Promise<void> { return this._check() || this._endTransaction(definition.rollback(this.lib, this.db!)); }
+      select(sql_select: SqlBinding) : Promise<object[]> { return this._check() || definition.select(this.lib, this.db!, definition.transform(this._t(sql_select))); }
+      insert(sql_insert: SqlBinding, out: string[])      { return this._check() || definition.insert(this.lib, this.db!, definition.transform(this._t(sql_insert)), out); }
+      update(sql_update: SqlBinding) : Promise<number>   { return this._check() || definition.update(this.lib, this.db!, definition.transform(this._t(sql_update))); }
+      delete(sql_delete: SqlBinding) : Promise<number>   { return this._check() || definition.delete(this.lib, this.db!, definition.transform(this._t(sql_delete))); }
+      commit() : Promise<void>   { return this._check() || this._t({ sql: "COMMIT"  , bind: []}) && this._endTransaction(definition.commit(this.lib, this.db!));   }
+      rollback() : Promise<void> { return this._check() || this._t({ sql: "ROLLBACK", bind: []}) && this._endTransaction(definition.rollback(this.lib, this.db!)); }
 
       private _endTransaction(promise: Promise<void>): Promise<void> {
         let ret = promise.then(() => { this.pool!.release(this.db!); this.db = undefined; this.pool = undefined; });
@@ -72,30 +72,35 @@ export namespace DBConnector {
     }
     class GenericConnector implements DBConnector {
       _transaction = 0;
-      constructor(private lib: LIB, private pool: Pool<DB>) {}
+      constructor(private lib: LIB, private pool: Pool<DB>, private _t: (sql: SqlBinding) => SqlBinding) {}
       maker = definition.maker;
 
       async transaction(): Promise<DBConnectorTransaction> {
         let db = await this.pool.acquire();
+        this._t({ sql: "BEGIN TRANSACTION", bind: [] });
         await definition.beginTransaction(this.lib, db);
-        return new GenericConnectorTransaction(this.lib, db, this.pool);
+        return new GenericConnectorTransaction(this.lib, db, this.pool, this._t);
       }
-      unsafeRun(sql: SqlBinding) : Promise<void>         { return this.pool.scoped(db => definition.run(this.lib, db, definition.transform(sql)));           }
-      select(sql_select: SqlBinding) : Promise<object[]> { return this.pool.scoped(db => definition.select(this.lib, db, definition.transform(sql_select))); }
-      insert(sql_insert: SqlBinding, out: string[])      { return this.pool.scoped(db => definition.insert(this.lib, db, definition.transform(sql_insert), out)); }
-      update(sql_update: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.update(this.lib, db, definition.transform(sql_update))); }
-      delete(sql_delete: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.delete(this.lib, db, definition.transform(sql_delete))); }
+      unsafeRun(sql: SqlBinding) : Promise<void>         { return this.pool.scoped(db => definition.run(this.lib, db, definition.transform(this._t(sql))));           }
+      select(sql_select: SqlBinding) : Promise<object[]> { return this.pool.scoped(db => definition.select(this.lib, db, definition.transform(this._t(sql_select)))); }
+      insert(sql_insert: SqlBinding, out: string[])      { return this.pool.scoped(db => definition.insert(this.lib, db, definition.transform(this._t(sql_insert)), out)); }
+      update(sql_update: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.update(this.lib, db, definition.transform(this._t(sql_update)))); }
+      delete(sql_delete: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.delete(this.lib, db, definition.transform(this._t(sql_delete)))); }
       
       close() {
         this.pool.close();
       }
     }
 
-    return function createPool(lib: LIB, options: OPTIONS, config?: Partial<Pool.Config>) : DBConnector {
+    return function createPool(lib: LIB, options: OPTIONS & { trace?(sql: SqlBinding): void }, config?: Partial<Pool.Config>) : DBConnector {
       return new GenericConnector(lib, new Pool<DB>({
         create() { return definition.create(lib, options); },
         destroy(db: DB) { return definition.destroy(lib, db); }
-      }, config))
+      }, config), (sql) => {
+        if (options.trace)
+          options.trace(sql);
+        return sql;
+      });
     }
   }
 }
