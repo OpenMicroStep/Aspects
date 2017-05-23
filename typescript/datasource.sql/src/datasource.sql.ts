@@ -40,6 +40,8 @@ export class SqlDataSourceImpl extends DataSource {
     }
     let map = (k: string, nv: any, ov: any | undefined) => {
       let attribute = mapper.get(k);
+      if (!attribute.insert) // virtual attribute
+        return;
       let last = attribute.last();
       let nvdb = attribute.toDb(mapValue(mapper, this, nv, k === '_id'));
       if (isNew && attribute.insert) { // insert syntax
