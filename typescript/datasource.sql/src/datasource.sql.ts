@@ -12,7 +12,6 @@ export class SqlDataSourceImpl extends DataSource {
   maker: SqlMaker;
 
   execute(db: DBConnector, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
-    let query = new SqlQuery();
     let ctx = {
       controlCenter: this.controlCenter(),
       maker: this.maker,
@@ -20,8 +19,8 @@ export class SqlDataSourceImpl extends DataSource {
       queries: new Map(),
       aliases: 0
     };
-    query.build(ctx, set);
-    return query.execute(ctx, db, component);
+    let query = SqlQuery.build(ctx, set);
+    return query.execute(ctx, set.scope || [], db, component);
   }
   async save(transaction: DBConnectorTransaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
     let manager = object.manager();
@@ -143,9 +142,9 @@ export class SqlDataSourceImpl extends DataSource {
       objects: VersionedObject[];
       scope?: string[];
   }): Promise<VersionedObject[]> {
-    let types = new Map<Function, VersionedObject[]>();
+    let types = new Map<Aspect.Installed, VersionedObject[]>();
     for (let object of objects) {
-      let aspect = object.constructor;
+      let aspect = object.manager().aspect();
       let list = types.get(aspect);
       if (!list)
         types.set(aspect, list = []);
@@ -153,10 +152,10 @@ export class SqlDataSourceImpl extends DataSource {
     }
     let sets = <ObjectSet[]>[];
     types.forEach((list, aspect) => {
-      let set = new ObjectSet();
+      let set = new ObjectSet('load');
       set.scope = scope;
-      new DataSourceInternal.ConstraintOnType(ConstraintType.InstanceOf, set, aspect);
-      new DataSourceInternal.ConstraintOnValue(ConstraintType.In, set, undefined, list);
+      set.setAspect(ConstraintType.InstanceOf, aspect);
+      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, "_id", list));
       sets.push(set);
     });
     let results = await this.scoped(component => Promise.all(sets.map(s => this.execute(this.connector, s, component))));

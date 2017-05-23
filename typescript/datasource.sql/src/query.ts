@@ -14,13 +14,10 @@ export type SharedContext = {
   maker: SqlMaker,
   mappers: { [s: string] : SqlMappedObject },
   queries: Map<ObjectSet, SqlQuery>,
-  aliases: number
+  aliases: number,
 }
 export function mapValue(mapper: SqlMappedObject, ctx: { mappers: { [s: string] : SqlMappedObject } }, value, isId: boolean) {
-  if (isId) {
-    value = mapper.get("_id").toDbKey(mapper.toDbKey(value));
-  }
-  else if (value instanceof VersionedObject) {
+  if (value instanceof VersionedObject) {
     let name = value.manager().aspect().name;
     let mapper = ctx.mappers[name];
     if (!mapper)
@@ -28,53 +25,66 @@ export function mapValue(mapper: SqlMappedObject, ctx: { mappers: { [s: string] 
     let idattr = mapper.get("_id");
     value = idattr.toDbKey(mapper.toDbKey(value.id()));
   }
+  else if (isId) {
+    value = mapper.get("_id").toDbKey(mapper.toDbKey(value));
+  }
   return value;
 }
 export class SqlQuery {
   mapper?: SqlMappedObject = undefined;
+  path?: { table: string, key: string } = undefined;
+
   tables = new Map<string, string>(); // [table, ref]"value"*[table, ref] -> table alias 
-  path: { table: string, key: string };
-  set: ObjectSet;
-  subrequests = new Map<SqlQuery, string>(); // query -> table alias
   from: SqlBinding[] = [];
   fromConditions: SqlBinding[] = [];
+  variables: Set<SqlQuery> = new Set();
+  subs = new Map<SqlQuery, { table: string, scope: string[] }>();
   where: SqlBinding[] = [];
 
-  promise: Promise<VersionedObject[]> | undefined = undefined;
+  static build(ctx: SharedContext, set: ObjectSet) : SqlQuery {
+    let ret = ctx.queries.get(set);
+    if (!ret) {
+      ret = new SqlQuery();
+      ctx.queries.set(set, ret);
+      ret.build(ctx, set);
+    }
+    return ret;
+  }
 
-  constructor() {}
+  private constructor() {}
 
   nextAlias(ctx: SharedContext): string {
     return `A${ctx.aliases++}`;
   }
 
-  setMapper(on: SqlQuery, mapper: SqlMappedObject | undefined) : SqlQuery {
-    if (on.mapper && on.mapper !== mapper) {
-      if (this === on)
-        throw new Error(`constraints on type collides`);
-      on = new SqlQuery();
-    }
-    on.mapper = mapper;
-    return on;
+  setMapper(ctx: SharedContext, mapper: SqlMappedObject | undefined) {
+    if (!mapper || this.mapper === mapper)
+      return;
+
+    this.mapper = mapper;
+    let attr = mapper.get("_id");
+    let alias = this.nextAlias(ctx);
+    let table = attr.path[0].table;
+    this.path = { table: alias, key: attr.path[0].key };
+    this.tables.set(JSON.stringify([table, this.path.key]), alias);
+    this.from.push(ctx.maker.from(table, alias))
   }
 
   cstor(ctx: SharedContext) {
     return ctx.controlCenter.aspect(this.mapper!.name)!
   }
 
-  addSubRequest(ctx: SharedContext, set: SqlQuery): string {
-    let alias = this.subrequests.get(set);
-    if (!alias) {
-      this.subrequests.set(set, alias = this.nextAlias(ctx));
-      set.joinInto(ctx, this, alias);
-    }
-    return alias;
+  sqlColumn(ctx: SharedContext, attribute: string | undefined, alias?: string) {
+    let lsqlattr = this.mapper!.get(attribute || "_id");
+    let table = this.table(ctx, lsqlattr.path);
+    let column = lsqlattr.last().value;
+    return ctx.maker.column(table, column, alias);
   }
 
   table(ctx: SharedContext, path: SqlPath[]) : string {
     let key = "";
     let ret: string | undefined = "";
-    let prev = ctx.maker.column(this.path.table, this.path.key);
+    let prev = ctx.maker.column(this.path!.table, this.path!.key);
     for (let p of path) {
       key += JSON.stringify([p.table, p.key]);
       ret = this.tables.get(key);
@@ -98,7 +108,7 @@ export class SqlQuery {
     return mapValue(this.mapper!, ctx, value, isId);
   }
 
-  addConstraintOnValue(ctx: SharedContext, attribute: string | undefined, operator: DataSourceInternal.ConstraintOnValueTypes, value: any | any[] | Promise<ObjectSet>) {
+  buildConstraintValue(ctx: SharedContext, attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any) : SqlBinding {
     let isId = attribute === "_id";
     value = Array.isArray(value) ? value.map(v => this.mapValue(ctx, v, isId)) : this.mapValue(ctx, value, isId);
     if (operator === ConstraintType.Text && !attribute) {
@@ -107,154 +117,100 @@ export class SqlQuery {
         if (attr.type.type === "primitive")
           constraints.push(ctx.maker.op(this.sqlColumn(ctx, attr.name), operator, value));
       });
-      this.addConstraint(ctx.maker.or(constraints));
+      return ctx.maker.or(constraints);
     }
     else {
-      this.addConstraint(ctx.maker.op(this.sqlColumn(ctx, attribute), operator, value));
+      return ctx.maker.op(this.sqlColumn(ctx, attribute), operator, value);
     }
   }
 
-  addConstraintOnColumn(ctx: SharedContext, attribute: string | undefined, operator: DataSourceInternal.ConstraintBetweenColumnsTypes, rightQuery: SqlQuery | undefined, rightAttribute: string | undefined) {
-    let rightAlias = rightQuery ? this.addSubRequest(ctx, rightQuery) : this.path.table;
-    if (!this.mapper)
-      throw new Error(`cannot add operator before mapper is set`);
-    rightQuery = rightQuery || this;
-    let rsqlattr = rightQuery.mapper!.get(rightAttribute || "_id");
-    let rtable = rightQuery.table(ctx, rsqlattr.path);
-    let rcolumn = rsqlattr.last().value;
-    this.addConstraint(ctx.maker.compare(this.sqlColumn(ctx, attribute), operator, ctx.maker.column(rtable, rcolumn)));
+
+  buildVariable(ctx: SharedContext, var_set: ObjectSet, var_attribute: string) : string {
+    let q = SqlQuery.build(ctx, var_set);
+    if (q !== this && q.variables.size > 1) {
+      let desc = this.subs.get(q);
+      if (!desc)
+        this.subs.set(q, desc = { table: this.nextAlias(ctx), scope: [] });
+      desc.scope.push(var_attribute);
+      return ctx.maker.column(desc.table, var_attribute);
+    }
+    else {
+      this.variables.add(q);
+      return q.sqlColumn(ctx, var_attribute);
+    }
+  }
+  buildConstraint(ctx: SharedContext, set: ObjectSet, constraint: DataSourceInternal.Constraint, prefix: string) : SqlBinding {
+    if (constraint instanceof DataSourceInternal.ConstraintTree) {
+      let constaints = constraint.value.map(c => this.buildConstraint(ctx, set, c, prefix + constraint.prefix));
+      switch(constraint.type) {
+        case ConstraintType.And: return ctx.maker.and(constaints);
+        case ConstraintType.Or : return ctx.maker.or (constaints);
+      }
+    }
+    else if (constraint instanceof DataSourceInternal.ConstraintValue) {
+      return this.buildConstraintValue(ctx, constraint.attribute, constraint.type, constraint.value);
+    }
+    else if (constraint instanceof DataSourceInternal.ConstraintVariable) {
+      let lset = set.variable(prefix + constraint.leftVariable)!;
+      let rset = set.variable(prefix + constraint.rightVariable)!;
+      let lc = this.buildVariable(ctx, lset, constraint.leftAttribute);
+      let rc = this.buildVariable(ctx, rset, constraint.rightAttribute);
+      return ctx.maker.compare(lc, constraint.type, rc);
+    }
+    throw new Error(`unsupported constraint`);
   }
 
-  sqlColumn(ctx: SharedContext, attribute: string | undefined, alias?: string) {
-    let lsqlattr = this.mapper!.get(attribute || "_id");
-    let table = this.table(ctx, lsqlattr.path);
-    let column = lsqlattr.last().value;
-    return ctx.maker.column(table, column, alias);
+  build(ctx: SharedContext, set: ObjectSet) {
+    switch (set.type) {
+      case ConstraintType.InstanceOf:
+      case ConstraintType.MemberOf: 
+        this.setMapper(ctx, ctx.mappers[(set.aspect as Aspect.Installed).name]); // TODO: real instanceof/memberof
+        break;
+      default:
+        throw new Error(`unsupported type ${ConstraintType[set.type as ConstraintType]}`);
+    }
+    this.variables.add(this);
+    for (let constraint of set.constraints)
+      this.addConstraint(this.buildConstraint(ctx, set, constraint, ""));
   }
 
-  // BEGIN BUILD
-  build(ctx: SharedContext, set: ObjectSet) : SqlQuery {
-    let ret = ctx.queries.get(set);
-    if (!ret) {
-      ret = this;
-      ret.set = set;
-      set.constraintsOnType.forEach(constraint => ret = ret!.addConstraintOnType(ctx, set, constraint));
-      ctx.queries.set(set, ret);
-      let attr = ret.mapper!.get("_id");
-      ret.path = attr.path[0];
-      ret.tables.set(JSON.stringify([ret.path.table, ret.path.key]), ret.path.table);
-      ret.from.push(ctx.maker.from(ret.path.table))
-      set.constraintsOnValue.forEach(constraint => ret!.addConstraintOnValue(ctx, constraint.attribute, constraint.type, constraint.value));
-      set.constraintsBetweenSet.forEach(constraint => ret!.addConstraintBetweenSet(ctx, set, constraint));
+  sql_columns(ctx: SharedContext, attributes: string[]) : string[] {
+    let columns: string[] = [];
+    for (let attribute of attributes)
+      columns.push(this.sqlColumn(ctx, attribute, attribute));
+    return columns;
+  }
+
+  sql_from(ctx: SharedContext) : SqlBinding[] {
+    let from: SqlBinding[] = [];
+    for (let variable of this.variables)
+      from.push(...variable.from);
+    for (let [sub, desc] of this.subs) {
+      let sql_select = ctx.maker.select(sub.sql_columns(ctx, desc.scope), sub.sql_from(ctx), [], sub.sql_where(ctx));
+      from.push(ctx.maker.from_sub(sql_select, desc.table));
+    }
+    return from;
+  }
+
+  sql_where(ctx: SharedContext) : SqlBinding {
+    let conditions: SqlBinding[] = [];
+    for (let variable of this.variables) {
+      conditions.push(...variable.fromConditions);
+      conditions.push(...variable.where);
+    }
+    return ctx.maker.and(conditions);
+  }
+  async execute(ctx: SharedContext, scope: string[], db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
+    let attributes = ["_id", "_version", ...scope];
+    let columns: string[] = this.sql_columns(ctx, attributes);
+    let query = ctx.maker.select(columns, this.sql_from(ctx), [], this.sql_where(ctx));
+    console.info(`SQL ${query.sql}`, query.bind);
+    let rows = await db.select(query);
+    let ret: VersionedObject[] = [];
+    for (let row of rows) {
+      ret.push(this.loadObject(ctx, component, row, attributes))
     }
     return ret;
-  }
-
-  buildSub(ctx: SharedContext, set: ObjectSet) : SqlQuery {
-    let sub = new SqlQuery();
-    return sub.build({
-      controlCenter: ctx.controlCenter,
-      aliases: 0,
-      maker: ctx.maker,
-      mappers: ctx.mappers,
-      queries: new Map()
-    }, set);
-  }
-
-  addConstraintOnType(ctx: SharedContext, set: ObjectSet, constraint: DataSourceInternal.ConstraintOnType) : SqlQuery {
-    let ret: SqlQuery = this;
-    switch(constraint.type) {
-      case ConstraintType.ElementOf:
-      case ConstraintType.In: {
-        let sub = ret.build(ctx, constraint.value as ObjectSet);
-        if (sub !== ret) {
-          if ((constraint.value as ObjectSet).name) {
-            ret = ret.setMapper(ret, sub.mapper);
-            ret.addConstraintOnValue(ctx, undefined, ConstraintType.In, sub);
-          }
-          else {
-            ret.addConstraintOnColumn(ctx, undefined, ConstraintType.Equal, sub, undefined);
-          }
-        }
-        break;
-      }
-      case ConstraintType.Union:{
-        let conditions = ret.where;
-        for (let unionSet of constraint.value as ObjectSet[]) {
-          ret.where = [];
-          let sub = ret.build(ctx, unionSet);
-          ret = ret.setMapper(ret, sub.mapper);
-          if (sub !== ret)
-            ret.addConstraintOnColumn(ctx, undefined, ConstraintType.Equal, sub, undefined);
-          conditions.push(ctx.maker.and(ret.where));
-        }
-        ret.where = [ctx.maker.or(conditions)];
-        break;
-      }
-      case ConstraintType.MemberOf:
-      case ConstraintType.InstanceOf: {
-        let v: any = constraint.value;
-        ret = ret.setMapper(ret, ctx.mappers[v.aspect ? v.aspect.name : v.definition.name]);
-        break;
-      }
-    }
-    return ret;
-  }
-
-  addConstraintBetweenSet(ctx: SharedContext, set: ObjectSet, constraint: DataSourceInternal.ConstraintBetweenSet) {
-    if (constraint.type !== ConstraintType.In && constraint.type !== ConstraintType.NotIn) {
-      let sub = this.build(ctx, constraint.oppositeSet(set));
-      if (set !== constraint.otherSet) {
-        if (sub !== this) {
-          // TODO: decide if we do sub or separate request (optimisation)
-          this.addConstraintOnColumn(ctx, constraint.myAttribute(set), constraint.type, sub, constraint.oppositeAttribute(set));
-        }
-        else if (set === constraint.set) {
-          this.addConstraintOnColumn(ctx, constraint.myAttribute(set), constraint.type, undefined, constraint.oppositeAttribute(set));
-        }
-      }
-    }
-    else if (set !== constraint.otherSet) {
-      let sub = this.buildSub(ctx, constraint.otherSet);
-      this.addConstraint(ctx.maker.compare_bind({ sql: this.sqlColumn(ctx, constraint.attribute), bind: [] }, constraint.type, sub.sqlSelect(ctx)));
-    }
-  }
-
-  sqlSelect(ctx: SharedContext) : SqlBinding {
-    let conditions = ctx.maker.and([...this.fromConditions, ...this.where]);
-    return ctx.maker.select([ctx.maker.column(this.path.table, this.path.key)], this.from, [], conditions);
-  }
-
-  joinInto(ctx: SharedContext, into: SqlQuery, alias: string) {
-    let w = ctx.maker.and([...this.fromConditions, ...this.where]);
-    into.from.push(ctx.maker.from_sub(ctx.maker.select([this.path.key], this.from, [], w), alias));
-    into.fromConditions.push(ctx.maker.compare(ctx.maker.column(alias, this.path.key), ConstraintType.Equal, ctx.maker.column(into.path.table, into.path.key)));
-  }
-  // END BUILD
-
-  execute(ctx: SharedContext, db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
-    if (!this.promise) {
-      this.promise = (async () => {
-        //Array.from(ctx.queries.values()).forEach(q => q.execute(ctx, cc, db)); // start quering deps
-        let set = this.set;
-        let attributes = ["_version"];
-        if (set.scope)
-          attributes.push(...set.scope);
-        let columns: string[] = [ctx.maker.column(this.path.table, this.path.key, "_id")];
-        for (let attribute of attributes)
-          columns.push(this.sqlColumn(ctx, attribute, attribute));
-        let conditions = ctx.maker.and([...this.fromConditions, ...this.where]);
-        let query = ctx.maker.select(columns, this.from, [], conditions);
-        //query.bind = await Promise.all(query.bind);
-        let rows = await db.select(query);
-        let ret: VersionedObject[] = [];
-        for (let row of rows) {
-          ret.push(this.loadObject(ctx, component, row, attributes))
-        }
-        return ret;
-      })();
-    }
-    return this.promise;
   }
 
   loadObject(ctx: SharedContext, component: AComponent, row: object, attributes: string[]): VersionedObject {
