@@ -57,6 +57,14 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
       });
     });
   },
+  delete(pg, db, sql_update: SqlBinding) : Promise<number> {
+    return new Promise<any>((resolve, reject) => {
+      trace(sql_update);
+      db.query(sql_update.sql, sql_update.bind, function (err, result) {
+        err ? reject(err) : resolve(result.rowCount);
+      });
+    });
+  },
   insert(pg, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     return new Promise<any>((resolve, reject) => {
       trace(sql_insert);

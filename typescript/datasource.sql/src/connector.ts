@@ -7,14 +7,16 @@ export interface DBConnector {
   transaction(): Promise<DBConnectorTransaction>;
   unsafeRun(sql: SqlBinding) : Promise<void>;
   select(sql_select: SqlBinding) : Promise<object[]>;
-  update(sql_update: SqlBinding) : Promise<number>;
   insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
+  update(sql_update: SqlBinding) : Promise<number>;
+  delete(sql_update: SqlBinding) : Promise<number>;
   close(): void;
 }
 export interface DBConnectorTransaction {
   select(sql_select: SqlBinding) : Promise<object[]>;
-  update(sql_update: SqlBinding) : Promise<number>;
   insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
+  update(sql_update: SqlBinding) : Promise<number>;
+  delete(sql_update: SqlBinding) : Promise<number>;
   commit() : Promise<void>;
   rollback() : Promise<void>;
 }
@@ -25,8 +27,9 @@ export namespace DBConnector {
     create(lib: LIB, options: OPTIONS): Promise<DB>,
     destroy(lib: LIB, db: DB): Promise<void>,
     select(lib: LIB, db: DB, sql_select: SqlBinding) : Promise<object[]>,
-    update(lib: LIB, db: DB, sql_update: SqlBinding) : Promise<number>,
     insert(lib: LIB, db: DB, sql_insert: SqlBinding, output_columns: string[]) : Promise<object>,
+    update(lib: LIB, db: DB, sql_update: SqlBinding) : Promise<number>,
+    delete(lib: LIB, db: DB, sql_update: SqlBinding) : Promise<number>,
     run(lib: LIB, db: DB, sql: SqlBinding) : Promise<any>,
     beginTransaction(lib: LIB, db: DB): Promise<void>,
     commit(lib: LIB, db: DB): Promise<void>,
@@ -55,8 +58,9 @@ export namespace DBConnector {
         return undefined;
       }
       select(sql_select: SqlBinding) : Promise<object[]> { return this._check() || definition.select(this.lib, this.db!, definition.transform(sql_select)); }
-      update(sql_update: SqlBinding) : Promise<number>   { return this._check() || definition.update(this.lib, this.db!, definition.transform(sql_update)); }
       insert(sql_insert: SqlBinding, out: string[])      { return this._check() || definition.insert(this.lib, this.db!, definition.transform(sql_insert), out); }
+      update(sql_update: SqlBinding) : Promise<number>   { return this._check() || definition.update(this.lib, this.db!, definition.transform(sql_update)); }
+      delete(sql_delete: SqlBinding) : Promise<number>   { return this._check() || definition.delete(this.lib, this.db!, definition.transform(sql_delete)); }
       commit() : Promise<void>   { return this._check() || this._endTransaction(definition.commit(this.lib, this.db!));   }
       rollback() : Promise<void> { return this._check() || this._endTransaction(definition.rollback(this.lib, this.db!)); }
 
@@ -78,9 +82,10 @@ export namespace DBConnector {
       }
       unsafeRun(sql: SqlBinding) : Promise<void>         { return this.pool.scoped(db => definition.run(this.lib, db, definition.transform(sql)));           }
       select(sql_select: SqlBinding) : Promise<object[]> { return this.pool.scoped(db => definition.select(this.lib, db, definition.transform(sql_select))); }
-      update(sql_update: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.update(this.lib, db, definition.transform(sql_update))); }
       insert(sql_insert: SqlBinding, out: string[])      { return this.pool.scoped(db => definition.insert(this.lib, db, definition.transform(sql_insert), out)); }
-
+      update(sql_update: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.update(this.lib, db, definition.transform(sql_update))); }
+      delete(sql_delete: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.delete(this.lib, db, definition.transform(sql_delete))); }
+      
       close() {
         this.pool.close();
       }

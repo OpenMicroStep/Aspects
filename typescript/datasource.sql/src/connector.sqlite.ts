@@ -47,6 +47,14 @@ export const SqliteDBConnectorFactory = DBConnector.createSimple<{
       });
     });
   },
+  delete(sqlite3, db, sql_update: SqlBinding) : Promise<number> {
+    return new Promise<any>((resolve, reject) => {
+      trace(sql_update);
+      db.run(sql_update.sql, sql_update.bind, function(this: {changes}, err) {
+        err ? reject(err) : resolve(this.changes);
+      });
+    });
+  },
   insert(sqlite3, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     if (output_columns.length > 1)
       return Promise.reject(new Error(`Sqlite doesn't support multiple output columns`));

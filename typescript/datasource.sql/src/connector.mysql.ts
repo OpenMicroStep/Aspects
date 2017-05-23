@@ -34,6 +34,14 @@ export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: str
       });
     });
   },
+  delete(mysql2, db, sql_update: SqlBinding) : Promise<number> {
+    return new Promise<any>((resolve, reject) => {
+      trace(sql_update);
+      db.execute(sql_update.sql, sql_update.bind, function (err, results, fields) {
+        err ? reject(err) : resolve(results.affectedRows);
+      });
+    });
+  },
   insert(mysql2, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     if (output_columns.length > 1)
       return Promise.reject(new Error(`MySQL doesn't support multiple output columns`));

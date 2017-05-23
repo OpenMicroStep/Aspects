@@ -35,6 +35,13 @@ export class SqlMaker {
       bind: [...([] as SqlBinding[]).concat(...sql_set.map(s => s.bind)), ...sql_where.bind]
     }
   }
+  
+  delete(table: string, sql_where: SqlBinding) : SqlBinding {
+    return {
+      sql: `DELETE FROM ${this.quote(table)} ${this._where(sql_where)}`,
+      bind: sql_where.bind
+    }
+  }
 
   _where(sql_where: SqlBinding) : string {
     return sql_where.sql ? `WHERE ${sql_where.sql}` : '';

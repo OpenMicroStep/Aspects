@@ -100,6 +100,13 @@ export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
       db.execSql(req);
     });
   },
+  delete(tedious, db, sql_update: SqlBinding) : Promise<number> {
+    return new Promise<any>((resolve, reject) => {
+      trace(sql_update);
+      let req = request(tedious, sql_update, (err, rowCount) => err ? reject(err) : resolve(rowCount));
+      db.execSql(req);
+    });
+  },
   insert(tedious, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     return new Promise<any>((resolve, reject) => {
       trace(sql_insert);

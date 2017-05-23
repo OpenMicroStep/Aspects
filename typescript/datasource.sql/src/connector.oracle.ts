@@ -50,6 +50,12 @@ export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
       db.execute(sql_update.sql, sql_update.bind, (err, result) => err ? reject(err) : resolve(result.rowsAffected));
     });
   },
+  delete(oracledb, db, sql_update: SqlBinding) : Promise<number> {
+    return new Promise<any>((resolve, reject) => {
+      trace(sql_update);
+      db.execute(sql_update.sql, sql_update.bind, (err, result) => err ? reject(err) : resolve(result.rowsAffected));
+    });
+  },
   insert(oracledb, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
     return new Promise<any>((resolve, reject) => {
       trace(sql_insert);
