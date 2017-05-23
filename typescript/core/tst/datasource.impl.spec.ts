@@ -242,6 +242,32 @@ function query_intersection(f: Flux<Context>) {
     f.continue();
   });
 }
+function query_elementof_sub(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  db.farPromise('rawQuery', { // All persons with a car and their cars
+    "C=": { $instanceOf: Car },
+    "P=": { $instanceOf: People },
+    "persons1=": {
+      $out: "=p",
+      "p=": { $elementOf: "=P" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    "cars2=": {
+      $out: "=c",
+      "p=": { $elementOf: "=persons1" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    results: [
+      { name: "cars2"   , where: "=cars2"   , scope: ['_name', '_owner', '_model']             },
+    ]
+  }).then((envelop) => {
+    let { cars2 } = envelop.result();
+    assert.sameMembers(cars2  , [c0, c1, c2]);
+    f.continue();
+  });
+}
 function query_elementof_intersection(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { // All persons with a car and their cars
@@ -293,7 +319,7 @@ function query_elementof_c1c2(f: Flux<Context>) {
       "=c1": { $ne: "=c2" },
     },
     results: [
-      { name: "cars", where: "=cars", scope: ['_firstname', '_lastname', '_birthDate'] },
+      { name: "cars", where: "=cars", scope: [] },
     ]
   }).then((envelop) => {
     let { cars } = envelop.result();
@@ -394,6 +420,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_elementof,
       query_intersection,
       query_elementof_intersection,
+      query_elementof_sub,
       query_elementof_c1c2,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]}]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];

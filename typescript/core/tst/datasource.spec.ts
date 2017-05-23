@@ -129,20 +129,7 @@ function set_resources() {
   ]);
 }
 
-function persons_with_cars() {
-  let sets = parseRequest({
-    "C=": { $instanceOf: Car },
-    "P=": { $instanceOf: People },
-    "persons1=": {
-      $out: "=p",
-      "p=": { $elementOf: "=P" },
-      "c=": { $elementOf: "=C" },
-      "=c._owner": { $eq: "=p" },
-    },
-    name: "persons1",
-    where: "=persons1",
-    scope: ['_name', '_owner', '_model'],
-  });
+function set_persons1_p() {
   let p: any = {
     _name: "p",
     type: ConstraintType.InstanceOf,
@@ -152,8 +139,8 @@ function persons_with_cars() {
     ],
     subs: undefined,
     variables: [],
-    name: "persons1",
-    scope: ['_name', '_owner', '_model'],
+    name: "peoples1",
+    scope: ['_firstname', '_lastname'],
     sort: undefined,
   }
   let c: any = {
@@ -169,6 +156,53 @@ function persons_with_cars() {
   }
   p.variables.push(["p", p]);
   p.variables.push(["c", c]);
+  return p;
+}
+
+function set_persons2_C_owner() {
+  let persons2_C_owner: any = {
+    _name: "persons2",
+    type: ConstraintType.InstanceOf,
+    aspect: "People",
+    constraints: [
+      { type: ConstraintType.And, prefix: "C._owner.", value: [
+        { type: ConstraintType.Equal, leftVariable: "C", leftAttribute: "_owner", rightVariable: "C._owner", rightAttribute: "_id" },
+      ] },
+    ],
+    subs: undefined,
+    variables: [],
+    name: "peoples2",
+    scope: ['_firstname', '_lastname', '_birthDate'],
+    sort: undefined,
+  }
+  let persons2_C: any = {
+    _name: "C",
+    type: ConstraintType.InstanceOf,
+    aspect: "Car",
+    subs: undefined,
+    constraints: [],
+    variables: undefined,
+    name: undefined, scope: undefined, sort: undefined,
+  };
+  persons2_C_owner.variables.push(["C._owner.C", persons2_C]);
+  persons2_C_owner.variables.push(["C._owner.C._owner", persons2_C_owner]);
+  return persons2_C_owner;
+}
+function persons_with_cars() {
+  let sets = parseRequest({
+    "C=": { $instanceOf: Car },
+    "P=": { $instanceOf: People },
+    "persons1=": {
+      $out: "=p",
+      "p=": { $elementOf: "=P" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    name: "peoples1",
+    where: "=persons1",
+    scope: ['_firstname', '_lastname'],
+  });
+  let p = set_persons1_p();
   assert.deepEqual<any>(sets, [p]);
 }
 
@@ -246,41 +280,13 @@ function persons_with_cars_intersection() {
     // Soit C l'ensemble des objets Car
     "C=": { $instanceOf: Car },
     // Soit persons les objets p de P tel que pour c dans C il existe c._owner = p
-    "persons=": { $intersection: ["=P", "=C:_owner"] },
+    "persons2=": { $intersection: ["=P", "=C:_owner"] },
     results: [
-      { name: "persons", where: "=persons", scope: ['_firstname', '_lastname', '_cars'] },
+      { name: "peoples2", where: "=persons2", scope: ['_firstname', '_lastname', '_birthDate'] },
     ]
   });
-  let C_owner: any = {
-    _name: "persons",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
-    constraints: [
-      { type: ConstraintType.And, prefix: "C._owner.", value: [
-        { type: ConstraintType.Equal, leftVariable: "C", leftAttribute: "_owner", rightVariable: "C._owner", rightAttribute: "_id" },
-      ] },
-    ],
-    subs: undefined,
-    variables: [],
-    name: "persons",
-    scope: ['_firstname', '_lastname', '_cars'],
-    sort: undefined,
-  }
-  let C: any = {
-    _name: "C",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
-    subs: undefined,
-    constraints: [],
-    variables: undefined,
-    name: undefined,
-    scope: undefined,
-    sort: undefined,
-  };
-  C_owner.variables.push(["C._owner.C", C]);
-  C_owner.variables.push(["C._owner.C._owner", C_owner]);
-
-  assert.deepEqual<any>(sets, [C_owner]);
+  let persons2_C_owner = set_persons2_C_owner();
+  assert.deepEqual<any>(sets, [persons2_C_owner]);
 }
 
 function persons_with_cars_and_their_cars() {
@@ -371,6 +377,138 @@ function persons_with_cars_and_their_cars() {
   assert.deepEqual<any>(sets, [c, C_owner]);
 }
 
+function set_cars2_c() {
+  let cars2_persons1_p: any = {
+    _name: "p",
+    type: ConstraintType.InstanceOf,
+    aspect: "People",
+    constraints: [
+      { type: ConstraintType.And, prefix: "p.", value: [
+        { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
+      ]},
+    ],
+    subs: undefined,
+    variables: [],
+    name: undefined, scope: undefined, sort: undefined,
+  }
+  let cars2_persons1_c: any = {
+    _name: "c",
+    type: ConstraintType.InstanceOf,
+    aspect: "Car",
+    constraints: [],
+    subs: undefined,
+    variables: undefined,
+    name: undefined, scope: undefined, sort: undefined,
+  }
+  cars2_persons1_p.variables.push(["p.p", cars2_persons1_p]);
+  cars2_persons1_p.variables.push(["p.c", cars2_persons1_c]);
+
+  let cars2_c: any = {
+    _name: "c",
+    type: ConstraintType.InstanceOf,
+    aspect: "Car",
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
+    ],
+    subs: undefined,
+    variables: [],
+    name: "cars2",
+    scope: ['_name', '_owner', '_model'],
+    sort: undefined,
+  }
+  cars2_c.variables.push(["c", cars2_c]);
+  cars2_c.variables.push(["p", cars2_persons1_p]);
+  return cars2_c;
+}
+function persons_cars_sub() {
+  let sets = parseRequest({
+    "C=": { $instanceOf: Car },
+    "P=": { $instanceOf: People },
+    "persons1=": {
+      $out: "=p",
+      "p=": { $elementOf: "=P" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    "cars2=": {
+      $out: "=c",
+      "p=": { $elementOf: "=persons1" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    results: [
+      { name: "cars2", where: "=cars2", scope: ['_name', '_owner', '_model']             },
+    ]
+  });
+  let cars2_c = set_cars2_c();
+  assert.deepEqual<any>(sets, [cars2_c]);
+}
+function persons_mixed() {
+  let sets = parseRequest({
+    "C=": { $instanceOf: Car },
+    "P=": { $instanceOf: People },
+    "persons1=": {
+      $out: "=p",
+      "p=": { $elementOf: "=P" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    "persons2=": { $intersection: ["=C:_owner", "=P"] },
+    "cars1=": {
+      $out: "=c",
+      "p=": { $elementOf: "=P" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    "cars2=": {
+      $out: "=c",
+      "p=": { $elementOf: "=persons1" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    results: [
+      { name: "peoples1", where: "=persons1", scope: ['_firstname', '_lastname'] },
+      { name: "peoples2", where: "=persons2", scope: ['_firstname', '_lastname', '_birthDate'] },
+      { name: "cars1"   , where: "=cars1"   , scope: ['_name', '_owner']             },
+      { name: "cars2"   , where: "=cars2"   , scope: ['_name', '_owner', '_model']             },
+    ]
+  });
+
+  // persons1
+  let persons1_p = set_persons1_p();
+  let persons2_C_owner = set_persons2_C_owner();
+
+  // cars1
+  let cars1_p: any = {
+    _name: "p",
+    type: ConstraintType.InstanceOf,
+    aspect: "People",
+    constraints: [],
+    subs: undefined,
+    variables: undefined,
+    name: undefined, scope: undefined, sort: undefined,
+  }
+  let cars1_c: any = {
+    _name: "c",
+    type: ConstraintType.InstanceOf,
+    aspect: "Car",
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
+    ],
+    subs: undefined,
+    variables: [],
+    name: "cars1",
+    scope: ['_name', '_owner'],
+    sort: undefined,
+  }
+  cars1_c.variables.push(["c", cars1_c]);
+  cars1_c.variables.push(["p", cars1_p]);
+
+  // cars2
+  let cars2_c = set_cars2_c();
+  assert.deepEqual<any>(sets, [persons1_p, persons2_C_owner, cars1_c, cars2_c]);
+}
+
 function persons_with_cars_and_their_cars_1k() { // about 170ms
   let i = 1e4;
   while (i-- > 0) {
@@ -445,6 +583,8 @@ export const tests = { name: 'DataSource', tests: [
     persons_with_cars_intersection,
     persons_and_their_cars,
     persons_with_cars_and_their_cars,
+    persons_cars_sub,
+    persons_mixed,
   ]},
   applyWhere,
   applyRequest,

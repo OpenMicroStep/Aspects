@@ -347,7 +347,10 @@ export namespace DataSourceInternal {
       let ret = new ObjectSet(name);
       ret.setAspect(this.type!, this.aspect);
       ret.constraints = this.constraints;
-      ret.variables = this.variables;
+      if (this.variables) {
+        for (let [name, variable] of this.variables)
+          ret.setVariable(name, variable === this ? ret : variable);
+      }
       ret.subs = this.subs;
       return ret;
     }
@@ -404,7 +407,7 @@ export namespace DataSourceInternal {
       if (sub.variables) {
         prefix = sub._name + ".";
         for (let [k, s] of sub.variables.entries())
-          this.setVariable(prefix + k, s === sub ? this: s);
+          this.setVariable(prefix + k, s === sub ? this : s);
       }
       return sub.constraints.length ? c_and(sub.constraints, prefix) : undefined;
     }
@@ -469,23 +472,6 @@ export namespace DataSourceInternal {
     }
     throw new Error(`Unsupported on value constraint ${ConstraintType[op as any]}`);
   }
-  /*function pass_var(object: VersionedObject, otherObject: VersionedObject) {
-    if (this.attribute && !object.manager().hasAttributeValue(this.attribute as keyof VersionedObject)) return false;
-    if (this.otherAttribute && !otherObject.manager().hasAttributeValue(this.otherAttribute as keyof VersionedObject)) return false;
-    let left = this.attribute ? object[this.attribute] : object;
-    let right = this.otherAttribute ? otherObject[this.otherAttribute] : otherObject;
-    switch(this.type) {
-      case ConstraintType.Equal: return map(left) === map(right);
-      case ConstraintType.NotEqual: return map(left) !== map(right);
-      case ConstraintType.GreaterThan: return left > right;
-      case ConstraintType.GreaterThanOrEqual: return left >= right;
-      case ConstraintType.LessThan: return left < right;
-      case ConstraintType.LessThanOrEqual: return left <= right;
-      case ConstraintType.In: return map(left) === map(right);
-      case ConstraintType.NotIn: return map(left) !== map(right);
-    }
-    throw new Error(`Unsupported on value constraint ${ConstraintType[this.type as any]}`);
-  }*/
 
   export type Scope = string[];
   export type Value = any;
@@ -836,7 +822,8 @@ export namespace DataSourceInternal {
 
   function parseResult(context: ParseContext, result: Result) {
     context.push(result);
-    let set = context.parseSet(result.where, result.name);
+    let set = context.parseSet(result.where, result.name)
+    set = set.clone(set._name);
     set.name = result.name;
     set.scope = result.scope;
     set.sort = result.sort;
