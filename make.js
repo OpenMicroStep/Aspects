@@ -13,6 +13,7 @@ function tests_aspects(path) {
   return [
     `${path}/js/node_modules/@openmicrostep/aspects.tests/typescript/core/tst/core.spec.js`,
     `${path}/js/node_modules/@openmicrostep/aspects.sql.tests/typescript/datasource.sql/tst/datasource.sql.spec.js`,
+    `${path}/js/node_modules/@openmicrostep/aspects.obi.tests/typescript/datasource.obi/tst/datasource.obi.spec.js`,
   ]
 }
 
@@ -97,6 +98,14 @@ module.exports =  {
         ]},
         { is: 'group', name: 'tst', path: 'tst/', elements: [
           { is: 'file', name: 'datasource.sql.spec.ts', tags: ['tsc'] },
+        ]},
+      ]},
+      { is: 'group', name: 'datasource.obi', path: 'typescript/datasource.obi/', elements: [
+        { is: 'group', name: 'src', path: 'src/', elements: [
+          { is: 'file', name: 'index.ts', tags: ['tsc'] },
+        ]},
+        { is: 'group', name: 'tst', path: 'tst/', elements: [
+          { is: 'file', name: 'datasource.obi.spec.ts', tags: ['tsc'] },
         ]},
       ]},
       { is: 'group', name: 'transport.express', path: 'typescript/transport.express/src', elements: [
@@ -186,6 +195,36 @@ module.exports =  {
           "pg": "^6.1.5",
           "tedious": "^2.0.0",
           "oracledb": "^1.13.1",
+          "@openmicrostep/msbuildsystem.shared": "^0.5.6",
+        },
+      },
+    },
+    "aspects obi=": {
+      is: 'target',
+      outputName: "@openmicrostep/aspects.obi",
+      targets: ["aspects core", "aspects sql"],
+      components: ["=::aspects core::", "=::aspects sql::", "=node"],
+      environments: ["=envs:js"],
+      files: ["=Files:datasource.obi:src ? tsc"],
+      npmPackage: { is: "component",
+        "main": "index.js",
+        "typings": "index.d.ts",
+        "dependencies": { is: "component",
+          "@openmicrostep/msbuildsystem.shared": "^0.5.6",
+        },
+      },
+    },
+    "aspects obi.tests=": {
+      is: 'target',
+      outputName: "@openmicrostep/aspects.obi.tests",
+      targets: ["aspects core", "aspects obi"],
+      components: ["=test", "=::aspects core::", "=::aspects sql::", "=::aspects obi::", "=node"],
+      environments: ["=envs:js"],
+      files: ["=Files:datasource.obi:tst ? tsc"],
+      interfaces: ["=Files:core:tst ? interface"],
+      npmPackage: { is: "component",
+        "dependencies": { is: "component",
+          "sqlite3": "^3.1.8",
           "@openmicrostep/msbuildsystem.shared": "^0.5.6",
         },
       },
