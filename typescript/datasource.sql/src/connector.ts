@@ -92,7 +92,7 @@ export namespace DBConnector {
       }
     }
 
-    return function createPool(lib: LIB, options: OPTIONS & { trace?(sql: SqlBinding): void }, config?: Partial<Pool.Config>) : DBConnector {
+    return function createPool(lib: LIB, options: OPTIONS & { trace?: (sql: SqlBinding)=> void }, config?: Partial<Pool.Config>) : DBConnector {
       return new GenericConnector(lib, new Pool<DB>({
         create() { return definition.create(lib, options); },
         destroy(db: DB) { return definition.destroy(lib, db); }
