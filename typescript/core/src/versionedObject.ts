@@ -98,6 +98,17 @@ export class VersionedObjectManager<T extends VersionedObject> {
       this._versionAttributes.set(this.assertHasAttribute(k), d._versionAttributes[k]);
   }
 
+  state(): VersionedObjectManager.State {
+    if (this._version === VersionedObjectManager.NoVersion)
+      return VersionedObjectManager.State.NEW;
+    if (this._version === VersionedObjectManager.DeletedVersion)
+      return VersionedObjectManager.State.DELETED;
+    if (this._localAttributes.size > 0)
+      return VersionedObjectManager.State.MODIFIED;
+    return VersionedObjectManager.State.UNCHANGED;
+    //INCONFLICT,
+  }
+
   hasChanges() {
     return this._localAttributes.size > 0;
   }
@@ -220,7 +231,15 @@ export class VersionedObjectManager<T extends VersionedObject> {
     return ret;
   }
 }
-
+export namespace VersionedObjectManager {
+  export enum State {
+    NEW,
+    UNCHANGED,
+    MODIFIED,
+    INCONFLICT,
+    DELETED,
+  };
+}
 export class VersionedObject implements MSTE.Decodable {
   static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
     return <any>class VersionedObjectExtended extends cstor {
