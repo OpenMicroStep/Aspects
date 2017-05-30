@@ -1,3 +1,5 @@
+const version = require('child_process').execSync('git describe --always', { cwd: __dirname }).toString().trim();
+
 function tests_buildsystem(path) {
   return [
     `${path}/node/node_modules/@openmicrostep/msbuildsystem.shared.tests/index.js`,
@@ -19,7 +21,7 @@ module.exports =  {
   name: "Aspects",
   "ts base=": { is: 'component', type: "javascript", compiler: "aspects",
       npmPackage: { is: "component",
-        "version": "0.5.2",
+        "version": version,
       },
       tsConfig: { is: "component",
         "module": "commonjs",
