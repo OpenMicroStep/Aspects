@@ -116,8 +116,36 @@ function nameClass<T extends { new(...args): any }>(name: string, parent: string
 const installedAttributesOnImpl = new Map<string, {
   attributes: Map<string, Aspect.InstalledAttribute>;
   references: Aspect.Reference[];
+  impls: Set<VersionedObjectConstructor<VersionedObject>>
 }>();
+const voAttributes = {
+  attributes: new Map<string, Aspect.InstalledAttribute>(),
+  references: [],
+  impls: new Set<VersionedObjectConstructor<VersionedObject>>([VersionedObject]),
+};
+installedAttributesOnImpl.set(VersionedObject.definition.name, voAttributes)
 
+const IdValidator = Object.assign(function IdValidator(value) : boolean {
+  return typeof value === "string" || typeof value === "number";
+}, { errors: [] });
+const VersionValidator = Object.assign(function VersionValidator(value) : boolean {
+  return typeof value === "number";
+}, { errors: [] });
+
+voAttributes.attributes.set("_id", {
+  name: "_id",
+  type: { is: "type", type: "primitive", name: "any" as Aspect.PrimaryType },
+  versionedObject: undefined,
+  validator: IdValidator,
+  relation: undefined,
+});
+voAttributes.attributes.set("_version", {
+  name: "_version",
+  type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
+  versionedObject: undefined,
+  validator: VersionValidator,
+  relation: undefined,
+});
 export class AspectCache {
   private readonly cachedAspects = new Map<string, VersionedObjectConstructorCache>();
   private readonly cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
@@ -144,12 +172,13 @@ export class AspectCache {
     
     definition.attributesToAdd.forEach(attribute => {
       const data = this.installAttribute(from, attribute);
+      attr!.impls.forEach(impl => this.installAttributeData(impl, data));
       attr!.attributes.set(data.name, data);
     });
     definition.attributesToRemove.forEach(attribute => {
       const data = attr!.attributes.get(attribute.name);
       if (data) {
-        this.uninstallAttribute(from, data);
+        attr!.impls.forEach(impl => this.uninstallAttribute(impl, data));
         attr!.attributes.delete(attribute.name);
       }
     });
@@ -284,6 +313,9 @@ export class AspectCache {
       let attr = installedAttributesOnImpl.get(ref);
       attr && attr.references.push({ class: from.definition.name, attribute: attribute.name });
     });
+    return data;
+  }
+  private installAttributeData(from: VersionedObjectConstructor<VersionedObject>, data: Aspect.InstalledAttribute) {
     Object.defineProperty(from.prototype, data.name, {
       enumerable: true,
       get(this: VersionedObject) { return this.__manager.attributeValue(data.name as keyof VersionedObject) },
@@ -300,12 +332,20 @@ export class AspectCache {
   private installAttributes(from: VersionedObjectConstructor<VersionedObject>): { references: Aspect.Reference[], attributes: Map<string, Aspect.InstalledAttribute> } {
     let ret = installedAttributesOnImpl.get(from.definition.name);
     if (!ret) {
-      ret = { attributes: from.parent ? new Map(this.installAttributes(from.parent).attributes) : new Map(), references: [] };
+      ret = { 
+        attributes: from.parent ? new Map(this.installAttributes(from.parent).attributes) : new Map(), 
+        references: [],
+        impls: new Set<VersionedObjectConstructor<VersionedObject>>(),
+      };
       from.definition.attributes.forEach(attribute => {
         const data = this.installAttribute(from, attribute);
         ret!.attributes.set(data.name, data);
       });
       installedAttributesOnImpl.set(from.definition.name, ret);
+    }
+    if (!ret.impls.has(from)) {
+      ret.impls.add(from);
+      ret.attributes.forEach(data => this.installAttributeData(from, data));
     }
     return ret;
   }
