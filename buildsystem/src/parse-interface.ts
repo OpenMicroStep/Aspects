@@ -382,7 +382,7 @@ function parseQuotedString(parser: Parser, quote = `"`) {
 }
 
 
-const primitiveTypes = new Set(['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object']);
+const primitiveTypes = new Set(['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object', 'boolean']);
 function parseType(parser: Parser) : Element.Type {
   let ret: Element.Type;
   let type: string;
