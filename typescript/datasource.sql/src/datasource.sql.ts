@@ -3,7 +3,7 @@ import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlMappedObject} from './mapper';
 export * from './mapper';
-import {SqlQuery, mapValue} from './query';
+import {SqlQuery, SqlMappedQuery, mapValue} from './query';
 import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, Pool} from './index';
 
 export class SqlDataSourceImpl extends DataSource {
@@ -13,6 +13,7 @@ export class SqlDataSourceImpl extends DataSource {
 
   execute(db: DBConnector, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
     let ctx = {
+      cstor: SqlMappedQuery,
       controlCenter: this.controlCenter(),
       maker: this.maker,
       mappers: this.mappers,

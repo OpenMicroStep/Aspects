@@ -9,11 +9,12 @@ function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O) 
   return arr ? arr.map(map) : undefined;
 }
 
-export type SharedContext = {
+export type SqlMappedSharedContext = {
+  cstor: { new(): SqlMappedQuery },
   controlCenter: ControlCenter,
   maker: SqlMaker,
   mappers: { [s: string] : SqlMappedObject },
-  queries: Map<ObjectSet, SqlQuery>,
+  queries: Map<ObjectSet, SqlMappedQuery>,
   aliases: number,
 }
 export function mapValue(mapper: SqlMappedObject, ctx: { mappers: { [s: string] : SqlMappedObject } }, value, isId: boolean) {
@@ -30,90 +31,57 @@ export function mapValue(mapper: SqlMappedObject, ctx: { mappers: { [s: string] 
   }
   return value;
 }
-export class SqlQuery {
-  mapper?: SqlMappedObject = undefined;
+export type SqlQuerySharedContext<C extends SqlQuerySharedContext<C, Q>, Q extends SqlQuery<C>> = {
+  cstor: { new(): Q },
+  controlCenter: ControlCenter,
+  maker: SqlMaker,
+  queries: Map<ObjectSet, Q>,
+  aliases: number,
+}
+export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<SharedContext, SqlQuery<SharedContext>>> {
   path?: { table: string, key: string } = undefined;
 
   tables = new Map<string, string>(); // [table, ref]"value"*[table, ref] -> table alias 
   from: SqlBinding[] = [];
   fromConditions: SqlBinding[] = [];
-  variables: Set<SqlQuery> = new Set();
-  subs = new Map<SqlQuery, { table: string, scope: string[] }>();
+  variables: Set<SqlQuery<SharedContext>> = new Set();
+  subs = new Map<SqlQuery<SharedContext>, { table: string, scope: string[] }>();
   where: SqlBinding[] = [];
 
-  static build(ctx: SharedContext, set: ObjectSet) : SqlQuery {
+  static build<SharedContext extends SqlQuerySharedContext<SharedContext, Q>, Q extends SqlQuery<SharedContext>>(ctx: SharedContext, set: ObjectSet
+  ) : Q {
     let ret = ctx.queries.get(set);
     if (!ret) {
-      ret = new SqlQuery();
+      ret = new ctx.cstor();
       ctx.queries.set(set, ret);
       ret.build(ctx, set);
     }
     return ret;
   }
 
-  private constructor() {}
+  constructor() {}
 
   nextAlias(ctx: SharedContext): string {
     return `A${ctx.aliases++}`;
   }
 
-  setMapper(ctx: SharedContext, mapper: SqlMappedObject | undefined) {
-    if (!mapper || this.mapper === mapper)
-      return;
-
-    this.mapper = mapper;
-    let attr = mapper.get("_id");
-    let alias = this.nextAlias(ctx);
-    let table = attr.path[0].table;
-    this.path = { table: alias, key: attr.path[0].key };
-    this.tables.set(JSON.stringify([table, this.path.key]), alias);
-    this.from.push(ctx.maker.from(table, alias))
-  }
-
-  cstor(ctx: SharedContext) {
-    return ctx.controlCenter.aspect(this.mapper!.name)!
-  }
-
-  sqlColumn(ctx: SharedContext, attribute: string | undefined, alias?: string) {
-    let lsqlattr = this.mapper!.get(attribute || "_id");
-    let table = this.table(ctx, lsqlattr.path);
-    let column = lsqlattr.last().value;
-    return ctx.maker.column(table, column, alias);
-  }
-
-  table(ctx: SharedContext, path: SqlPath[]) : string {
-    let key = "";
-    let ret: string | undefined = "";
-    let prev = ctx.maker.column(this.path!.table, this.path!.key);
-    for (let p of path) {
-      key += JSON.stringify([p.table, p.key]);
-      ret = this.tables.get(key);
-      if (!ret) {
-        ret = this.nextAlias(ctx);
-        this.from.push(ctx.maker.from(p.table, ret));
-        this.fromConditions.push(ctx.maker.compare(prev, ConstraintType.Equal, ctx.maker.column(ret, p.key)));
-        this.tables.set(key, ret);
-      }
-      prev = ctx.maker.column(ret, p.value);
-      key += JSON.stringify(p.value);
-    }
-    return ret;
-  }
+  abstract setMapper(ctx: SharedContext, mapper: string | undefined): void;
+  abstract aspect(ctx: SharedContext): Aspect.Installed;
+  abstract sqlColumn(ctx: SharedContext, attribute: string | undefined, alias?: string) : string;  
+  abstract execute(ctx: SharedContext, scope: string[], db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]>;
+  abstract mapValue(ctx: SharedContext, value, isId: boolean): any;
 
   addConstraint(constraint: SqlBinding) {
     this.where.push(constraint);
   }
 
-  mapValue(ctx: SharedContext, value, isId: boolean) {
-    return mapValue(this.mapper!, ctx, value, isId);
-  }
 
   buildConstraintValue(ctx: SharedContext, attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any) : SqlBinding {
     let isId = attribute === "_id";
     value = Array.isArray(value) ? value.map(v => this.mapValue(ctx, v, isId)) : this.mapValue(ctx, value, isId);
     if (operator === ConstraintType.Text && !attribute) {
       let constraints: SqlBinding[] = [];
-      this.cstor(ctx).aspect.attributes.forEach(attr => {
+      this.aspect(ctx).attributes.forEach(attr => {
         if (attr.type.type === "primitive")
           constraints.push(ctx.maker.op(this.sqlColumn(ctx, attr.name), operator, value));
       });
@@ -164,7 +132,7 @@ export class SqlQuery {
     switch (set.type) {
       case ConstraintType.InstanceOf:
       case ConstraintType.MemberOf: 
-        this.setMapper(ctx, ctx.mappers[(set.aspect as Aspect.Installed).name]); // TODO: real instanceof/memberof
+        this.setMapper(ctx, (set.aspect as Aspect.Installed).name); // TODO: real instanceof/memberof
         break;
       default:
         throw new Error(`unsupported type ${ConstraintType[set.type as ConstraintType]}`);
@@ -200,7 +168,62 @@ export class SqlQuery {
     }
     return ctx.maker.and(conditions);
   }
-  async execute(ctx: SharedContext, scope: string[], db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
+}
+export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
+  mapper?: SqlMappedObject = undefined;
+  
+  setMapper(ctx: SqlMappedSharedContext, name: string | undefined) {
+    let mapper = name && ctx.mappers[name];
+    if (!mapper || this.mapper === mapper)
+      return;
+
+    this.mapper = mapper;
+    let attr = mapper.get("_id");
+    let alias = this.nextAlias(ctx);
+    let table = attr.path[0].table;
+    this.path = { table: alias, key: attr.path[0].key };
+    this.tables.set(JSON.stringify([table, this.path.key]), alias);
+    this.from.push(ctx.maker.from(table, alias))
+  }
+
+  aspect(ctx: SqlMappedSharedContext): Aspect.Installed {
+    return this.cstor(ctx).aspect;
+  }
+  cstor(ctx: SqlMappedSharedContext) {
+    return ctx.controlCenter.aspect(this.mapper!.name)!
+  }
+
+  sqlColumn(ctx: SqlMappedSharedContext, attribute: string | undefined, alias?: string) {
+    let lsqlattr = this.mapper!.get(attribute || "_id");
+    let table = this.table(ctx, lsqlattr.path);
+    let column = lsqlattr.last().value;
+    return ctx.maker.column(table, column, alias);
+  }
+
+  table(ctx: SqlMappedSharedContext, path: SqlPath[]) : string {
+    let key = "";
+    let ret: string | undefined = "";
+    let prev = ctx.maker.column(this.path!.table, this.path!.key);
+    for (let p of path) {
+      key += JSON.stringify([p.table, p.key]);
+      ret = this.tables.get(key);
+      if (!ret) {
+        ret = this.nextAlias(ctx);
+        this.from.push(ctx.maker.from(p.table, ret));
+        this.fromConditions.push(ctx.maker.compare(prev, ConstraintType.Equal, ctx.maker.column(ret, p.key)));
+        this.tables.set(key, ret);
+      }
+      prev = ctx.maker.column(ret, p.value);
+      key += JSON.stringify(p.value);
+    }
+    return ret;
+  }
+  
+  mapValue(ctx: SqlMappedSharedContext, value, isId: boolean) {
+    return mapValue(this.mapper!, ctx, value, isId);
+  }
+
+  async execute(ctx: SqlMappedSharedContext, scope: string[], db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
     let attributes = ["_id", "_version", ...scope];
     let columns: string[] = this.sql_columns(ctx, attributes);
     let query = ctx.maker.select(columns, this.sql_from(ctx), [], this.sql_where(ctx));
@@ -212,7 +235,7 @@ export class SqlQuery {
     return ret;
   }
 
-  loadObject(ctx: SharedContext, component: AComponent, row: object, attributes: string[]): VersionedObject {
+  loadObject(ctx: SqlMappedSharedContext, component: AComponent, row: object, attributes: string[]): VersionedObject {
     let cstor = this.cstor(ctx);
     let cc = ctx.controlCenter;
     let id = this.mapper!.fromDbKey(this.mapper!.get("_id").fromDbKey(row["_id"]));

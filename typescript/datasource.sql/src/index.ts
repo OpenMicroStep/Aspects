@@ -7,3 +7,4 @@ export * from './connector.mysql';
 export * from './connector.mssql';
 export * from './connector.oracle';
 export * from './connector.postgres';
+export {SqlQuery, SqlQuerySharedContext} from './query';
