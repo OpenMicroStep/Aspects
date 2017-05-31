@@ -1,4 +1,4 @@
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
+import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, ImmutableSet, ImmutableList} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlBinding, SqlMaker} from './index';
@@ -17,7 +17,7 @@ export type SqlMappedSharedContext = {
   queries: Map<ObjectSet, SqlMappedQuery>,
   aliases: number,
 }
-export function mapValue(mapper: SqlMappedObject, ctx: { mappers: { [s: string] : SqlMappedObject } }, value, isId: boolean) {
+export function mapValue(ctx: { mappers: { [s: string] : SqlMappedObject } }, mapper: SqlMappedObject, attribute: SqlMappedAttribute, value) {
   if (value instanceof VersionedObject) {
     let name = value.manager().aspect().name;
     let mapper = ctx.mappers[name];
@@ -26,9 +26,10 @@ export function mapValue(mapper: SqlMappedObject, ctx: { mappers: { [s: string] 
     let idattr = mapper.get("_id");
     value = idattr.toDbKey(mapper.toDbKey(value.id()));
   }
-  else if (isId) {
-    value = mapper.get("_id").toDbKey(mapper.toDbKey(value));
+  else if (attribute.name === "_id") {
+    value = mapper.toDbKey(value);
   }
+  value = attribute.toDb(value);
   return value;
 }
 export type SqlQuerySharedContext<C extends SqlQuerySharedContext<C, Q>, Q extends SqlQuery<C>> = {
@@ -59,7 +60,9 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     return ret;
   }
 
-  constructor() {}
+  constructor() {
+    this.variables.add(this);
+  }
 
   nextAlias(ctx: SharedContext): string {
     return `A${ctx.aliases++}`;
@@ -67,9 +70,9 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
 
   abstract setMapper(ctx: SharedContext, mapper: string | undefined): void;
   abstract aspect(ctx: SharedContext): Aspect.Installed;
-  abstract sqlColumn(ctx: SharedContext, attribute: string | undefined, alias?: string) : string;  
+  abstract sqlColumn(ctx: SharedContext, attribute: string, alias?: string) : string;  
   abstract execute(ctx: SharedContext, scope: string[], db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]>;
-  abstract mapValue(ctx: SharedContext, value, isId: boolean): any;
+  abstract mapValue(ctx: SharedContext, attribute: string, value): any;
 
   addConstraint(constraint: SqlBinding) {
     this.where.push(constraint);
@@ -77,8 +80,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
 
 
   buildConstraintValue(ctx: SharedContext, attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any) : SqlBinding {
-    let isId = attribute === "_id";
-    value = Array.isArray(value) ? value.map(v => this.mapValue(ctx, v, isId)) : this.mapValue(ctx, value, isId);
+    value = Array.isArray(value) ? value.map(v => this.mapValue(ctx, attribute, v)) : this.mapValue(ctx, attribute, value);
     if (operator === ConstraintType.Text && !attribute) {
       let constraints: SqlBinding[] = [];
       this.aspect(ctx).attributes.forEach(attr => {
@@ -137,7 +139,6 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       default:
         throw new Error(`unsupported type ${ConstraintType[set.type as ConstraintType]}`);
     }
-    this.variables.add(this);
     for (let constraint of set.constraints)
       this.addConstraint(this.buildConstraint(ctx, set, constraint, ""));
   }
@@ -168,6 +169,16 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     }
     return ctx.maker.and(conditions);
   }
+
+  mergeRemotes(remotes: Map<VersionedObject, Map<string, any>>): VersionedObject[] {
+    for (let [vo, remoteAttributes] of remotes) {
+      let version = remoteAttributes.get('_version');
+      let manager = vo.manager();
+      remoteAttributes.delete('_version');
+      manager.mergeWithRemoteAttributes(remoteAttributes as Map<keyof VersionedObject, any>, version);
+    }
+    return [...remotes.keys()];
+  }
 }
 export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   mapper?: SqlMappedObject = undefined;
@@ -193,8 +204,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return ctx.controlCenter.aspect(this.mapper!.name)!
   }
 
-  sqlColumn(ctx: SqlMappedSharedContext, attribute: string | undefined, alias?: string) {
-    let lsqlattr = this.mapper!.get(attribute || "_id");
+  sqlColumn(ctx: SqlMappedSharedContext, attribute: string, alias?: string) {
+    let lsqlattr = this.mapper!.get(attribute);
     let table = this.table(ctx, lsqlattr.path);
     let column = lsqlattr.last().value;
     return ctx.maker.column(table, column, alias);
@@ -219,52 +230,90 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return ret;
   }
   
-  mapValue(ctx: SqlMappedSharedContext, value, isId: boolean) {
-    return mapValue(this.mapper!, ctx, value, isId);
+  mapValue(ctx: SqlMappedSharedContext, attribute: string, value) {
+    return mapValue(ctx, this.mapper!, this.mapper!.get(attribute), value);
   }
 
   async execute(ctx: SqlMappedSharedContext, scope: string[], db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
-    let attributes = ["_id", "_version", ...scope];
-    let columns: string[] = this.sql_columns(ctx, attributes);
-    let query = ctx.maker.select(columns, this.sql_from(ctx), [], this.sql_where(ctx));
-    let rows = await db.select(query);
     let ret: VersionedObject[] = [];
-    for (let row of rows) {
-      ret.push(this.loadObject(ctx, component, row, attributes))
-    }
-    return ret;
-  }
-
-  loadObject(ctx: SqlMappedSharedContext, component: AComponent, row: object, attributes: string[]): VersionedObject {
-    let cstor = this.cstor(ctx);
+    let remotes = new Map<VersionedObject, Map<string, any>>();
     let cc = ctx.controlCenter;
-    let id = this.mapper!.fromDbKey(this.mapper!.get("_id").fromDbKey(row["_id"]));
-    let remoteAttributes = new Map<string, any>();
-    let vo = cc.registeredObject(id) || new cstor();
-    let manager = vo.manager();
-    let aspect = manager.aspect();
-    cc.registerObjects(component, [vo]);
-    for (let i = 0; i < attributes.length; i++) {
-      let attr = attributes[i];
-      let aspectAttr = aspect.attributes.get(attr);
-      let sqlattr = this.mapper!.get(attr);
-      let value = sqlattr.fromDb(row[attr]);
-      if (aspectAttr && aspectAttr.versionedObject) {
-        let mapper = ctx.mappers[aspectAttr.versionedObject];
-        let subid = mapper.fromDbKey(value);
-        value = cc.registeredObject(subid);
-        if (!value) {
-          value = new (cc.aspect(aspectAttr.versionedObject)!)();
-          value.manager().setId(subid);
-          cc.registerObjects(component, [value]);
+    let cstor = this.cstor(ctx);
+    let aspect = cstor.aspect;
+
+    let mono_attributes: string[] = ["_version"];
+    let mult_attributes: string[] = [];
+    for (let attribute of scope) {
+      let a = aspect.attributes.get(attribute)!;
+      if (a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary")
+        mono_attributes.push(attribute);
+      else if (a.type.type === "set" || a.type.type === "array")
+        mult_attributes.push(attribute);
+    }
+
+    let mono_query = ctx.maker.select(this.sql_columns(ctx, ["_id", ...mono_attributes]), this.sql_from(ctx), [], this.sql_where(ctx));
+    let mono_rows = await db.select(mono_query);
+    let attribute_id = this.mapper!.get("_id");
+    let ids: any[] = [];
+    for (let row of mono_rows) {
+      let db_id = row["_id"];
+      let id = this.mapper!.fromDbKey(attribute_id.fromDbKey(db_id));
+      let remoteAttributes = new Map<string, any>();
+      let vo = cc.registeredObject(id) || new cstor();
+      vo.manager().setId(id);
+      ids.push(db_id);
+      cc.registerObjects(component, [vo]);
+      remotes.set(vo, remoteAttributes);
+      for (let i = 0; i < mono_attributes.length; i++) {
+        let attr = mono_attributes[i];
+        let aspectAttr = aspect.attributes.get(attr)!;
+        let sqlattr = this.mapper!.get(attr);
+        let value = this.loadValue(ctx, component, aspectAttr, sqlattr.fromDb(row[attr]));
+        remoteAttributes.set(attr, value);
+      }
+    }
+    for (let mult_attribute of mult_attributes) {
+      let q = new SqlMappedQuery();
+      q.setMapper(ctx, this.mapper!.name);
+      q.buildConstraintValue(ctx, "_id", ConstraintType.In, ids);
+      let mult_query = ctx.maker.select(q.sql_columns(ctx, ["_id", mult_attribute]), q.sql_from(ctx), [], q.sql_where(ctx));
+      let mult_rows = await db.select(mult_query);
+      let mult_attr = aspect.attributes.get(mult_attribute)!;
+      let mult_sql_attr = this.mapper!.get(mult_attribute);
+      let isSet = mult_attr.type.type === "set";
+      let isArray = mult_attr.type.type === "array";
+      for (let row of mult_rows) {
+        let id = this.mapper!.fromDbKey(attribute_id.fromDbKey(row["_id"]));
+        let vo = cc.registeredObject(id)!;
+        let remoteAttributes = remotes.get(vo)!;
+        let value = this.loadValue(ctx, component, mult_attr, mult_sql_attr.fromDb(row[mult_attribute]));
+        let c = remoteAttributes.get(mult_attribute);
+        if (isSet) {
+          if (!c) 
+            remoteAttributes.set(mult_attribute, c = new Set());
+          c.add(value);
+        }
+        else if (isArray) {
+          if (!c) 
+            remoteAttributes.set(mult_attribute, c = []);
+          c.push(value);
         }
       }
-      remoteAttributes.set(attr, value);
     }
-    let version = remoteAttributes.get('_version');
-    remoteAttributes.delete('_version');
-    manager.setId(id);
-    manager.mergeWithRemoteAttributes(remoteAttributes as Map<keyof VersionedObject, any>, version);
-    return vo;
+    return this.mergeRemotes(remotes);
+  }
+
+  loadValue(ctx: SqlMappedSharedContext, component: AComponent, aspectAttr: Aspect.InstalledAttribute, value) {
+    if (aspectAttr.versionedObject) {
+      let mapper = ctx.mappers[aspectAttr.versionedObject];
+      let subid = mapper.fromDbKey(value);
+      value = ctx.controlCenter.registeredObject(subid);
+      if (!value) {
+        value = new (ctx.controlCenter.aspect(aspectAttr.versionedObject)!)();
+        value.manager().setId(subid);
+        ctx.controlCenter.registerObjects(component, [value]);
+      }
+    }
+    return value;
   }
 }

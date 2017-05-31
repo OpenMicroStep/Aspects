@@ -44,14 +44,14 @@ export class SqlDataSourceImpl extends DataSource {
       if (!attribute.insert) // virtual attribute
         return;
       let last = attribute.last();
-      let nvdb = attribute.toDb(mapValue(mapper, this, nv, k === '_id'));
+      let nvdb = mapValue(this, mapper, attribute, nv);
       if (isNew && attribute.insert) { // insert syntax
         let values = valuesByTable.get(attribute.insert)!;
         values.set(last.value, nvdb);
       }
       else { // update syntax
         let iddb = attribute.toDbKey(mapper.toDbKey(id));
-        let ovdb = ov && attribute.toDb(mapValue(mapper, this, ov, k === '_id'));
+        let ovdb = ov && mapValue(this, mapper, attribute, ov);
         let key = attribute.pathref_uniqid();
         let values = valuesByPath.get(key);
         if (!values) {
