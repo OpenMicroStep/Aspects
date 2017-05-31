@@ -5,7 +5,7 @@ Resource.category('local', <Resource.ImplCategories.local<Resource>>{
 });
 
 Car.category('local', <Car.ImplCategories.local<Car>>{
-    name() { return `${this._name} - ${this._model}` },
+    name() { return this._name && this._model && `${this._name} - ${this._model}` },
     model() { return this._model; },
     owner() { return this._owner; },
 });

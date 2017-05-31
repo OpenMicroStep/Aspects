@@ -129,6 +129,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return ret;
   }
 
+  clear() {
+    this._localAttributes.clear();
+  }
+
   hasAttributeValue<K extends keyof T>(attribute: K) : boolean {
     return attribute === '_id' || attribute === '_version' || this._localAttributes.has(attribute) || this._versionAttributes.has(attribute);
   }
@@ -144,7 +148,31 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return this.version();
     if (this._oldVersionAttributes.has(attribute))
       throw new Error(`attribute '${attribute}' is unaccessible due to version change`);
+    
+    let a = this._aspect.attributes.get(attribute);
+    if (!a)
+      throw new Error(`attribute '${attribute}' doesn't exists on ${this.name()}`);
+    if (this.state() === VersionedObjectManager.State.NEW) {
+      let ret = this.missingValue(a);
+      this._localAttributes.set(attribute, ret);
+      return ret;
+    }
     throw new Error(`attribute '${attribute}' is unaccessible and never was`);
+  }
+
+  setNewObjectMissingValues() {
+    for (let attribute of this._aspect.attributes.values()) {
+      if (!this.hasAttributeValue(attribute.name))
+        this._localAttributes.set(attribute.name, this.missingValue(attribute));
+    }
+  }
+
+  private missingValue(attribute: Aspect.InstalledAttribute) {
+    if (attribute.type.type === "array")
+      return [];
+    if (attribute.type.type === "set")
+      return new Set();
+    return undefined;
   }
 
   setAttributeValue<K extends keyof T>(attribute: K, value: T[K]) {
@@ -187,6 +215,14 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
             default: throw new Error(`unsupported relation destination type ${otype.type}`);
           }
           other[data.relation.attribute] = v;
+        }
+        else if (add && other_manager.state() === VersionedObjectManager.State.NEW) {
+          let v = other[data.relation.attribute];
+          switch (otype.type) {
+            case 'set':   other[data.relation.attribute] = (new Set<VersionedObject>()).add(this._object); break;
+            case 'class': other[data.relation.attribute] = this._object; break;
+            default: throw new Error(`unsupported relation destination type ${otype.type}`);
+          }
         }
       }
     }

@@ -40,8 +40,8 @@ function basics() {
   assert(VersionedObjectManager.isLocalId(c1._id));
   assert.notEqual(c1._id, v1._id);
   assert.notEqual(c1._id, v2._id);
-  assert.throw(() => { c1.name(); });
-  assert.throw(() => { c1.model(); });
+  assert.equal(c1.name(), undefined);
+  assert.equal(c1.model(), undefined);
   c1._name = "MyCar";
   c1._model = "MyModel";
   assert.equal(c1.name(), `MyCar - MyModel`);
@@ -60,7 +60,7 @@ function basics() {
   assert(VersionedObjectManager.isLocalId(p1._id));
   assert.notEqual(p1._id, v1._id);
   assert.notEqual(p1._id, v2._id);
-  assert.throw(() => { p1.name(); });
+  assert.equal(p1.name(), undefined);
   p1._name = "MyPeople";
   assert.equal(p1.name(), `MyPeople`);
   assert.instanceOf(p1.birthDate(), Date);
@@ -76,7 +76,7 @@ function basics() {
   assert.equal(v1.id(), 2);
   assert.throw(() => { v1.manager().setId(3) }, `id can't be modified once assigned (not local)`);
 
-  assert.throw(() => { v1.name(); });
+  assert.equal(v1.name(), undefined);
   v1._name = "Resource Name";
   assert.equal(v1.name(), "Resource Name");
   v1._name = "Resource Name 2";

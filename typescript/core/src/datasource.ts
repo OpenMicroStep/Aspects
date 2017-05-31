@@ -1,4 +1,4 @@
-import {Identifier, VersionedObject, FarImplementation, areEquals, Invocation, InvocationState, Invokable, Aspect } from './core';
+import {Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Invocation, InvocationState, Invokable, Aspect } from './core';
 import {DataSource} from '../../../generated/aspects.interfaces';
 
 DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
@@ -101,7 +101,13 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
     return this.farPromise('implLoad', w);
   },
   rawSave(this, objects: VersionedObject[]) {
-    let changed = objects.filter(o => o.manager().hasChanges());
+    let changed = objects.filter(o => {
+      let manager = o.manager();
+      let state = manager.state();
+      if (state === VersionedObjectManager.State.NEW)
+        manager.setNewObjectMissingValues();
+      return state !== VersionedObjectManager.State.UNCHANGED;
+    });
     return this.farPromise('implSave', changed).then<VersionedObject[]>((envelop) => {
       if (envelop.state() === InvocationState.Terminated)
         return objects;
