@@ -1,7 +1,6 @@
-import {ControlCenter, Identifier, areEquals, Invocation, Invokable, Aspect, addIsEqualSupport, addReplaceInGraphSupport, replaceInGraph} from './core';
+import {ControlCenter, areEquals, Identifier, Invocation, Invokable, Aspect, addIsEqualSupport, addReplaceInGraphSupport, replaceInGraph} from './core';
 import { Flux } from '@openmicrostep/async';
 import {MSTE} from '@openmicrostep/mstools';
-import * as Immutable from 'immutable';
 
 function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
   let ret = { add: [] as T[], del: [] as T[] };
@@ -27,7 +26,7 @@ function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[]
 }
 
 export type VersionedObjectAttributes<T extends VersionedObject> = Map<keyof T, any>;
-export class VersionedObjectManager<T extends VersionedObject> {
+export class VersionedObjectManager<T extends VersionedObject = VersionedObject> {
   static NoVersion = -1;
   static DeletedVersion = -2;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
@@ -154,14 +153,17 @@ export class VersionedObjectManager<T extends VersionedObject> {
 
   setAttributeValueFast<K extends keyof T>(attribute: K, value: T[K], data: Aspect.InstalledAttribute) {
     let hasChanged = false;
-
+    let isNew = this.state() === VersionedObjectManager.State.NEW;
     let oldValue;
-    if (this._versionAttributes.has(attribute) && Immutable.is(this._versionAttributes.get(attribute), value)) {
+    let hasVersionAttribute = this._versionAttributes.has(attribute);
+    if (!hasVersionAttribute && !isNew)
+      throw new Error(`attribute '${attribute}' is unaccessible and never was`);
+    if (hasVersionAttribute && areEquals(this._versionAttributes.get(attribute), value)) {
       if (data.relation)
         oldValue = this._localAttributes.get(attribute);
       hasChanged = this._localAttributes.delete(attribute);
     }
-    else if (!this._localAttributes.has(attribute) || !Immutable.is(this._localAttributes.get(attribute), value)) {
+    else if (!this._localAttributes.has(attribute) || !areEquals(this._localAttributes.get(attribute), value)) {
       if (this._localAttributes.has(attribute))
         oldValue = this._localAttributes.get(attribute);
       if (this._versionAttributes.has(attribute))
@@ -176,10 +178,11 @@ export class VersionedObjectManager<T extends VersionedObject> {
       let ai = 0, di = 0;
       while ((add = ai < sadd.length) || di < sdel.length) {
         let other = add ? sadd[ai++] : sdel[di++];
-        if (other.manager().hasAttributeValue(data.relation.attribute as keyof VersionedObject)) {
+        let other_manager = other.manager();
+        if (other_manager.hasAttributeValue(data.relation.attribute as keyof VersionedObject)) {
           let v = other[data.relation.attribute];
           switch (otype.type) {
-            case 'set':   v = (v as Immutable.Set<VersionedObject>)[add ? 'add' : 'delete'](this._object); break;
+            case 'set':   v = (new Set<VersionedObject>(v))[add ? 'add' : 'delete'](this._object); break;
             case 'class': v = add ? this._object : undefined; break;
             default: throw new Error(`unsupported relation destination type ${otype.type}`);
           }
@@ -326,7 +329,7 @@ Object.defineProperty(VersionedObject.prototype, '_version', {
   get(this: VersionedObject) { return this.__manager._version; },
 });
 
-export class VersionedObjectSnapshot<T extends VersionedObject> {
+export class VersionedObjectSnapshot<T extends VersionedObject = VersionedObject> {
   __cls: string;
   _id: Identifier;
   _version: number;

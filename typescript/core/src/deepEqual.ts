@@ -1,6 +1,6 @@
 declare global {
   interface Object {
-    isEqual(other, level?: number);
+    isEqual(other);
   }
 }
 
@@ -21,19 +21,26 @@ function isEqualObject(this: Object, other) {
   return false;
 }
 
-function isEqualArray<T>(this: Array<T>, other, level?: number) {
+function isEqualArray<T>(this: Array<T>, other) {
   if (other instanceof Array && this.length === other.length) {
-    if (typeof level === "number")
-      level--;
     for (var i = 0, l = this.length; i < l; i++)
-      if (!this[i].isEqual(other[i], level))
+      if (!this[i].isEqual(other[i]))
         return false;
     return true;
   }
-  return true;
+  return false;
+}
+function isEqualSet<T>(this: Set<T>, other) {
+  if (other instanceof Set && this.size === other.size) {
+    for (let v of this)
+      if (!other.has(v))
+        return false;
+    return true;
+  }
+  return false;
 }
 
-function isEqualDate(this: Date, other, level?: number) {
+function isEqualDate(this: Date, other) {
   return other instanceof Date && this.getTime() === other.getTime();
 }
 
@@ -43,6 +50,7 @@ function isStrictEqual(this, other) {
 
 addIsEqualSupport(Object, isEqualObject);
 addIsEqualSupport(Array, isEqualArray);
+addIsEqualSupport(Set, isEqualSet);
 addIsEqualSupport(Date, isEqualDate);
 
 export function addIsEqualSupport<T>(clazz: { new (...args): T }, impl: (this: T, other, level?: number) => boolean) {

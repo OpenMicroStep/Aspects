@@ -139,26 +139,27 @@ function relation() {
   let c1 = new C();
   let p0 = new P();
 
-  p0._cars = ImmutableSet<Car>();
+  p0._cars = new Set<Car>();
+  Symbol.iterator;
   c0._owner = p0;
   c1._owner = undefined;
   assert.equal(c0._owner, p0);
-  assert.sameMembers(p0._cars.toArray(), [c0]);
-  p0._cars = p0._cars.add(c1);
-  assert.sameMembers(p0._cars.toArray(), [c0, c1]);
+  assert.sameMembers([...p0._cars], [c0]);
+  p0._cars = new Set(p0._cars).add(c1);
+  assert.sameMembers([...p0._cars], [c0, c1]);
   assert.equal(c0._owner, p0);
   assert.equal(c1._owner, p0);
 
-  p0._drivenCars = ImmutableSet<Car>();
-  c0._drivers = ImmutableSet<People>();
-  c1._drivers = ImmutableSet<People>();
-  assert.sameMembers(p0._drivenCars.toArray(), []);
-  assert.sameMembers(c0._drivers.toArray(), []);
-  assert.sameMembers(c1._drivers.toArray(), []);
-  p0._drivenCars = p0._drivenCars.add(c0).add(c1);
-  assert.sameMembers(p0._drivenCars.toArray(), [c0, c1]);
-  assert.sameMembers(c0._drivers.toArray(), [p0]);
-  assert.sameMembers(c1._drivers.toArray(), [p0]);
+  p0._drivenCars = new Set<Car>();
+  c0._drivers = new Set<People>();
+  c1._drivers = new Set<People>();
+  assert.sameMembers([...p0._drivenCars], []);
+  assert.sameMembers([...c0._drivers], []);
+  assert.sameMembers([...c1._drivers], []);
+  p0._drivenCars = new Set(p0._drivenCars).add(c0).add(c1);
+  assert.sameMembers([...p0._drivenCars], [c0, c1]);
+  assert.sameMembers([...c0._drivers], [p0]);
+  assert.sameMembers([...c1._drivers], [p0]);
 }
 export const tests = { name: 'VersionedObject', tests: [
   basics,

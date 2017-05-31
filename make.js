@@ -121,17 +121,9 @@ module.exports =  {
         "main": "typescript/core/src/core.js",
         "typings": "typescript/core/src/core.d.ts",
         "dependencies": { is: "component",
+          "@openmicrostep/msbuildsystem.shared": "^0.5.0",
           "@openmicrostep/async": "^0.1.0",
-          "ajv": "^4.9.0",
           "@openmicrostep/mstools": "^1.0.2",
-          "immutable": "^3.8.1"
-        },
-        "devDependencies": { is: "component",
-          "@openmicrostep/async": "^0.1.0",
-          "ajv": "^4.9.0",
-          "@types/ajv": "^0.0.4",
-          "@openmicrostep/mstools": "^1.0.2",
-          "immutable": "^3.8.1"
         },
       },
     },
@@ -263,6 +255,6 @@ module.exports =  {
       "sh", "-c",
       "cat ./coverage/coverage-final.json | remap-istanbul --output coverage --type html"
     ]) },
-    "build=":     { is: "target", components: ["=shell"], preTasks: Value(["=build-bs", "=tests-bs", "=build-aspects", "=tests-aspects" ]) },
+    "build=":     { is: "target", components: ["=shell"], preTasks: Value(["=build-bs", /*"=tests-bs",*/ "=build-aspects", "=tests-aspects" ]) },
   }
 };

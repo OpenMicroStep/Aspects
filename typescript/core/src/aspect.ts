@@ -1,6 +1,9 @@
-import { ControlCenter, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, Invocation, InvocationState } from './core';
+import { 
+  ControlCenter, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, Invocation, InvocationState, Identifier, DataSourceInternal,
+  ImmutableSet, ImmutableList, ImmutableMap,
+} from './core';
 import {Async, Flux} from '@openmicrostep/async';
-import * as Ajv from 'ajv';
+import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
 
 export interface FarTransport {
   remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T>;
@@ -9,8 +12,6 @@ export interface FarTransport {
 export interface PublicTransport {
   installMethod(cstor: VersionedObjectConstructor<VersionedObject>, method: Aspect.InstalledFarMethod);
 }
-
-const ajv = new Ajv();
 
 export interface Aspect {
   is: string;
@@ -31,14 +32,15 @@ export namespace Aspect {
   }
 
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object';
-  export type Type =
-    { is: 'type', type: 'void' } |
-    { is: 'type', type: 'primitive', name: PrimaryType } |
-    { is: 'type', type: 'class', name: string } |
-    { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" } |
-    { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"} |
-    { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
-  export type TypeValidator = ((value) => boolean) & { errors: any[] };
+  export type TypeVoid       =  { is: 'type', type: 'void' };
+  export type TypePrimitive  =  { is: 'type', type: 'primitive', name: PrimaryType };
+  export type TypeClass      =  { is: 'type', type: 'class', name: string };
+  export type TypeArray      =  { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" };
+  export type TypeSet        =  { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"};
+  export type TypeDictionary =  { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
+  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary;
+  export type TypeValidator = AttributeTypes.Validator0<any>;
+  export type AttributeTypeValidator = AttributeTypes.Validator<any, VersionedObjectManager<VersionedObject>>;
   export interface Definition {
     name: string;
     version: number;
@@ -66,7 +68,7 @@ export namespace Aspect {
   };
   export interface InstalledMethod extends Method {
     argumentValidators: TypeValidator[];
-    returnValidator: TypeValidator;
+    returnValidator: TypeValidator | undefined;
     transport: FarTransport | undefined;
   };
   export interface InstalledFarMethod extends InstalledMethod {
@@ -77,10 +79,9 @@ export namespace Aspect {
     attribute: string
   };
   export interface InstalledAttribute {
-    name: string;
+    name: keyof VersionedObject;
     type: Type;
-    versionedObject: string | undefined;
-    validator: TypeValidator;
+    validator: AttributeTypeValidator;
     relation: Reference | undefined;
   };
   export interface Installed {
@@ -125,25 +126,37 @@ const voAttributes = {
 };
 installedAttributesOnImpl.set(VersionedObject.definition.name, voAttributes)
 
-const IdValidator = Object.assign(function IdValidator(value) : boolean {
-  return typeof value === "string" || typeof value === "number";
-}, { errors: [] });
-const VersionValidator = Object.assign(function VersionValidator(value) : boolean {
-  return typeof value === "number";
-}, { errors: [] });
+export const validateId: AttributeTypes.Validator0<Identifier> = {
+  validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
+    if (typeof value !== "string" && typeof value !== "number")
+      path.diagnostic(reporter, { type: "warning", msg: `an identifier must be a string or a number, got ${typeof value}`});
+    else if (value === "")
+      path.diagnostic(reporter, { type: "warning", msg: `an identifier can't be an empty string `});
+    else
+      return value;
+    return undefined;
+  }
+};
+export const validateVersion: AttributeTypes.Validator0<number> = {
+  validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
+    if (typeof value !== "number" || !Number.isInteger(value))
+      path.diagnostic(reporter, { type: "warning", msg: `a version must be an integer, got ${typeof value}`});
+    else
+      return value;
+    return undefined;
+  }
+};
 
 voAttributes.attributes.set("_id", {
   name: "_id",
   type: { is: "type", type: "primitive", name: "any" as Aspect.PrimaryType },
-  versionedObject: undefined,
-  validator: IdValidator,
+  validator: validateId,
   relation: undefined,
 });
 voAttributes.attributes.set("_version", {
   name: "_version",
   type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
-  versionedObject: undefined,
-  validator: VersionValidator,
+  validator: validateVersion,
   relation: undefined,
 });
 export class AspectCache {
@@ -246,8 +259,8 @@ export class AspectCache {
     let isFar = list[0] === "far";
     list[1].forEach(method => {
       let farMethod = Object.assign({}, method, {
-        argumentValidators: method.argumentTypes.map(t => createValidator(t)),
-        returnValidator: createValidator(method.returnType),
+        argumentValidators: method.argumentTypes.map(t => this.createValidator(false, t)),
+        returnValidator: method.returnType.type !== "void" ? this.createValidator(false, method.returnType) : undefined,
         transport: isFar ? Aspect.farTransportStub : undefined
       });
       ret.set(method.name, farMethod);
@@ -295,9 +308,8 @@ export class AspectCache {
   }
   private installAttribute(from: VersionedObjectConstructor<VersionedObject>, attribute: Aspect.Attribute) {
     const data: Aspect.InstalledAttribute = {
-      name: attribute.name,
-      validator: createValidator(attribute.type),
-      versionedObject: attribute.type.type === "class" ? attribute.type.name : undefined,
+      name: attribute.name as keyof VersionedObject,
+      validator: this.createValidator(true, attribute.type),
       type: attribute.type,
       relation: undefined
     };
@@ -318,13 +330,11 @@ export class AspectCache {
   private installAttributeData(from: VersionedObjectConstructor<VersionedObject>, data: Aspect.InstalledAttribute) {
     Object.defineProperty(from.prototype, data.name, {
       enumerable: true,
-      get(this: VersionedObject) { return this.__manager.attributeValue(data.name as keyof VersionedObject) },
+      get(this: VersionedObject) { return this.__manager.attributeValue(data.name) },
       set(this: VersionedObject, value) {
-        if (VersionedObjectManager.SafeMode && !data.validator(value))
-          throw new Error(`attribute value is invalid`);
-        if (value && data.versionedObject)
-          value = this.__manager._controlCenter.registeredObject(value.id()) || value; // value will be merged later
-        this.__manager.setAttributeValueFast(data.name as keyof VersionedObject, value, data);
+        let manager = this.manager();
+        value = validateValue(value, new AttributePath(manager.aspect().name, manager.id(), '.', data.name), data.validator, manager);
+        this.__manager.setAttributeValueFast(data.name, value, data);
       }
     });
     return data;
@@ -362,6 +372,78 @@ export class AspectCache {
     aspect.categories.forEach(c => { categories.add(c); this.installCategoryCache(this.cachedCategory(c, from), on, from, true); });
     aspect.farCategories.forEach(c => { categories.add(c); this.installCategoryCache(this.cachedCategory(c, from), on, from, false); });
   }
+  
+  private arrayValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*') : Aspect.TypeValidator {
+    let validateItem = this.createValidator(forAttribute, itemType, lvl + 1);
+    return { validate: function validateArray(reporter: Reporter, path: AttributePath, value: any) {
+      if (Array.isArray(value)) {
+        if (forAttribute)
+          value = [...value];
+        return validate(reporter, path, value, validateItem, min, max);
+      }
+      else
+        path.diagnostic(reporter, { type: "warning", msg: `attribute must be an array`});
+      return undefined;
+    }};
+  }
+  private setValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*') : Aspect.TypeValidator {
+    let validateItem = this.createValidator(forAttribute, itemType, lvl + 1);
+    return { validate: function validateSet(reporter: Reporter, path: AttributePath, value: any) {
+      if (value instanceof Set) {
+        if (forAttribute)
+          value = new Set(value);
+        return validate(reporter, path, value, validateItem, min, max);
+      }
+      else
+        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a set`});
+      return undefined;
+    }};
+  }
+  private propertiesValidator(forAttribute: boolean, lvl: number, properties:  { [s: string]: Aspect.Type }) : Aspect.TypeValidator {
+    let extensions: AttributeTypes.Extensions<any, VersionedObjectManager> = {};
+    let objectForKeyValidator: Aspect.TypeValidator = AttributeTypes.validateAnyToUndefined;
+    for (let k in properties) {
+      if (k === '*')
+        objectForKeyValidator = this.createValidator(forAttribute, properties[k], lvl + 1);
+      else
+        extensions[k] = this.createValidator(forAttribute, properties[k], lvl + 1);
+    }
+    return AttributeTypes.objectValidator(extensions, objectForKeyValidator);
+  }
+  private classValidator(forAttribute: boolean, classname: string, allowUndefined: boolean) : Aspect.TypeValidator {
+    if (!forAttribute) return AttributeTypes.validateAny;
+
+    return { validate: function validateClass(reporter: Reporter, path: AttributePath, value: any) {
+      if (value === undefined && allowUndefined)
+        return value;
+      if (value instanceof VersionedObject) {
+        let cstor: Function | undefined = value.controlCenter().aspect(classname);
+        if (!cstor)
+          path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, unable to find aspect`});
+        else if (value instanceof cstor)
+          return value;
+        else
+          path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.manager().name()}`});
+      }
+      else if (typeof value === "object")
+        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.constructor ? value.constructor.name : value}`});
+      else
+        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${typeof value}`});
+      return value;
+    }}
+  }
+  private createValidator(forAttribute: boolean, type: Aspect.Type, lvl = 0) : Aspect.TypeValidator {
+    if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class")
+      throw new Error(`cannot create deep type validator for attribute`);
+    switch (type.type) {
+      case "primitive": return primitiveValidator[type.name];
+      case "class": return this.classValidator(forAttribute, type.name, lvl === 0);
+      case "array": return this.arrayValidator(forAttribute, lvl, type.itemType, type.min, type.max);
+      case "set": return this.setValidator(forAttribute, lvl, type.itemType, type.min, type.max);
+      case "dictionary": return this.propertiesValidator(forAttribute, lvl, type.properties);
+    }
+    throw new Error(`cannot create ${type.type} type validator`);
+  }
 }
   
 function findReferences(type: Aspect.Type, apply: (ref: string) => void) {
@@ -378,21 +460,83 @@ function installPublicMethod(cc: ControlCenter, aspect: Aspect.Installed, public
   let publicImpl = localImplInPrototype(prototype, publicMethod);
   transport.register(cc, aspect, publicMethod, protectPublicImpl(prototype, publicMethod, publicImpl));
 }*/
-
-function createValidator(type: Aspect.Type) : Aspect.TypeValidator {
-  // TODO: provide simple and shared validators for primitive types or cache validators
-  let jsonSchema = convertTypeToJsonSchema(type);
-  return <Aspect.TypeValidator>ajv.compile(jsonSchema);
+const primitiveValidator: { [s in Aspect.PrimaryType]: Aspect.TypeValidator } = {
+  'identifier': validateId,
+  'array': AttributeTypes.validateArray,
+  'any': AttributeTypes.validateAny,
+  'string': { validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
+    if (typeof value === "string")
+      return value;
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a string, got ${typeof value}`});
+    return undefined;
+  }},
+  'integer': { validate: function validateInteger(reporter: Reporter, path: AttributePath, value: any) {
+    if (typeof value === "number" && Number.isInteger(value))
+      return value;
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must be an integer, got ${typeof value}`});
+    return undefined;
+  }},
+  'decimal': { validate: function validateDecimal(reporter: Reporter, path: AttributePath, value: any) {
+    if (typeof value === "number" && Number.isFinite(value))
+      return value;
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a decimal, got ${typeof value}`});
+    return undefined;
+  }},
+  'dictionary': { validate: function validateDictionary(reporter: Reporter, path: AttributePath, value: any) {
+    if (typeof value === "object")
+      return value;
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a dictionary, got ${typeof value}`});
+    return undefined;
+  }},
+  'object': { validate: function validateObject(reporter: Reporter, path: AttributePath, value: any) {
+    if (typeof value === "object")
+      return value;
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must be an object, got ${typeof value}`});
+    return undefined;
+  }},
+  'date': { validate: function validateDate(reporter: Reporter, path: AttributePath, value: any) {
+    if (value instanceof Date)
+      return value;
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a Date, got ${typeof value}`});
+    return undefined;
+  }},
+  'localdate': { validate: function validateLocalDate(reporter: Reporter, path: AttributePath, value: any) {
+    if (value instanceof Date)
+      return value;
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a Date, got ${typeof value}`});
+    return undefined;
+  }},
 }
-
+function validate(
+  reporter: Reporter, path: AttributePath,
+  collection: any, validateItem: Aspect.TypeValidator, 
+  min: number, max: number | '*'
+) {
+  path.pushArray();
+  if (collection.size < min)
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must contains at least ${min} elements`});
+  if (max !== '*' && collection.size > max)
+    path.diagnostic(reporter, { type: "warning", msg: `attribute must contains at most ${max} elements`});
+  collection.forEach((v, idx) => validateItem.validate(reporter, path.setArrayKey(idx), v));
+  path.popArray();
+  return collection;
+}
+function validateValue(value, path: AttributePath, validator: Aspect.TypeValidator): any;
+function validateValue(value, path: AttributePath, validator: Aspect.AttributeTypeValidator, manager: VersionedObjectManager): any;
+function validateValue(value, path: AttributePath, validator: Aspect.AttributeTypeValidator, manager?: VersionedObjectManager) {
+  let reporter = new Reporter();
+  value = validator.validate(reporter, path, value, manager!);
+  if (reporter.diagnostics.length > 0)
+    throw new Error(`attribute ${path} value is invalid: ${JSON.stringify(reporter.diagnostics, null, 2)}`);
+  return value;
+}
 function protectLocalImpl(localImpl: (...args) => any, argumentValidators: Aspect.TypeValidator[], returnValidator: Aspect.TypeValidator) {
+  let path = new AttributePath(localImpl.name, ":");
   return function protectedLocalImpl(this) {
     for (var i = 0, len = argumentValidators.length; i < len; i++)
-      if (!argumentValidators[i](arguments[i]))
-        throw new Error(`argument ${i} is invalid`);
+      validateValue(arguments[i], path.set(i), argumentValidators[i]);
     var ret = localImpl.apply(this, arguments);
-    if (!returnValidator(ret))
-      throw new Error(`return value is invalid`);
+    ret = validateValue(ret, path.set("ret"), returnValidator);
     return ret;
   }
 }
@@ -439,70 +583,16 @@ function fastSafeCall(farImpl: Function, self, arg0): Promise<any> {
 }
 
 function protectPublicImpl(prototype, farMethod: Aspect.InstalledMethod, farImpl: Function) : (this, arg0) => Promise<any> {
-    let argumentValidators = farMethod.argumentValidators;
-    let returnValidator = farMethod.returnValidator;
-    return function(this, arg0) {
-      if (argumentValidators[0] && !argumentValidators[0](arg0))
-        return Promise.reject(`argument is invalid`);
-      let ret: Promise<any> = fastSafeCall(farImpl, this, arg0);
-      return ret.then(function(ret) {
-        return (!returnValidator || returnValidator(ret)) ? Promise.resolve(ret) : Promise.reject(`return value is invalid`);
-      });
-    };
-}
-
-function convertTypeToJsonSchema(type: Aspect.Type): any { 
-  switch (type.type) {
-    case 'primitive':
-      switch (type.name) {
-        case 'integer':    return { type: "integer"   };
-        case 'decimal':    return { type: "number"    };
-        case 'date':       return { instanceof: "Date" };
-        case 'localdate':  return { type: "localdate" };
-        case 'string':     return { type: "string"    };
-        case 'array':      return { type: "array"     };
-        case 'dictionary': return { type: "object"    };
-        case 'object':     return { type: "object"    };
-        case 'identifier': return { type: "string"    };
-      }
-      // console.warn(`unsupported primitive type: ${type.name}`);
-      return {};
-    case 'class':
-    case 'set':
-      return {}; // TODO
-    case 'array': {
-      let ret: any = {
-        type: "array",
-        items: convertTypeToJsonSchema(type.itemType)
-      };
-      if (typeof type.min === "number")
-        ret.minItems = type.min;
-      if (typeof type.max === "number")
-        ret.maxItems = type.max;
+  let path = new AttributePath(farMethod.name, ":");
+  let argumentValidators = farMethod.argumentValidators;
+  let returnValidator = farMethod.returnValidator;
+  return function(this, arg0) {
+    if (argumentValidators[0])
+      validateValue(arg0, path.setArrayKey(0), argumentValidators[0]);
+    let ret: Promise<any> = fastSafeCall(farImpl, this, arg0);
+    return ret.then(function(ret) {
+      ret = returnValidator ? validateValue(ret, path.setArrayKey("ret"), returnValidator) : ret;
       return ret;
-    }
-    case 'dictionary': {
-      let properties = {};
-      let patternProperties = {};
-      let required: string[] = [];
-      Object.keys(type.properties).forEach(k => {
-        let schema = convertTypeToJsonSchema(type.properties[k]);
-        if (k !== '*') {
-          properties[k] = schema;
-          required.push(k);
-        }
-        else {
-          patternProperties["^[a-z0-9]+$"] = schema;
-        }
-      });
-      return {
-        type: "object",
-        properties: properties,
-        patternProperties: patternProperties,
-        required: required.length ? required : undefined
-      };
-    }
-    default:
-      throw new Error(`unsupported type: ${(type as any).type }`);
+    });
   }
 }

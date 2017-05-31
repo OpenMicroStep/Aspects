@@ -30,9 +30,9 @@ function init(flux: Flux<Context>) {
   ctx.c1 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 2" });
   ctx.c2 = Object.assign(new Car(), { _name: "Peugeot", _model: "3008 DKR" });
   ctx.c3 = Object.assign(new Car(), { _name: "Peugeot", _model: "4008 DKR" });
-  ctx.p0 = Object.assign(new People(), { _name: "Lisa Simpsons" , _firstname: "Lisa" , _lastname: "Simpsons", _birthDate: new Date() , _cars: ImmutableSet() });
-  ctx.p1 = Object.assign(new People(), { _name: "Bart Simpsons" , _firstname: "Bart" , _lastname: "Simpsons", _birthDate: new Date(0), _cars: ImmutableSet() });
-  ctx.p2 = Object.assign(new People(), { _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: new Date() , _cars: ImmutableSet() });
+  ctx.p0 = Object.assign(new People(), { _name: "Lisa Simpsons" , _firstname: "Lisa" , _lastname: "Simpsons", _birthDate: new Date()  });
+  ctx.p1 = Object.assign(new People(), { _name: "Bart Simpsons" , _firstname: "Bart" , _lastname: "Simpsons", _birthDate: new Date(0) });
+  ctx.p2 = Object.assign(new People(), { _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: new Date()  });
   ctx.component = {};
   cc.registerComponent(ctx.component);
   cc.registerObjects(ctx.component, [ctx.c0, ctx.c1, ctx.c2, ctx.c3, ctx.p0, ctx.p1, ctx.p2]);
@@ -152,19 +152,19 @@ function save_c0_c1_c2_c3_p0_p1_p2(f: Flux<Context>) {
 function save_relation_c0p0_c1p0_c2p1(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   assert.equal(c0.manager().hasChanges(), false);
-  assert.sameMembers(p0._cars.toArray(), []);
+  assert.sameMembers([...p0._cars], []);
   c0._owner = p0;
-  assert.sameMembers(p0._cars.toArray(), [c0]);
+  assert.sameMembers([...p0._cars], [c0]);
   assert.equal(c0.manager().hasChanges(), true);
   assert.equal(c1.manager().hasChanges(), false);
   c1._owner = p0;
-  assert.sameMembers(p0._cars.toArray(), [c0, c1]);
+  assert.sameMembers([...p0._cars], [c0, c1]);
   assert.equal(c1.manager().hasChanges(), true);
   c2._owner = p1;
-  assert.sameMembers(p1._cars.toArray(), [c2]);
+  assert.sameMembers([...p1._cars], [c2]);
 
-  db.farPromise('rawSave', [c0, c1, c2]).then((envelop) => {
-    assert.sameMembers(envelop.result(), [c0, c1, c2]);
+  db.farPromise('rawSave', [c0, c1, c2, p0, p1]).then((envelop) => {
+    assert.sameMembers(envelop.result(), [c0, c1, c2, p0, p1]);
     assert.equal(c0.version(), 1);
     assert.equal(c0.manager().hasChanges(), false);
     assert.equal(c0._owner, p0);
