@@ -261,22 +261,23 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let remoteAttributes = new Map<string, any>();
       let vo = cc.registeredObject(id) || new cstor();
       vo.manager().setId(id);
-      ids.push(db_id);
+      ids.push(id);
       cc.registerObjects(component, [vo]);
       remotes.set(vo, remoteAttributes);
       for (let i = 0; i < mono_attributes.length; i++) {
         let attr = mono_attributes[i];
         let aspectAttr = aspect.attributes.get(attr)!;
         let sqlattr = this.mapper!.get(attr);
-        let value = this.loadValue(ctx, component, aspectAttr, sqlattr.fromDb(row[attr]));
+        let value = this.loadValue(ctx, component, aspectAttr.type, sqlattr.fromDb(row[attr]));
         remoteAttributes.set(attr, value);
       }
     }
     for (let mult_attribute of mult_attributes) {
       let q = new SqlMappedQuery();
       q.setMapper(ctx, this.mapper!.name);
-      q.buildConstraintValue(ctx, "_id", ConstraintType.In, ids);
-      let mult_query = ctx.maker.select(q.sql_columns(ctx, ["_id", mult_attribute]), q.sql_from(ctx), [], q.sql_where(ctx));
+      q.addConstraint(q.buildConstraintValue(ctx, "_id", ConstraintType.In, ids));
+      let mult_columns = q.sql_columns(ctx, ["_id", mult_attribute]);
+      let mult_query = ctx.maker.select(mult_columns, q.sql_from(ctx), [], q.sql_where(ctx));
       let mult_rows = await db.select(mult_query);
       let mult_attr = aspect.attributes.get(mult_attribute)!;
       let mult_sql_attr = this.mapper!.get(mult_attribute);
@@ -286,7 +287,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let id = this.mapper!.fromDbKey(attribute_id.fromDbKey(row["_id"]));
         let vo = cc.registeredObject(id)!;
         let remoteAttributes = remotes.get(vo)!;
-        let value = this.loadValue(ctx, component, mult_attr, mult_sql_attr.fromDb(row[mult_attribute]));
+        let value = this.loadValue(ctx, component, (mult_attr.type as any).itemType, mult_sql_attr.fromDb(row[mult_attribute]));
         let c = remoteAttributes.get(mult_attribute);
         if (isSet) {
           if (!c) 
@@ -303,13 +304,14 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return this.mergeRemotes(remotes);
   }
 
-  loadValue(ctx: SqlMappedSharedContext, component: AComponent, aspectAttr: Aspect.InstalledAttribute, value) {
-    if (aspectAttr.versionedObject) {
-      let mapper = ctx.mappers[aspectAttr.versionedObject];
+  loadValue(ctx: SqlMappedSharedContext, component: AComponent, type: Aspect.Type, value) {
+    if (type.type === "class") {
+      let classname = type.name;
+      let mapper = ctx.mappers[classname];
       let subid = mapper.fromDbKey(value);
       value = ctx.controlCenter.registeredObject(subid);
       if (!value) {
-        value = new (ctx.controlCenter.aspect(aspectAttr.versionedObject)!)();
+        value = new (ctx.controlCenter.aspect(classname)!)();
         value.manager().setId(subid);
         ctx.controlCenter.registerObjects(component, [value]);
       }

@@ -207,6 +207,41 @@ function query_cars_peoples(f: Flux<Context>) {
     f.continue();
   });
 }
+
+function query_cars_peoples_relation(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let c0_id = c0.id()
+  let p0_id = p0.id()
+  cc.unregisterObjects(component, [c0, p0]);
+  db.farPromise('rawQuery', { results: [
+    { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0_id }, scope: ['_name', '_owner', '_model']                      },
+    { name: "peoples", where: { $instanceOf: People            , _id: p0_id }, scope: ['_firstname', '_lastname', '_birthDate', '_cars'] },
+  ]}).then((envelop) => {
+    let cars = envelop.result()['cars'];
+    let peoples = envelop.result()['peoples'];
+    assert.equal(cars.length, 1);
+    assert.equal(peoples.length, 1);
+    let lc0 = cars[0] as typeof c0;
+    let lp0 = peoples[0] as typeof p0;
+    assert.notEqual(lc0, c0, "objects where unregistered, the datasource should not return the same object");
+    assert.notEqual(lp0, p0, "objects where unregistered, the datasource should not return the same object");
+    assert.equal(lc0._name, c0._name);
+    assert.equal(lc0._owner!.id(), c0._owner!.id());
+    assert.equal(lc0._owner, lp0);
+    assert.equal(lc0._model, c0._model);
+    c0 = f.context.c0 = lc0;
+
+    assert.equal(lp0._firstname, p0._firstname);
+    assert.equal(lp0._lastname, p0._lastname);
+    assert.equal(lp0._birthDate!.getTime(), p0._birthDate!.getTime());
+    assert.sameMembers([...lp0._cars], [c0, c1]);
+    p0 = f.context.p0 = lp0;
+
+    cc.registerObjects(component, [p0, c0]);
+    f.continue();
+  });
+}
+
 function query_elementof(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { // All persons with a car and their cars
@@ -417,6 +452,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       save_c0_c1_c2_c3_p0_p1_p2,
       save_relation_c0p0_c1p0_c2p1,
       query_cars_peoples,
+      query_cars_peoples_relation,
       query_elementof,
       query_intersection,
       query_elementof_intersection,
