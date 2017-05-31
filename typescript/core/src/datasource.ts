@@ -113,13 +113,25 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
 
 export namespace DataSourceInternal {
   type VarDep = Map<ObjectSet, Set<ObjectSet>>;
-  type Solution = {
-    partial: Set<VersionedObject>,
-    full: Set<VersionedObject> | undefined,
+  type Solution<T> = {
+    partial: Set<T>,
+    full: Set<T> | undefined,
   };
-  class FilterContext {
-    _resolution = new Map<ObjectSet, Solution>();
-    constructor(public objects: VersionedObject[] = []) {}
+  export type Mapper<T> = {
+    aspect(object: T): Aspect.Installed;
+    has(object: T, attribute: string): boolean;
+    get(object: T, attribute: string): any;
+    todb(object: T, attribute: string, value): any;
+  };
+  export const versionedObjectMapper: Mapper<VersionedObject> = {
+    aspect(vo: VersionedObject) { return vo.manager().aspect(); },
+    has(vo: VersionedObject, attribute: string) { return vo.manager().hasAttributeValue(attribute as keyof VersionedObject); },
+    get(vo: VersionedObject, attribute: string) { return vo.manager().attributeValue(attribute as keyof VersionedObject); },
+    todb(vo: VersionedObject, attribute: string, value) { return value; }
+  }
+  export class FilterContext<T> {
+    _resolution = new Map<ObjectSet, Solution<T>>();
+    constructor(public objects: T[] = [], public mapper: Mapper<T>) {}
 
     solution(set: ObjectSet) {
       let s = this._resolution.get(set)!
@@ -170,7 +182,7 @@ export namespace DataSourceInternal {
       return order;
     }
 
-    private pass(set: ObjectSet, constraint: Constraint, prefix: string, object: VersionedObject) : boolean {
+    private pass(set: ObjectSet, constraint: Constraint, prefix: string, object: T) : boolean {
       let ok = true;
       if (constraint instanceof ConstraintTree) {
         switch(constraint.type) {
@@ -179,20 +191,20 @@ export namespace DataSourceInternal {
         }
       }
       else if (constraint instanceof ConstraintValue) {
-        ok = object.manager().hasAttributeValue(constraint.attribute as keyof VersionedObject) &&
-             pass_value(constraint.type, object.manager().attributeValue(constraint.attribute as keyof VersionedObject), constraint.value);
+        ok = this.mapper.has(object, constraint.attribute) &&
+             pass_value(constraint.type, this.mapper.get(object, constraint.attribute), this.mapper.todb(object, constraint.attribute, constraint.value));
       }
       return ok;
     }
 
-    private solvePartial(set: ObjectSet) : Set<VersionedObject> {
-      let ret = new Set<VersionedObject>();
+    private solvePartial(set: ObjectSet) : Set<T> {
+      let ret = new Set<T>();
       for (let object of this.objects) {
         let ok = false;
         switch (set.type) {
           case ConstraintType.InstanceOf:
           case ConstraintType.MemberOf: 
-            ok = object.manager().aspect().name === (set.aspect as Aspect.Installed).name; // TODO: real instanceof/memberof
+            ok = this.mapper.aspect(object).name === (set.aspect as Aspect.Installed).name; // TODO: real instanceof/memberof
             break;
           case ConstraintType.UnionOf:
             ok = (set.aspect as ObjectSet[]).some(s => this.solveFull(set).has(object));
@@ -206,7 +218,7 @@ export namespace DataSourceInternal {
       return ret;
     }
 
-    private passVars(set: ObjectSet, set1: ObjectSet, o1: VersionedObject, set2: ObjectSet, o2: VersionedObject, constraint: Constraint, prefix: string) : boolean {
+    private passVars(set: ObjectSet, set1: ObjectSet, o1: T, set2: ObjectSet, o2: T, constraint: Constraint, prefix: string) : boolean {
       let ok = true;
       if (constraint instanceof ConstraintTree) {
         switch(constraint.type) {
@@ -218,18 +230,17 @@ export namespace DataSourceInternal {
         let lset = set.variable(prefix + constraint.leftVariable)!;
         let rset = set.variable(prefix + constraint.rightVariable)!;
         if ((lset === set1 || lset === set2) && (rset === set1 || rset === set2)) {
-          let lm = (lset === set1 ? o1 : o2).manager();
-          let rm = (rset === set1 ? o1 : o2).manager();
-          ok = lm.hasAttributeValue(constraint.leftAttribute as any) && rm.hasAttributeValue(constraint.rightAttribute as any)
-            && pass_value(constraint.type, lm.attributeValue(constraint.leftAttribute as any), rm.attributeValue(constraint.rightAttribute as any));
+          let lo = (lset === set1 ? o1 : o2);
+          let ro = (rset === set1 ? o1 : o2);
+          ok = this.mapper.has(lo, constraint.leftAttribute) && this.mapper.has(ro, constraint.rightAttribute)
+            && pass_value(constraint.type, this.mapper.get(lo, constraint.leftAttribute), this.mapper.get(ro, constraint.rightAttribute));
         }
       }
       return ok;
     }
 
-    solveFull(set: ObjectSet, solution?: Solution) : Set<VersionedObject> {
-      if (!solution)
-        solution = this.solution(set);
+    solveFull(set: ObjectSet) : Set<T> {
+      let solution = this.solution(set);
       if (!solution.full) {
         if (set.variables) {
           let order = this.buildOrder(set);
@@ -846,7 +857,7 @@ export namespace DataSourceInternal {
   export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[], findAspect: (name: string) => Aspect.Installed | undefined) : VersionedObject[] {
     let context = new ParseContext(new ParseStack(where), undefined, findAspect);
     let set = context.parseSet(where, "where");
-    let sctx = new FilterContext(objects);
+    let sctx = new FilterContext(objects, versionedObjectMapper);
     return [...sctx.solveFull(set)];
   }
 
@@ -861,9 +872,11 @@ export namespace DataSourceInternal {
 
   export function applySets(sets: ObjectSet[], objects: VersionedObject[], namedOnly: true): Map<ObjectSet & { name: string }, VersionedObject[]>
   export function applySets(sets: ObjectSet[], objects: VersionedObject[], namedOnly?: boolean): Map<ObjectSet, VersionedObject[]>
-  export function applySets(sets: ObjectSet[], objects: VersionedObject[], namedOnly = true): Map<ObjectSet, VersionedObject[]> {
+  export function applySets<T>(sets: ObjectSet[], objects: T[], namedOnly: true, mapper: Mapper<T>): Map<ObjectSet & { name: string }, VersionedObject[]>
+  export function applySets<T>(sets: ObjectSet[], objects: T[], namedOnly: boolean, mapper: Mapper<T>): Map<ObjectSet, VersionedObject[]>
+  export function applySets(sets: ObjectSet[], objects: any[], namedOnly = true, mapper: Mapper<any> = versionedObjectMapper): Map<ObjectSet, VersionedObject[]> {
     let ret = new Map<ObjectSet, VersionedObject[]>();
-    let sctx = new FilterContext(objects);
+    let sctx = new FilterContext(objects, mapper);
     for (let set of sets) {
       if (set.name || !namedOnly) {
         ret.set(set, [...sctx.solveFull(set)]);
