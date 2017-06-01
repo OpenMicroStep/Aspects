@@ -82,10 +82,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     return this.farPromise('rawLoad', w);
   },
   async safeSave(this, objects: VersionedObject[]) {
-    let ok = validateConsistency.call(this, null /* reporter*/, objects);
-    if (ok)
-      return this.farPromise('rawSave', objects);
-    return Promise.reject(""/* reporter.diagnostics */);
+    return this.farPromise('rawSave', objects);
   }
 });
 
