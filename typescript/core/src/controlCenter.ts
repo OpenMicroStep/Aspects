@@ -123,4 +123,16 @@ export class ControlCenter {
       o.manager().mergeWithRemote(m);
     return o || object;
   }
+
+  /// category Transport
+  installTransport(transport: FarTransport, filter?: (cstor: Aspect.Constructor) => boolean) {
+    this._aspects.forEach(cstor => {
+      if (filter && !filter(cstor))
+        return;
+      cstor.aspect.farMethods.forEach(method => {
+        if (method.transport === Aspect.farTransportStub)
+          method.transport = transport;
+      });
+    });
+  }
 }
