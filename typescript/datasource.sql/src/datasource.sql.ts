@@ -158,7 +158,7 @@ export class SqlDataSourceImpl extends DataSource {
       let set = new ObjectSet('load');
       set.scope = scope;
       set.setAspect(ConstraintType.InstanceOf, aspect);
-      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, "_id", list));
+      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set.aspectAttribute("_id"), list));
       sets.push(set);
     });
     let results = await this.scoped(component => Promise.all(sets.map(s => this.execute(this.connector, s, component))));

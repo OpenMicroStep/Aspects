@@ -79,9 +79,9 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   }
 
 
-  buildConstraintValue(ctx: SharedContext, attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any) : SqlBinding {
-    value = Array.isArray(value) ? value.map(v => this.mapValue(ctx, attribute, v)) : this.mapValue(ctx, attribute, value);
-    if (operator === ConstraintType.Text && !attribute) {
+  buildConstraintValue(ctx: SharedContext, attribute: Aspect.InstalledAttribute, operator: DataSourceInternal.ConstraintOnValueTypes, value: any) : SqlBinding {
+    value = Array.isArray(value) ? value.map(v => this.mapValue(ctx, attribute.name, v)) : this.mapValue(ctx, attribute.name, value);
+    if (operator === ConstraintType.Text && attribute.name === "_id") {
       let constraints: SqlBinding[] = [];
       this.aspect(ctx).attributes.forEach(attr => {
         if (attr.type.type === "primitive")
@@ -90,7 +90,9 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       return ctx.maker.or(constraints);
     }
     else {
-      return ctx.maker.op(this.sqlColumn(ctx, attribute), operator, value);
+      if (operator === ConstraintType.Has)
+        operator = ConstraintType.Equal;
+      return ctx.maker.op(this.sqlColumn(ctx, attribute.name), operator, value);
     }
   }
 
@@ -123,8 +125,8 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     else if (constraint instanceof DataSourceInternal.ConstraintVariable) {
       let lset = set.variable(prefix + constraint.leftVariable)!;
       let rset = set.variable(prefix + constraint.rightVariable)!;
-      let lc = this.buildVariable(ctx, lset, constraint.leftAttribute);
-      let rc = this.buildVariable(ctx, rset, constraint.rightAttribute);
+      let lc = this.buildVariable(ctx, lset, constraint.leftAttribute.name);
+      let rc = this.buildVariable(ctx, rset, constraint.rightAttribute.name);
       return ctx.maker.compare(lc, constraint.type, rc);
     }
     throw new Error(`unsupported constraint`);
@@ -275,7 +277,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     for (let mult_attribute of mult_attributes) {
       let q = new SqlMappedQuery();
       q.setMapper(ctx, this.mapper!.name);
-      q.addConstraint(q.buildConstraintValue(ctx, "_id", ConstraintType.In, ids));
+      q.addConstraint(q.buildConstraintValue(ctx, aspect.attributes.get("_id")!, ConstraintType.In, ids));
       let mult_columns = q.sql_columns(ctx, ["_id", mult_attribute]);
       let mult_query = ctx.maker.select(mult_columns, q.sql_from(ctx), [], q.sql_where(ctx));
       let mult_rows = await db.select(mult_query);

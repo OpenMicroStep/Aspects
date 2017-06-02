@@ -39,6 +39,12 @@ function serialize(s, map = new Map()) {
         }
         if (r.aspect && typeof r.aspect.name === "string")
           r.aspect = r.aspect.name;
+        if (typeof r.leftAttribute === "object")
+          r.leftAttribute = r.leftAttribute.name;
+        if (typeof r.rightAttribute === "object")
+          r.rightAttribute = r.rightAttribute.name;
+        if (typeof r.attribute === "object")
+          r.attribute = r.attribute.name;
       }
     }
   }

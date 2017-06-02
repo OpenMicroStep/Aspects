@@ -191,8 +191,8 @@ export namespace DataSourceInternal {
         }
       }
       else if (constraint instanceof ConstraintValue) {
-        ok = this.mapper.has(object, constraint.attribute) &&
-             pass_value(constraint.type, this.mapper.get(object, constraint.attribute), this.mapper.todb(object, constraint.attribute, constraint.value));
+        ok = this.mapper.has(object, constraint.attribute.name) &&
+             pass_value(constraint.type, this.mapper.get(object, constraint.attribute.name), this.mapper.todb(object, constraint.attribute.name, constraint.value));
       }
       return ok;
     }
@@ -232,8 +232,8 @@ export namespace DataSourceInternal {
         if ((lset === set1 || lset === set2) && (rset === set1 || rset === set2)) {
           let lo = (lset === set1 ? o1 : o2);
           let ro = (rset === set1 ? o1 : o2);
-          ok = this.mapper.has(lo, constraint.leftAttribute) && this.mapper.has(ro, constraint.rightAttribute)
-            && pass_value(constraint.type, this.mapper.get(lo, constraint.leftAttribute), this.mapper.get(ro, constraint.rightAttribute));
+          ok = this.mapper.has(lo, constraint.leftAttribute.name) && this.mapper.has(ro, constraint.rightAttribute.name)
+            && pass_value(constraint.type, this.mapper.get(lo, constraint.leftAttribute.name), this.mapper.get(ro, constraint.rightAttribute.name));
         }
       }
       return ok;
@@ -280,6 +280,7 @@ export namespace DataSourceInternal {
     NotIn,
     SubIn,
     SubNotIn,
+    Has,
     InstanceOf,
     MemberOf,
     UnionOf,
@@ -293,7 +294,8 @@ export namespace DataSourceInternal {
     ConstraintType.GreaterThan |
     ConstraintType.GreaterThanOrEqual |
     ConstraintType.LessThan |
-    ConstraintType.LessThanOrEqual;
+    ConstraintType.LessThanOrEqual |
+    ConstraintType.Has;
   export type ConstraintBetweenSetTypes = 
     ConstraintBetweenColumnsTypes |
     ConstraintType.In |
@@ -314,7 +316,7 @@ export namespace DataSourceInternal {
   export class ConstraintValue {
     constructor(
       public type: ConstraintOnValueTypes,
-      public attribute: string,
+      public attribute: Aspect.InstalledAttribute,
       public value: any) {}
   }
   
@@ -322,15 +324,15 @@ export namespace DataSourceInternal {
     constructor(
       public type: ConstraintBetweenColumnsTypes,
       public leftVariable: string,
-      public leftAttribute: string,
+      public leftAttribute: Aspect.InstalledAttribute,
       public rightVariable: string,
-      public rightAttribute: string) {}
+      public rightAttribute: Aspect.InstalledAttribute) {}
   }
   
   export class ConstraintSub {
     constructor(
       public type: ConstraintType.SubIn | ConstraintType.SubNotIn,
-      public attribute: string,
+      public attribute: Aspect.InstalledAttribute,
       public sub: string) {}
   }
 
@@ -403,6 +405,13 @@ export namespace DataSourceInternal {
       return ret;
     }
 
+    aspectAttribute(name: string) {
+      let attr = (this.aspect as Aspect.Installed).attributes.get(name);
+      if (!attr)
+        throw new Error(`attribute ${name} not found in ${(this.aspect as Aspect.Installed).name}`);
+      return attr;
+    }
+
     sub(sub: ObjectSet) : string {
       if (!this.subs)
         this.subs = new Map();
@@ -439,12 +448,12 @@ export namespace DataSourceInternal {
 
   function c_or (constraints: Constraint[] = [], prefix = "") { return new ConstraintTree(ConstraintType.Or , prefix, constraints); }
   function c_and(constraints: Constraint[] = [], prefix = "") { return new ConstraintTree(ConstraintType.And, prefix, constraints); }
-  function c_value(type: ConstraintOnValueTypes, attribute: string, value: any): ConstraintValue 
+  function c_value(type: ConstraintOnValueTypes, attribute: Aspect.InstalledAttribute, value: any): ConstraintValue 
   { return new ConstraintValue(type, attribute, value); }
-  function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: string, rightVariable: string, rightAttribute: string): ConstraintVariable
+  function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: Aspect.InstalledAttribute, rightVariable: string, rightAttribute: Aspect.InstalledAttribute): ConstraintVariable
   { return new ConstraintVariable(type, leftVariable, leftAttribute, rightVariable, rightAttribute); }
-  function c_subin (sub: string, attribute?: string): ConstraintSub { return new ConstraintSub(ConstraintType.SubIn   , attribute || "_id", sub); }
-  function c_subnin(sub: string, attribute?: string): ConstraintSub { return new ConstraintSub(ConstraintType.SubNotIn, attribute || "_id", sub); }
+  function c_subin (sub: string, attribute: Aspect.InstalledAttribute): ConstraintSub { return new ConstraintSub(ConstraintType.SubIn   , attribute, sub); }
+  function c_subnin(sub: string, attribute: Aspect.InstalledAttribute): ConstraintSub { return new ConstraintSub(ConstraintType.SubNotIn, attribute, sub); }
 
 
   function map(value) {
@@ -452,9 +461,13 @@ export namespace DataSourceInternal {
       value = value.id();
     return value;
   }
-  function find(arr, value) {
+  function find(arr: IterableIterator<any>, value) {
     value = map(value);
-    return Array.isArray(arr) && arr.findIndex(v => map(v) === value) !== -1;
+    for (let v of arr) {
+      if (map(v) === value)
+        return true;
+    }
+    return false;
   }
 
   function pass_value(op: ConstraintOnValueTypes, left, right) {
@@ -477,6 +490,7 @@ export namespace DataSourceInternal {
       }
       case ConstraintType.In: return find(right, left);
       case ConstraintType.NotIn: return !find(right, left);
+      case ConstraintType.Has: return find(left, right);
       case ConstraintType.Exists: {
         return right !== undefined && (!Array.isArray(right) || right.length > 0);
       }
@@ -497,6 +511,7 @@ export namespace DataSourceInternal {
     $exists?: boolean,
     $in?: Instance<ObjectSetDefinition> | (Value[]),
     $nin?: Instance<ObjectSetDefinition> | (Value[]),
+    $has?: Instance<ObjectSetDefinition> | Value,
     [s: string]: Value | ConstraintDefinition
   };
   export interface ObjectSetDefinitionR {
@@ -579,12 +594,12 @@ export namespace DataSourceInternal {
         throw new Error(`diff value must be an array of 2 object set`);
       let add = context.parseSet(value[0], `${set._name}.$diff+`);
       let del = context.parseSet(value[1], `${set._name}.$diff-`);
-      set.and(c_subin(set.sub(add)));
-      set.and(c_subnin(set.sub(del)));
+      set.and(c_subin(set.sub(add), add.aspectAttribute("_id")));
+      set.and(c_subnin(set.sub(del), del.aspectAttribute("_id")));
     },
     $in: (context, set, value) => {
       if (Array.isArray(value))
-        set.and(c_value(ConstraintType.In, "_id", value));
+        set.and(c_value(ConstraintType.In, set.aspectAttribute("_id"), value));
       else {
         let sub = context.parseSet(value, `${set._name}.$in`);
         if (set.setAspectIfCompatible(sub)) // must be compatible
@@ -595,10 +610,10 @@ export namespace DataSourceInternal {
     },
     $nin: (context, set, value) => {
       if (Array.isArray(value))
-        set.and(c_value(ConstraintType.NotIn, "_id", value));
+        set.and(c_value(ConstraintType.NotIn, set.aspectAttribute("_id"), value));
       else {
         let sub = context.parseSet(value, `${set._name}.$nin`);
-        set.and(c_subnin(set.sub(sub)));
+        set.and(c_subnin(set.sub(sub), sub.aspectAttribute("_id")));
       }
     },
     $out: (context, set, value) => {
@@ -607,10 +622,10 @@ export namespace DataSourceInternal {
     $text: (context, set, value) => {
       if (typeof value !== "string")
         throw new Error(`$text value must be a string`);
-      set.and(c_value(ConstraintType.Text, "_id", value));
+      set.and(c_value(ConstraintType.Text, set.aspectAttribute("_id"), value));
     },
   }
-  
+
   const operatorsBetweenSet: { [s: string]: ConstraintBetweenColumnsTypes; } = {
     $eq: ConstraintType.Equal,
     $ne: ConstraintType.NotEqual,
@@ -619,14 +634,26 @@ export namespace DataSourceInternal {
     $lt: ConstraintType.LessThan,
     $lte: ConstraintType.LessThanOrEqual,
   };
-  const operatorsOnValue: { [s: string]: ConstraintOnValueTypes; } = {
-    $eq: ConstraintType.Equal,
-    $ne: ConstraintType.NotEqual,
-    $gt: ConstraintType.GreaterThan,
-    $gte: ConstraintType.GreaterThanOrEqual,
-    $lt: ConstraintType.LessThan,
-    $lte: ConstraintType.LessThanOrEqual,
-    $text: ConstraintType.Text,
+  function alwaysTrue() { return true; }
+  function validateInValue(this: { type: ConstraintOnValueTypes }, attribute: Aspect.InstalledAttribute, value) {
+    if (!Array.isArray(value))
+      throw new Error(`${attribute.name} ${ConstraintType[this.type]} value must be an array`);
+  }
+  function validateHasValue(this: { type: ConstraintOnValueTypes }, attribute: Aspect.InstalledAttribute, value) {
+    if (attribute.type.type !== "array" && attribute.type.type !== "set")
+      throw new Error(`${attribute.name}  must be an array or a set to allow ${ConstraintType[this.type]} operator`);
+  }
+  const operatorsOnValue: { [s: string]: { type: ConstraintOnValueTypes, validate(attribute: Aspect.InstalledAttribute, value): void } } = {
+    $eq  : { type: ConstraintType.Equal             , validate: alwaysTrue },
+    $ne  : { type: ConstraintType.NotEqual          , validate: alwaysTrue },
+    $gt  : { type: ConstraintType.GreaterThan       , validate: alwaysTrue },
+    $gte : { type: ConstraintType.GreaterThanOrEqual, validate: alwaysTrue },
+    $lt  : { type: ConstraintType.LessThan          , validate: alwaysTrue },
+    $lte : { type: ConstraintType.LessThanOrEqual   , validate: alwaysTrue },
+    $in  : { type: ConstraintType.In                , validate: validateInValue },
+    $nin : { type: ConstraintType.NotIn             , validate: validateInValue },
+    $has : { type: ConstraintType.Has               , validate: validateHasValue },
+    $text: { type: ConstraintType.Text              , validate: alwaysTrue },
   };
 
   function isResult(result: Request): result is Result {
@@ -643,8 +670,8 @@ export namespace DataSourceInternal {
       this.original = original;
     }
   }
-  type VarPath = { set: ObjectSet, variable: string, attribute: string };
-  class ParseContext { 
+  type VarPath = { set: ObjectSet, variable: string, attribute: Aspect.InstalledAttribute };
+  class ParseContext {
     constructor(public head: ParseStack, public end: ParseStack | undefined, private _aspect: (name: string) => Aspect.Installed | undefined) {}
 
     derive(head: ParseStack, end: ParseStack | undefined) {
@@ -665,6 +692,7 @@ export namespace DataSourceInternal {
         throw new Error(`cannot pop stack`);
       this.head = this.head.parent;
     }
+    
     resolve(reference: string, deep = Number.MAX_SAFE_INTEGER) : ObjectSet {
       let key = `${reference}=`;
       let v: ObjectSet | undefined, s: ParseStack | undefined = this.head;
@@ -734,17 +762,17 @@ export namespace DataSourceInternal {
         let s = set.variable(k);
         if (!s) {
           s = this.createSet(k);
-          let attr = (set.aspect as Aspect.Installed).attributes.get(parts[i])!; // TODO: add checks
+          let attr = set.aspectAttribute(parts[i]);
           switch(attr.type.type) {
             case "class": s.setAspect(ConstraintType.InstanceOf, this.aspect(attr.type.name)); break;
             default: throw new Error(`invalid constraint attribute type ${attr.type.type} on ${parts[i]}`);
           }
-          let c = c_var(ConstraintType.Equal, set._name, parts[i], k, "_id");
+          let c = c_var(ConstraintType.Equal, set._name, attr, k, s.aspectAttribute("_id"));
           decl(k, s, c);
         }
         set = s;
       }
-      return { set: set, variable: k, attribute: i < parts.length ? parts[i] : "_id" };
+      return { set: set, variable: k, attribute: set.aspectAttribute(i < parts.length ? parts[i] : "_id") };
     }
 
     parseSet(v: Instance<ObjectSetDefinition>, name: string, set?: ObjectSet) : ObjectSet {
@@ -817,9 +845,10 @@ export namespace DataSourceInternal {
             }
             else {
               let o = operatorsOnValue[key];
-              if (o === undefined) 
+              if (!o) 
                 throw new Error(`operator on value '${key}' not found`);
-              set.variable(attr.variable)!.and(c_value(o, attr.attribute, v));
+              o.validate(attr.attribute, v);
+              set.variable(attr.variable)!.and(c_value(o.type, attr.attribute, v));
             }
           }
           this.pop();
