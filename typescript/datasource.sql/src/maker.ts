@@ -134,7 +134,7 @@ export class SqlMaker {
       case ConstraintType.NotIn:              return { sql: `${sql_column} NOT IN (${value.map(v => '?').join(',')})`, bind: value };
       case ConstraintType.Exists:             return { sql: `${sql_column} ${value ? 'NOT NULL' : 'IS NULL'}`, bind: [] };
     }
-    throw new Error(`unsupported op operator ${operator}`);
+    throw new Error(`unsupported op operator ${ConstraintType[operator]}`);
   }
 
   op_bind(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenColumnsTypes, value): SqlBinding {
@@ -152,7 +152,7 @@ export class SqlMaker {
       case ConstraintType.LessThan:           return { sql: `${sql_columnLeft} < ${sql_columnRight}` , bind: [] };
       case ConstraintType.LessThanOrEqual:    return { sql: `${sql_columnLeft} <= ${sql_columnRight}`, bind: [] };
     }
-    throw new Error(`unsupported compare operator ${operator}`);
+    throw new Error(`unsupported compare operator ${ConstraintType[operator]}`);
   }
 
   compare_bind(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenSetTypes, sql_columnRight: SqlBinding): SqlBinding {
