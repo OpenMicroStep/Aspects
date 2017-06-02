@@ -340,19 +340,18 @@ export class VersionedObject implements MSTE.Decodable {
   manager(): VersionedObjectManager<this> { return this.__manager; }
   controlCenter(): ControlCenter { return this.__manager.controlCenter(); }
 
-  farCallback<O extends VersionedObject, R>(this: O, method: string, argument: any, callback: (envelop: Invocation<O, R>) => void) {
-    new Invocation(this, method, argument).farCallback(callback);
+  farCallback<O extends VersionedObject, R>(this: O, method: string, argument: any, callback: (envelop: Invocation<R>) => void) {
+    Invocation.farCallback(this, method, argument, callback);
   }
   farEvent<O extends VersionedObject>(this: O, method: string, argument: any, eventName: string, onObject?: Object) {
-    new Invocation(this, method, argument).farEvent(eventName, onObject);
+    Invocation.farEvent(this, method, argument, eventName, onObject);
   }
-  farPromise<O extends VersionedObject, R>(this: O, method: string, argument: any) : Promise<Invocation<O, R>> {
-    return new Invocation(this, method, argument).farPromise();
+  farPromise<O extends VersionedObject, R>(this: O, method: string, argument: any) : Promise<Invocation<R>> {
+    return Invocation.farPromise(this, method, argument, );
   }
-  farAsync<O extends VersionedObject, R>(this: O, method: string, argument: any) : (flux: Flux<{ envelop: Invocation<O, R> }>) => void {
-    let invocation = new Invocation(this, method, argument);
-    return (flux: Flux<{ envelop: Invocation<O, R> }>) => {
-      invocation.farAsync(flux);
+  farAsync<O extends VersionedObject, R>(this: O, method: string, argument: any) : (flux: Flux<{ envelop: Invocation<R> }>) => void {
+    return (flux: Flux<{ envelop: Invocation<R> }>) => {
+      Invocation.farAsync(flux, this, method, argument);
     };
   }
 }

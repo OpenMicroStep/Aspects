@@ -105,11 +105,8 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
         manager.setNewObjectMissingValues();
       return state !== VersionedObjectManager.State.UNCHANGED;
     });
-    return this.farPromise('implSave', changed).then<VersionedObject[]>((envelop) => {
-      if (envelop.state() === InvocationState.Terminated)
-        return objects;
-      else
-        return Promise.reject(envelop.error());
+    return this.farPromise('implSave', changed).then((envelop) => {
+      return new Invocation(envelop.diagnostics(), true, objects);
     });
   }
 });

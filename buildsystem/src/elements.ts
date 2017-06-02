@@ -188,11 +188,11 @@ export class QueryElement extends Element {
 
 const farMethods = <((clazz: string, method: string, argument: string, ret: string) => string)[]>[
   (clazz: string, method: string, argument: string, ret: string) =>
-    `farCallback(this: ${clazz}, method: '${method}', argument: ${argument}, callback: (envelop: Invocation<${clazz}, ${ret}>) => void);`,
+    `farCallback(this: ${clazz}, method: '${method}', argument: ${argument}, callback: (envelop: Invocation<${ret}>) => void);`,
   (clazz: string, method: string, argument: string, ret: string) =>
     `farEvent(this: ${clazz}, method: '${method}', argument: ${argument}, eventName: string, onObject?: Object);`,
   (clazz: string, method: string, argument: string, ret: string) =>
-    `farPromise(this: ${clazz}, method: '${method}', argument: ${argument}): Promise<Invocation<${clazz}, ${ret}>>;`,
+    `farPromise(this: ${clazz}, method: '${method}', argument: ${argument}): Promise<Invocation<${ret}>>;`,
   //(clazz: string, method: string, argument: string, ret: string) =>
   //  `farAsync(this: ${clazz}, method: '${method}', argument: ${argument}): (flux: Flux<{ envelop: Invocation<${clazz}, ${ret}> }>) => void;`
 ];
