@@ -44,26 +44,6 @@ function set1M() { // around 100ms
     v._name = `${i}`;
   }
 }
-function diff100k() { // around 100ms
-  let cc = new ControlCenter();
-  let R = Resource.installAspect(cc, 'test1');
-  let v = new R();
-  let i = 1e5;
-  while (i-- > 0) {
-    v._name = `${i}`;
-    v.manager().diff();
-  }
-}
-function snapshot100k() { // around 100ms
-  let cc = new ControlCenter();
-  let R = Resource.installAspect(cc, 'test1');
-  let v = new R();
-  let i = 1e5;
-  while (i-- > 0) {
-    v._name = `${i}`;
-    v.manager().snapshot();
-  }
-}
 function newNative1M() { // around 100ms
   let i = 1e6;
   while (i-- > 0) {
@@ -94,6 +74,4 @@ export const tests = { name: 'perfs', tests: [
   getNative200M,
   set1M,
   setNative2M,
-  diff100k,
-  snapshot100k
 ]};

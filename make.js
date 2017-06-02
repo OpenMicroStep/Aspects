@@ -24,6 +24,7 @@ module.exports =  {
         "version": version,
       },
       tsConfig: { is: "component",
+        "stripInternal": true,
         "module": "commonjs",
         "target": "es6",
         "declaration": true,

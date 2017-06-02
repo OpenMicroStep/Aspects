@@ -27,7 +27,7 @@ export class SqlDataSourceImpl extends DataSource {
     let manager = object.manager();
     let aspect = manager.aspect();
     let id = manager.id();
-    let version = manager._version;
+    let version = manager.versionVersion();
     let mapper = this.mappers[aspect.name];
     if (!mapper)
       return Promise.reject(`mapper not found for: ${aspect.name}`);
@@ -82,7 +82,7 @@ export class SqlDataSourceImpl extends DataSource {
           values.checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, ovdb));
       }
     };
-    manager._localAttributes.forEach((nv, k) => map(k, nv, isNew ? undefined : manager._versionAttributes.get(k)));
+    manager.localAttributes().forEach((nv, k) => map(k, nv, isNew ? undefined : manager.versionAttributes().get(k)));
     map("_version", version + 1, version);
     version++;
     if (isNew) {

@@ -13,19 +13,19 @@ function basics() {
   assert.instanceOf(v1, R);
   assert.instanceOf(v1, Resource);
   assert.instanceOf(v1, VersionedObject);
-  assert.equal(v1._version, -1);
-  assert.typeOf(v1._id, 'string');
-  assert(VersionedObjectManager.isLocalId(v1._id));
+  assert.equal(v1.version(), -1);
+  assert.typeOf(v1.id(), 'string');
+  assert(VersionedObjectManager.isLocalId(v1.id()));
   assert.equal(v1.manager().controlCenter(), cc);
   
   let v2 = new R();
   assert.instanceOf(v2, R);
   assert.instanceOf(v2, Resource);
   assert.instanceOf(v2, VersionedObject);
-  assert.equal(v2._version, -1);
-  assert.typeOf(v2._id, 'string');
-  assert(VersionedObjectManager.isLocalId(v2._id));
-  assert.notEqual(v1._id, v2._id);
+  assert.equal(v2.version(), -1);
+  assert.typeOf(v2.id(), 'string');
+  assert(VersionedObjectManager.isLocalId(v2.id()));
+  assert.notEqual(v1.id(), v2.id());
 
   let c1 = new C();
   assert.notInstanceOf(c1, P);
@@ -35,11 +35,11 @@ function basics() {
   assert.notInstanceOf(c1, R);
   assert.instanceOf(c1, Resource);
   assert.instanceOf(c1, VersionedObject);
-  assert.equal(c1._version, -1);
-  assert.typeOf(c1._id, 'string');
-  assert(VersionedObjectManager.isLocalId(c1._id));
-  assert.notEqual(c1._id, v1._id);
-  assert.notEqual(c1._id, v2._id);
+  assert.equal(c1.version(), -1);
+  assert.typeOf(c1.id(), 'string');
+  assert(VersionedObjectManager.isLocalId(c1.id()));
+  assert.notEqual(c1.id(), v1.id());
+  assert.notEqual(c1.id(), v2.id());
   assert.equal(c1.name(), undefined);
   assert.equal(c1.model(), undefined);
   c1._name = "MyCar";
@@ -55,23 +55,23 @@ function basics() {
   assert.notInstanceOf(p1, R);
   assert.instanceOf(p1, Resource);
   assert.instanceOf(p1, VersionedObject);
-  assert.equal(p1._version, -1);
-  assert.typeOf(p1._id, 'string');
-  assert(VersionedObjectManager.isLocalId(p1._id));
-  assert.notEqual(p1._id, v1._id);
-  assert.notEqual(p1._id, v2._id);
+  assert.equal(p1.version(), -1);
+  assert.typeOf(p1.id(), 'string');
+  assert(VersionedObjectManager.isLocalId(p1.id()));
+  assert.notEqual(p1.id(), v1.id());
+  assert.notEqual(p1.id(), v2.id());
   assert.equal(p1.name(), undefined);
   p1._name = "MyPeople";
   assert.equal(p1.name(), `MyPeople`);
   assert.instanceOf(p1.birthDate(), Date);
 
-  assert.equal(v1.id(), v1._id);
-  assert.equal(v2.id(), v2._id);
-  assert.equal(v1.version(), v1._version);
-  assert.equal(v2.version(), v2._version);
+  assert.equal(v1.id(), v1.id());
+  assert.equal(v2.id(), v2.id());
+  assert.equal(v1.version(), v1.version());
+  assert.equal(v2.version(), v2.version());
 
-  assert.doesNotThrow(() => { v1.manager().setId(v1._id) });
-  assert.throw(() => { v1.manager().setId(v2._id) }, `cannot change identifier to a local identifier`);
+  assert.doesNotThrow(() => { v1.manager().setId(v1.id()) });
+  assert.throw(() => { v1.manager().setId(v2.id()) }, `cannot change identifier to a local identifier`);
   v1.manager().setId(2);
   assert.equal(v1.id(), 2);
   assert.throw(() => { v1.manager().setId(3) }, `id can't be modified once assigned (not local)`);
@@ -82,40 +82,7 @@ function basics() {
   v1._name = "Resource Name 2";
   assert.equal(v1.name(), "Resource Name 2");
 
-  assert.deepEqual<any>(v1.manager().diff(), { // only changed values
-    "_id": 2,
-    "_version": VersionedObjectManager.NextVersion,
-    "_localAttributes": {
-      "_name": "Resource Name 2"
-    },
-    "_versionAttributes": {},
-  });
-
-  assert.deepEqual<any>(v1.manager().snapshot(), { // complete object snapshot
-    "_id": 2,
-    "_version": VersionedObjectManager.NextVersion,
-    "_localAttributes": {
-      "_name": "Resource Name 2"
-    },
-    "_versionAttributes": {},
-  });
-
   v1.manager().setVersion(2);
-
-  assert.deepEqual<any>(v1.manager().diff(), { // complete object snapshot
-    "_id": 2,
-    "_version": 2,
-    "_localAttributes": {},
-    "_versionAttributes": {},
-  });
-  assert.deepEqual<any>(v1.manager().snapshot(), { // complete object snapshot
-    "_id": 2,
-    "_version": 2,
-    "_localAttributes": {},
-    "_versionAttributes": {
-      "_name": "Resource Name 2"
-    },
-  });
 }
 
 function shared() {
