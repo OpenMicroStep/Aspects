@@ -541,45 +541,21 @@ function protectLocalImpl(localImpl: (...args) => any, argumentValidators: Aspec
   }
 }
 
-function fastSafeCallMap(ret): Promise<any> {
-    if (ret instanceof Invocation)
-      ret = ret.state() === InvocationState.Terminated ? Promise.resolve(ret.result()) : Promise.reject(ret.error());
-    else if (!(ret instanceof Promise))
-      ret = Promise.resolve(ret);
-    return ret;
-}
-function fastSafeCall0(impl: Function, self) : Promise<any> {
-  try {
-    return fastSafeCallMap(impl.call(self));
-  } catch(e) {
-    return Promise.reject(e);
-  }
-}
-
-function fastSafeCall1(impl: Function, self, arg0) : Promise<any> {
-  try {
-    return fastSafeCallMap(impl.call(self, arg0));
-  } catch(e) {
-    return Promise.reject(e);
-  }
-}
 function fastSafeCall(farImpl: Function, self, arg0): Promise<any> {
-  let ret: Promise<any>;
-  if (farImpl.length === 0) {
-    ret = fastSafeCall0(farImpl, self);
+  try {
+    if (farImpl.length === 0) return Promise.resolve(farImpl.call(self));
+    else if (farImpl.length === 1) return Promise.resolve(farImpl.call(self, arg0));
+    else {
+      return new Promise((resolve) => {
+        Async.run({ result: undefined }, [
+          (p) => { farImpl.call(self, p, arg0); },
+          (p) => { resolve(p.context.result); p.continue(); }
+        ]);
+      });
+    }
+  } catch(e) {
+    return Promise.reject(e);
   }
-  else if (farImpl.length === 1) {
-    ret = fastSafeCall1(farImpl, self, arg0);
-  }
-  else {
-    ret = new Promise((resolve) => {
-      Async.run({ result: undefined }, [
-        (p) => { farImpl.call(self, p, arg0); },
-        (p) => { resolve(p.context.result); p.continue(); }
-      ]);
-    });
-  }
-  return ret;
 }
 
 function protectPublicImpl(prototype, farMethod: Aspect.InstalledMethod, farImpl: Function) : (this, arg0) => Promise<any> {
