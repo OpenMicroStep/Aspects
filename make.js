@@ -116,7 +116,7 @@ module.exports =  {
       interfaces: [{ 
         is: "group",
         elements: ["=Files:core:src ? interface"], 
-        customHeader: "import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal, ImmutableList, ImmutableSet, ImmutableObject} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
+        customHeader: "import {ControlCenter, DataSourceQueries, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, DataSourceInternal, ImmutableList, ImmutableSet, ImmutableObject} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"  
       }],
       npmPackage: { is: "component",
         "main": "typescript/core/src/core.js",
