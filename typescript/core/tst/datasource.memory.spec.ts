@@ -8,8 +8,9 @@ export const tests = { name: 'InMemoryDataSource', tests:
     let cc = new ControlCenter();
     let C = Car.installAspect(cc, 'test1');
     let P = People.installAspect(cc, 'test1');
+    let ds = new InMemoryDataSource.DataStore();
     let DB = InMemoryDataSource.installAspect(cc, "server");
-    let db = new DB();
+    let db = new DB(ds);
     Object.assign(flux.context, {
       Car: C,
       People: P,
