@@ -73,8 +73,8 @@ const jsonEncoders: ObjectCoding<any, any, JSONEncoder, JSONDecoder>[]= [
         r._version = m.versionVersion();
         r._localAttributes = {};
         r._versionAttributes = {}
-        m.versionAttributes().forEach((v, k) => r._versionAttributes[k] = e.encode(v, false));
-        m.localAttributes().forEach((v, k) => r._localAttributes[k] = e.encode(v, false));
+        m.versionAttributes().forEach((v, k) => r._versionAttributes[k] = v !== undefined ? e.encode(v, false) : null);
+        m.localAttributes().forEach((v, k) => r._localAttributes[k] = v !== undefined ? e.encode(v, false) : null);
       }
       return r;
     },
@@ -97,8 +97,10 @@ const jsonEncoders: ObjectCoding<any, any, JSONEncoder, JSONDecoder>[]= [
         d.decodedWithLocalId.set(r, s._id);
       if (typeof s._versionAttributes === "object" && typeof s._version === "number" && s._version !== VersionedObjectManager.NoVersion) {
         let ra = new Map<keyof VersionedObject, any>();
-        for (let k in s._versionAttributes)
-          ra.set(k as keyof VersionedObject, d.decode(s._versionAttributes[k]));
+        for (let k in s._versionAttributes) {
+          let v = s._versionAttributes[k];
+          ra.set(k as keyof VersionedObject, v !== null ? d.decode(v) : undefined);
+        }
         m.mergeWithRemoteAttributes(ra, s._version);
       }
       if (typeof s._localAttributes === "object" && typeof s._version === "number") {
