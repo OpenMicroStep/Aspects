@@ -18,6 +18,7 @@ _relation_: `_cars`
 #### _drivers: [0, *, People]
 _relation_: `_drivenCars`
 ### category local
+#### brand(): string
 #### model(): string
 #### owner(): People
 ### aspect test1

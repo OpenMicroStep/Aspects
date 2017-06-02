@@ -1,9 +1,10 @@
 import {Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Invocation, InvocationState, Invokable, Aspect } from './core';
 import {DataSource} from '../../../generated/aspects.interfaces';
+import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 
 DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
   /// category core 
-  filter(this, objects: VersionedObject[], arg1) {
+  filter(objects: VersionedObject[], arg1) {
     return DataSourceInternal.applyWhere(arg1, objects, (name) => {
       let cstor = this.controlCenter().aspect(name);
       return cstor && cstor.aspect;
@@ -11,36 +12,52 @@ DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
   }
 });
 
-const queries = new Map<string, (query) => any>();
-export function registerQuery(id: string, creator: (query) => any) {
-  queries.set(id, creator);
-}
+export type DataSourceQuery = (reporter: Reporter, query: { id: string, [s: string]: any }) => DataSourceInternal.Request;
+export type DataSourceQueries = Map<string, DataSourceQuery>;
+DataSource.category('queries', <DataSource.ImplCategories.queries<DataSource & { _queries?:DataSourceQueries }>>{
+  setQueries(queries) {
+    this._queries = queries;
+  }
+});
 
 DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.server>>{
-  query(this, request: { [k: string]: any }) {
+  query(request: { [k: string]: any }) {
     return this.farPromise('distantQuery', request);
   },
-  load(this, w: {objects: VersionedObject[], scope: string[]}) {
-    // TODO: add some local checks
-    return this.farPromise('distantLoad', w);
+  load(w: {objects: VersionedObject[], scope: string[]}) {
+    let diagnostics: Diagnostic[] = [];
+    let saved: VersionedObject[]= [];
+    for (let vo of w.objects) {
+      if (vo.manager().state() === VersionedObjectManager.State.NEW)
+        diagnostics.push({ type: "warning", msg: `trying to load attributes on a non saved object`});
+      else
+        saved.push(vo);
+    }
+    return this.farPromise('distantLoad', { objects: saved, scope: w.scope });
   },
-  save(this, objects: VersionedObject[]) {
+  save(objects: VersionedObject[]) {
     // TODO: add some local checks
     return this.farPromise('distantSave', objects);
   }
 });
 
-DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.safe>>{
-  distantQuery(this, request: { [k: string]: any }) {
-    // throw "TODO: generate request (request is an id + options)";
-    request = queries.get(request['id'])!(request);
-    return this.farPromise('safeQuery', request);
+DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.safe & { _queries?:DataSourceQueries }>>{
+  distantQuery(request) {
+    let creator = this._queries && this._queries.get(request.id);
+    if (!creator)
+      return new Invocation([{ type: "error", msg: `request ${request.id} doesn't exists` }], false, undefined);
+    let reporter = new Reporter();
+    reporter.transform.push((d) => { d.type = "error"; return d; });
+    let query = creator(reporter, request);
+    if (reporter.failed)
+      return new Invocation(reporter.diagnostics, false, undefined);
+    return this.farPromise('safeQuery', query);
   },
-  distantLoad(this, w: {objects: VersionedObject[], scope: string[]}) {
+  distantLoad(w: {objects: VersionedObject[], scope: string[]}) {
     // TODO: add some local checks
     return this.farPromise('safeLoad', w);
   },
-  distantSave(this, objects: VersionedObject[]) {
+  distantSave(objects: VersionedObject[]) {
     // TODO: add some local checks
     return this.farPromise('safeSave', objects);
   }
@@ -52,13 +69,13 @@ async function validateConsistency(this: DataSource, reporter: any/*Reporter*/, 
   // Let K be the number of attributes
   // Let V be the number of validators (V range should be mostly in [1 - 5])
   let ok = true;
-  let classes = new Set();
+  let classes = new Set<Aspect.Installed>();
   let attributes = new Set();
   let validators = new Map<any/*Validator*/, any/*VersionnedObject*/[]>();
   objects.forEach(o => classes.add(o.manager().aspect())); // O(N * log M)
   classes.forEach(c => (c as any).attributesToLoad('consistency').forEach(a => attributes.add(a))); // O(M * log K)
   await this.farPromise('rawLoad', { objects: objects, scope: Array.from(attributes) }); // O(K + N * K)
-  objects.forEach(o => (o as any).validateConsistency(reporter) || (ok = false)); // O(N)
+  objects.forEach(o => (o as any).validateConsistency(reporter)); // O(N)
   objects.forEach(o => {
     let v = (o as any).validatorsForGraphConsistency();
     if (v)
@@ -66,38 +83,38 @@ async function validateConsistency(this: DataSource, reporter: any/*Reporter*/, 
         let l = validators.get(v);
         if (!l) validators.set(v, l = []);
         l.push(o);
-      })
+      });
   }); // O(N * V * log V)
   validators.forEach((l, v) => v(reporter, l) || (ok = false)); // O(V)
-  return ok; 
+  return reporter.failed; 
   // O(N * (log M + K + V * log V + 1) + M * log K + K + V) this is quite heavy
   // perfect O= O(N * (K + V)) this is quite heavy
 }
 
 DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.raw>>{
-  safeQuery(this, request: { [k: string]: any }) {
+  safeQuery(request: { [k: string]: any }) {
     return this.farPromise('rawQuery', request);
   },
-  safeLoad(this, w: {objects: VersionedObject[], scope: string[]}) {
+  safeLoad(w: {objects: VersionedObject[], scope: string[]}) {
     return this.farPromise('rawLoad', w);
   },
-  async safeSave(this, objects: VersionedObject[]) {
+  async safeSave(objects: VersionedObject[]) {
     return this.farPromise('rawSave', objects);
   }
 });
 
 DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.implementation>>{
-  rawQuery(this, request: { [k: string]: any }) {
+  rawQuery(request: { [k: string]: any }) {
     let sets = DataSourceInternal.parseRequest(<any>request, (name) => {
       let cstor = this.controlCenter().aspect(name);
       return cstor && cstor.aspect;
     });
     return this.farPromise('implQuery', sets);
   },
-  rawLoad(this, w: {objects: VersionedObject[], scope: string[]}) {
+  rawLoad(w: {objects: VersionedObject[], scope: string[]}) {
     return this.farPromise('implLoad', w);
   },
-  rawSave(this, objects: VersionedObject[]) {
+  rawSave(objects: VersionedObject[]) {
     let changed = objects.filter(o => {
       let manager = o.manager();
       let state = manager.state();

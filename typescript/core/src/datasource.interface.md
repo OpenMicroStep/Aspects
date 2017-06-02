@@ -5,6 +5,10 @@ Sous-classable.
 
 ### attributes
 
+### category queries
+
+#### setQueries(queries: DataSourceQueries): void
+
 ### category local
 
 Traitements faisable en local, c'est à dire sans accéder à la base de données.
@@ -26,7 +30,7 @@ Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes imp
 
 Partie accessible depuis l'exterieur de la DataSource
 
-#### distantQuery(q: dictionary): { * :[0, *, VersionedObject]}
+#### distantQuery(q: { id: string, *: any }): { * :[0, *, VersionedObject]}
 
 #### distantLoad(l: {objects: [0, *, VersionedObject], scope: [0, *, string]}): [0, *, VersionedObject]
 
@@ -80,4 +84,4 @@ En cas de conflits, rien n'est sauvé et les informations sur les conflits sont 
 #### farCategories: server
 
 ### aspect server
-#### categories: local server safe raw implementation
+#### categories: local server safe raw implementation queries

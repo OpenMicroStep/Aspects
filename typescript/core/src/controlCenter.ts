@@ -4,7 +4,7 @@ import {
 } from './core';
 
 export type Identifier = string | number;
-export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, arg: A) => R | Promise<R | Invocation<R>>);
+export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, arg: A) => R | Invocation<R> | Promise<R | Invocation<R>>);
 
 export interface AComponent {
 

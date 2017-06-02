@@ -1,10 +1,10 @@
-import {ControlCenter, Identifier, VersionedObject, DataSource, InMemoryDataSource, Invocation, Transport} from '@openmicrostep/aspects';
+import {ControlCenter, Identifier, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Transport, AspectCache} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
-function createContext_C1() {
-  let cc = new ControlCenter();
+function createContext_C1(publicTransport: (json: string) => Promise<string>) {
+  let cc = new ControlCenter(new AspectCache());
   let ret = {
     cc: cc,
     Resource  : Resource  .installAspect(cc, "c1"    ),
@@ -14,6 +14,20 @@ function createContext_C1() {
     component: {},
   };
   ret.db.manager().setId('datasource');
+  let coder = new Transport.JSONCoder();
+  ret.cc.installTransport({
+    async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
+      let req = { to: to.id(), method: method, args: args.map(a => coder.encodeWithCC(a, ret.cc)) };
+      let request = JSON.stringify(req, null, 2);
+      let response = await publicTransport(request);
+      let res = JSON.parse(response);
+      let component = {};
+      ret.cc.registerComponent(component);
+      let inv = new Invocation(res.diagnostics, "result" in res, coder.decodeWithCC(res.result, ret.cc, component));
+      ret.cc.unregisterComponent(component);
+      return inv;
+    }
+  });
   return ret;
 }
 
@@ -31,9 +45,10 @@ type ContextS1 = {
   p1: People.Aspects.s1,
   p2: People.Aspects.s1,
   component: {},
+  publicTransport: (json: string) => Promise<string>
 };
 
-function createContext_S1(ds: InMemoryDataSource.DataStore): ContextS1 {
+function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string, DataSourceQuery>): ContextS1 {
   let ctx: any = {};
   let cc = ctx.cc = new ControlCenter();
   ctx.Resource   = Resource.installAspect(cc, "s1"    );
@@ -42,6 +57,7 @@ function createContext_S1(ds: InMemoryDataSource.DataStore): ContextS1 {
   ctx.DataSource = InMemoryDataSource.installAspect(cc, "server");
 
   ctx.db = new ctx.DataSource(ds);
+  ctx.db.setQueries(queries);
   ctx.c0 = Object.assign(new ctx.Car(), { _name: "Renault", _model: "Clio 3" });
   ctx.c1 = Object.assign(new ctx.Car(), { _name: "Renault", _model: "Clio 2" });
   ctx.c2 = Object.assign(new ctx.Car(), { _name: "Peugeot", _model: "3008 DKR" });
@@ -52,18 +68,10 @@ function createContext_S1(ds: InMemoryDataSource.DataStore): ContextS1 {
   ctx.component = {};
   cc.registerComponent(ctx.component);
   ctx.db.manager().setId('datasource');
-  return ctx;
-}
-
-async function test1(flux) {
-  let ds = new InMemoryDataSource.DataStore();
-  let c1 = createContext_C1();
-  let s1 = createContext_S1(ds);
-  await s1.db.farPromise("rawSave", [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]);
 
   let coder = new Transport.JSONCoder();
-  let publicTransport = async (json: string) => {
-    let p1 = createContext_S1(ds);
+  ctx.publicTransport = async (json: string) => {
+    let p1 = createContext_S1(ds, queries);
     p1.cc.registerObjects(p1.component, [p1.db]);
     let request = JSON.parse(json);
     let to = p1.cc.registeredObject(request.to)!;
@@ -78,30 +86,49 @@ async function test1(flux) {
     let response = JSON.stringify(ret);
     return response;
   };
-  c1.cc.installTransport({
-    async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
-      let req = { to: to.id(), method: method, args: args.map(a => coder.encodeWithCC(a, c1.cc)) };
-      let request = JSON.stringify(req, null, 2);
-      let response = await publicTransport(request);
-      let res = JSON.parse(response);
-      let component = {};
-      c1.cc.registerComponent(component);
-      let inv = new Invocation(res.diagnostics, "result" in res, coder.decodeWithCC(res.result, c1.cc, component));
-      c1.cc.unregisterComponent(component);
-      return inv;
-    }
-  });
+  return ctx;
+}
+
+async function distantSave(flux) {
+  let ds = new InMemoryDataSource.DataStore();
+  let s1 = createContext_S1(ds, new Map());
+  let c1 = createContext_C1(s1.publicTransport);
+
   let c1_c4 = Object.assign(new c1.Car(), { _name: "Renault", _model: "Clio 4" });
   c1.cc.registerComponent(c1.component);
   c1.cc.registerObjects(c1.component, [c1_c4]);
+
   let inv = await c1.db.farPromise("save", [c1_c4]);
   assert.deepEqual(inv.result(), [c1_c4]);
+
   c1.cc.unregisterComponent(c1.component);
   flux.continue();
 }
 
+let queries = new Map<string, DataSourceQuery>();
+queries.set("s1cars", (reporter, q) => {
+  return {
+    name: "cars",
+    where: { $instanceOf: Car },
+    scope: ['_name', '_owner'],
+  }
+});
+async function distantQuery(flux) {
+  let ds = new InMemoryDataSource.DataStore();
+  let s1 = createContext_S1(ds, queries);
+  let c1 = createContext_C1(s1.publicTransport);
+  await s1.db.farPromise("rawSave", [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]);
+
+  let inv = await c1.db.farPromise("query", { id: "s1cars" });
+  let res = inv.result();
+  assert.sameMembers(
+    res["cars"].map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`), 
+    [s1.c0, s1.c1, s1.c2, s1.c3].map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`));
+  flux.continue();
+}
 
 
 export const tests = { name: 'transport', tests: [
-  test1,
+  distantSave,
+  distantQuery,
 ]};
