@@ -5,6 +5,10 @@
 #### name(): string
 ### aspect test1
 #### categories: local
+### aspect c1
+#### categories: local
+### aspect s1
+#### categories: local
 
 ## class Car: Resource
 ### attributes
@@ -17,6 +21,10 @@ _relation_: `_drivenCars`
 #### model(): string
 #### owner(): People
 ### aspect test1
+#### categories: local
+### aspect c1
+#### categories: local
+### aspect s1
 #### categories: local
 
 ## class People: Resource
@@ -31,4 +39,8 @@ _relation_: `_drivers`
 ### category local
 #### birthDate(): date
 ### aspect test1
+#### categories: local
+### aspect c1
+#### categories: local
+### aspect s1
 #### categories: local

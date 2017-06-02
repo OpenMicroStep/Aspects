@@ -7,6 +7,8 @@ export * from './invocation';
 export {DataSource, DataSourceConstructor} from '../../../generated/aspects.interfaces';
 export * from './datasource';
 export * from './datasource.memory';
+export * from './transport';
+
 export interface ImmutableList<T> extends ReadonlyArray<T> {
 
 }
