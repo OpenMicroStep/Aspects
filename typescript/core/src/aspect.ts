@@ -559,15 +559,15 @@ function fastSafeCall(farImpl: Function, self, arg0): Promise<any> {
 }
 
 function protectPublicImpl(prototype, farMethod: Aspect.InstalledMethod, farImpl: Function) : (this, arg0) => Promise<any> {
-  let path = new AttributePath(farMethod.name, ":");
+  let path = new AttributePath(farMethod.name, ":", "");
   let argumentValidators = farMethod.argumentValidators;
   let returnValidator = farMethod.returnValidator;
   return function(this, arg0) {
     if (argumentValidators[0])
-      validateValue(arg0, path.setArrayKey(0), argumentValidators[0]);
+      validateValue(arg0, path.set(0), argumentValidators[0]);
     let ret: Promise<any> = fastSafeCall(farImpl, this, arg0);
     return ret.then(function(ret) {
-      ret = returnValidator ? validateValue(ret, path.setArrayKey("ret"), returnValidator) : ret;
+      ret = returnValidator ? validateValue(ret, path.set("ret"), returnValidator) : ret;
       return ret;
     });
   }
