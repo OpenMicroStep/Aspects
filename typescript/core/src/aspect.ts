@@ -79,7 +79,7 @@ export namespace Aspect {
     attribute: string
   };
   export interface InstalledAttribute {
-    name: keyof VersionedObject;
+    name: string;
     type: Type;
     validator: AttributeTypeValidator;
     relation: Reference | undefined;
@@ -330,11 +330,11 @@ export class AspectCache {
   private installAttributeData(from: VersionedObjectConstructor<VersionedObject>, data: Aspect.InstalledAttribute) {
     Object.defineProperty(from.prototype, data.name, {
       enumerable: true,
-      get(this: VersionedObject) { return this.__manager.attributeValue(data.name) },
+      get(this: VersionedObject) { return this.__manager.attributeValue(data.name as keyof VersionedObject) },
       set(this: VersionedObject, value) {
         let manager = this.manager();
         value = validateValue(value, new AttributePath(manager.aspect().name, manager.id(), '.', data.name), data.validator, manager);
-        this.__manager.setAttributeValueFast(data.name, value, data);
+        this.__manager.setAttributeValueFast(data.name as keyof VersionedObject, value, data);
       }
     });
     return data;
@@ -531,7 +531,7 @@ function validateValue(value, path: AttributePath, validator: Aspect.AttributeTy
   return value;
 }
 function protectLocalImpl(localImpl: (...args) => any, argumentValidators: Aspect.TypeValidator[], returnValidator: Aspect.TypeValidator) {
-  let path = new AttributePath(localImpl.name, ":");
+  let path = new AttributePath(localImpl.name, ":", "");
   return function protectedLocalImpl(this) {
     for (var i = 0, len = argumentValidators.length; i < len; i++)
       validateValue(arguments[i], path.set(i), argumentValidators[i]);

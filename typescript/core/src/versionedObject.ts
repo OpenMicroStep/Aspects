@@ -162,8 +162,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   setNewObjectMissingValues() {
     for (let attribute of this._aspect.attributes.values()) {
-      if (!this.hasAttributeValue(attribute.name))
-        this._localAttributes.set(attribute.name, this.missingValue(attribute));
+      if (!this.hasAttributeValue(attribute.name as keyof VersionedObject))
+        this._localAttributes.set(attribute.name as keyof VersionedObject, this.missingValue(attribute));
     }
   }
 
