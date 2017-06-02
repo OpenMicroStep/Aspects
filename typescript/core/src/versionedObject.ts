@@ -38,6 +38,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   /** @internal */ _controlCenter: ControlCenter;
   /** @internal */ _aspect: Aspect.Installed;
   /** @internal */ _object: T;
+  /** @internal */ _components: Set<object>;
 
   /** @internal */ _localAttributes: VersionedObjectManager.Attributes<T>;
   /** @internal */ _version: number;
@@ -47,6 +48,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   constructor(controlCenter: ControlCenter, aspect: Aspect.Installed) {
     this._controlCenter = controlCenter;
+    this._components = new Set();
     this._id = `_localid:${++VersionedObjectManager.LocalIdCounter}`;
     this._localAttributes = new Map();
     this._version = VersionedObjectManager.NoVersion;
@@ -62,6 +64,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   name() { return this._aspect.name; }
   aspect() { return this._aspect; }
 
+  isRegistered() { return this._components.size > 0; }
 
   hasChanges() { return this._localAttributes.size > 0; }
   localVersion(): number { return this._localAttributes.size > 0 ? VersionedObjectManager.NextVersion : this._version; }

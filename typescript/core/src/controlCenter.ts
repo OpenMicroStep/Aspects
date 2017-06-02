@@ -12,7 +12,7 @@ export interface AComponent {
 
 export class ControlCenter {
   _notificationCenter = new NotificationCenter();
-  _objects = new Map<Identifier, { object: VersionedObject, components: Set<AComponent> }>();
+  _objects = new Map<Identifier, VersionedObject>();
   _components = new Set<AComponent>();
   _aspects = new Map<string, Aspect.Constructor>();
   _cache: AspectCache;
@@ -27,15 +27,14 @@ export class ControlCenter {
 
   /// category component
   registeredObject(id: Identifier) : VersionedObject | undefined {
-    let o = this._objects.get(id);
-    return o ? o.object : undefined;
+    return this._objects.get(id);
   }
   
   registeredObjects(component: AComponent) : VersionedObject[] {
     let ret = <VersionedObject[]>[];
     this._objects.forEach((o, k) => {
-      if (o.components.has(component))
-        ret.push(o.object);
+      if (o.manager()._components.has(component))
+        ret.push(o);
     });
     return ret;
   }
@@ -48,8 +47,9 @@ export class ControlCenter {
     if (!this._components.delete(component))
       throw new Error(`cannot remove unregistered component`);
     this._objects.forEach((o, k) => {
-      if (o.components.delete(component)) {
-        if (o.components.size === 0)
+      let m = o.manager();
+      if (m._components.delete(component)) {
+        if (m._components.size === 0)
           this._objects.delete(k);
       }
     });
@@ -66,10 +66,10 @@ export class ControlCenter {
       if (method)
         (<(string | undefined)[]>(events || [undefined])).forEach(event => notificationCenter.addObserver(component, method, event, o));
       if (!d)
-        i.set(id, d = { object: o, components: new Set() });
-      if (d.object !== o)
+        i.set(id, d = o);
+      if (d !== o)
         throw new Error(`a different object with the same id (${id}) is already registered`);
-      d.components.add(component);
+      d.manager()._components.add(component);
     });
   }
 
@@ -80,9 +80,10 @@ export class ControlCenter {
       let d = i.get(id);
       if (!d)
         throw new Error(`cannot unregister an object that is not registered`);
-      if (!d.components.delete(component))
+      let m = o.manager();
+      if (!m._components.delete(component))
         throw new Error(`cannot unregister an object that is not registered by the given component`);
-      if (d.components.size === 0)
+      if (m._components.size === 0)
         i.delete(id);
     });
   }
