@@ -44,9 +44,9 @@ export namespace Aspect {
   export interface Definition {
     name: string;
     version: number;
-    attributes: Attribute[];
-    categories: Category[];
-    farCategories: Category[];
+    attributes?: Attribute[];
+    categories?: Category[];
+    farCategories?: Category[];
     aspects: Aspect[];
   }
   export interface Attribute {
@@ -167,8 +167,8 @@ export class AspectCache {
     let tmp = this.cachedAspect(name, implementation);
     let aspect = tmp.aspect;
     let cstor = class InstalledAspect extends tmp {
-      constructor() {
-        super(new VersionedObjectManager(on, aspect))
+      constructor(...args) {
+        super(new VersionedObjectManager(on, aspect), ...args);
         this.__manager._object = this;
       }
       static displayName = `${aspect.name}[${aspect.aspect}]`;
@@ -242,7 +242,7 @@ export class AspectCache {
     let r: ['far' | 'local' | undefined, Map<string, Aspect.Method>];
     r = from.parent ? this.buildMethodList(categoryName, from.parent, map) : [undefined, map];
     let definition = from.definition;
-    let category = definition.categories.find(cel => cel.name === categoryName) || definition.farCategories.find(cel => cel.name === categoryName);
+    let category = (definition.categories || []).find(cel => cel.name === categoryName) || (definition.farCategories || []).find(cel => cel.name === categoryName);
     if (category) {
       let type = r[0];
       if (type === undefined)
@@ -347,7 +347,7 @@ export class AspectCache {
         references: [],
         impls: new Set<VersionedObjectConstructor<VersionedObject>>(),
       };
-      from.definition.attributes.forEach(attribute => {
+      from.definition.attributes && from.definition.attributes.forEach(attribute => {
         const data = this.installAttribute(from, attribute);
         ret!.attributes.set(data.name, data);
       });

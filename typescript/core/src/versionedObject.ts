@@ -407,7 +407,7 @@ function VersionedObject_replaceInGraph(this: VersionedObject, replacer: (object
 addReplaceInGraphSupport(VersionedObject, VersionedObject_replaceInGraph);
 
 export interface VersionedObjectConstructor<C extends VersionedObject> {
-    new(manager: VersionedObjectManager<C>): C;
+    new(manager: VersionedObjectManager<C>, ...args): C;
     definition: Aspect.Definition;
     parent?: VersionedObjectConstructor<VersionedObject>;
 }
