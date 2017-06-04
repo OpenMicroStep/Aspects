@@ -1,4 +1,4 @@
-import {ControlCenter, areEquals, Identifier, Invocation, Invokable, Aspect, addIsEqualSupport, addReplaceInGraphSupport, replaceInGraph, ImmutableMap} from './core';
+import {ControlCenter, areEquals, Identifier, Invocation, Invokable, Aspect, addIsEqualSupport, ImmutableMap} from './core';
 import { Flux } from '@openmicrostep/async';
 
 function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
@@ -329,21 +329,6 @@ function isEqualVersionedObject(this: VersionedObject, other, level?: number) {
   return other === this;
 }
 addIsEqualSupport(VersionedObject, isEqualVersionedObject);
-
-function VersionedObject_replaceInGraph(this: VersionedObject, replacer: (object) => any, done: Set<any>) {
-  let manager = this.manager();
-  manager._localAttributes.forEach((v,k) => {
-    let v2 = replaceInGraph(v, replacer, done);
-    if (v2 !== v)
-        manager._localAttributes.set(k, v2);
-  });
-  manager._versionAttributes.forEach((v,k) => {
-    let v2 = replaceInGraph(v, replacer, done);
-    if (v2 !== v)
-        manager._versionAttributes.set(k, v2);
-  });
-}
-addReplaceInGraphSupport(VersionedObject, VersionedObject_replaceInGraph);
 
 export interface VersionedObjectConstructor<C extends VersionedObject> {
     new(manager: VersionedObjectManager<C>, ...args): C;

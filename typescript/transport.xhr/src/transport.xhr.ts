@@ -1,58 +1,34 @@
-import {FarTransport, VersionedObject, ControlCenter, replaceInGraph} from '@openmicrostep/aspects';
-import { MSTE } from '@openmicrostep/mstools';
+import { FarTransport, VersionedObject, ControlCenter, Transport, Invocation } from '@openmicrostep/aspects';
 
+const coder = new Transport.JSONCoder();
 export class XHRTransport implements FarTransport {
   remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
     return new Promise((resolve, reject) => {
-        var isVoid = args.length === 0;
-        var xhr = new XMLHttpRequest();
-        xhr.open(isVoid ? "GET" : "POST", this.httpUrl(to, method), true);
-        xhr.onreadystatechange = () => {
-            if (xhr.readyState == 4) {
-                if (xhr.status >= 200 && xhr.status < 300) 
-                    resolve(this.decode(to.controlCenter(), xhr.responseText));
-                else
-                    reject(this.decode(to.controlCenter(), xhr.responseText));
-            }
+      let isVoid = args.length === 0;
+      let xhr = new XMLHttpRequest();
+      let cc = to.controlCenter();
+      xhr.open(isVoid ? "GET" : "POST", this.httpUrl(to, method), true);
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          let res = JSON.parse(xhr.responseText);
+          let component = {};
+          cc.registerComponent(component);
+          let inv = new Invocation(res.diagnostics, "result" in res, coder.decodeWithCC(res.result, cc, component));
+          cc.unregisterComponent(component);
+          resolve(inv);
         }
-        if (!isVoid) {
-            xhr.setRequestHeader('Content-Type', 'application/json+mste');
-            xhr.send(this.encode(args[0]));
-        }
-        else
-            xhr.send();
+      }
+      if (!isVoid) {
+        xhr.setRequestHeader('Content-Type', 'application/json+mste');
+        xhr.send(coder.encodeWithCC(args[0], cc));
+      }
+      else
+        xhr.send();
     });
   }
 
-  httpMethod(to: VersionedObject, method: string) {
-      return "GET";
-  }
-
   httpUrl(to: VersionedObject, method: string) {
-      let def = to.manager().aspect();
-      return `${def.version}/${def.name}/${to.id()}/${method}`;
-  }
-
-  encode(value): any {
-    return MSTE.stringify(value);
-  }
-
-  decode(controlCenter: ControlCenter, value): any {
-    let classes = {}
-    controlCenter._aspects.forEach((a, n) => classes[n] = a);
-    let ret = MSTE.parse(value, { classes: classes });
-    let objects = new Map<VersionedObject, VersionedObject>();
-    let replacer = (object) => {
-        if (object instanceof VersionedObject) {
-            let found = objects.get(object);
-            if (!found) {
-                found = controlCenter.mergeObject(object);
-                objects.set(object, found);
-            }
-            return found;
-        }
-        return object;
-    }
-    return replaceInGraph(ret, replacer, new Set());
+    let def = to.manager().aspect();
+    return `${def.version}/${def.name}/${to.id()}/${method}`;
   }
 }

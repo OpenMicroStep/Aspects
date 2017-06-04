@@ -1,10 +1,10 @@
-import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, InvocationState, replaceInGraph } from '@openmicrostep/aspects';
+import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, InvocationState, Transport } from '@openmicrostep/aspects';
 import { Router } from 'express';
 import * as bodyparser from 'body-parser';
-import { MSTE } from '@openmicrostep/mstools';
 
 const text_middleware = bodyparser.text({type: () => true });
 
+const coder = new Transport.JSONCoder();
 export class ExpressTransport implements PublicTransport {
   app: Router;
   findObject: (cstor: VersionedObjectConstructor<VersionedObject>, id: Identifier) => Promise<VersionedObject>;
@@ -23,43 +23,20 @@ export class ExpressTransport implements PublicTransport {
       this.app.use(path, text_middleware);
     this.app[isA0Void ? "get" : "post"](path, (req, res) => {
       let id = req.params.id;
-      this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id).then((entity) => {
-        if (!isA0Void)
-          return entity.farPromise(method.name, this.decode(req.body, entity.controlCenter()));
-        else
-          return entity.farPromise(method.name, undefined);
-      }).then((envelop) => {
-        if (envelop.state() === InvocationState.Terminated)
-          res.status(200).send(this.encode(envelop.result()));
-        else
-          res.status(400).send(JSON.stringify(envelop.diagnostics()));
+      this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id).then(async (entity) => {
+        let component = {}
+        let cc = entity.controlCenter();
+        cc.registerComponent(component);
+        let decodedWithLocalId = new Map<VersionedObject, Identifier>();
+        let inv = await entity.farPromise(method.name, isA0Void ? undefined : coder.decodeWithCC(req.body, cc, component));
+        let ret = inv.hasResult() 
+          ? { result: coder.encodeWithCC(inv.result(), cc, vo => decodedWithLocalId.get(vo) || vo.id()), diagnostics: inv.diagnostics() }
+          : { diagnostics: inv.diagnostics() };
+        res.status(inv.hasDiagnostics() ? 400 : 200).json(ret);
       }).catch((error) => {
         console.info(error);
         res.status(501).send(error);
       });
     });
-  }
-
-  encode(value): any {
-    return MSTE.stringify(value);
-  }
-
-  decode(value, controlCenter: ControlCenter): any {
-    let classes = {}
-    controlCenter._aspects.forEach((a, n) => classes[n] = a);
-    let ret = MSTE.parse(value, { classes: classes });
-    let objects = new Map<VersionedObject, VersionedObject>();
-    let replacer = (object) => {
-        if (object instanceof VersionedObject) {
-            let found = objects.get(object);
-            if (!found) {
-                found = controlCenter.mergeObject(object);
-                objects.set(object, found);
-            }
-            return found;
-        }
-        return object;
-    }
-    return replaceInGraph(ret, replacer, new Set());
   }
 }
