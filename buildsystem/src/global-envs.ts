@@ -103,16 +103,22 @@ Element.load(reporter, {
     }],
   },
   "openms.aspects.angular.dev=": {
-      is: "environment",
-      compatibleEnvironments: ["js"],
+      is: "component",
+      "js=": { is: "environment" },
+      environments: ["=js"],
       targets: ["aspects core", "aspects client"],
-      components: ["=openms.aspects.angular:target", "=openms.aspects.angular:angular", "=::aspects core::", "=::aspects client::"],
+      componentsByEnvironment: {
+        "=js": ["=openms.aspects.angular:target", "=openms.aspects.angular:angular", "=::aspects core::", "=::aspects client::"],
+      }
   },
   "openms.aspects.node.dev=": {
-      is: "environment",
-      compatibleEnvironments: ["js"],
+      is: "component",
+      "js=": { is: "environment" },
+      environments: ["=js"],
       targets: ["aspects core", "aspects express", "aspects sql"],
-      components: ["=openms.aspects.node:target", "=openms.aspects.node:express", "=::aspects core::", "=::aspects express::", "=::aspects sql::"],
+      componentsByEnvironment: {
+        "=js": ["=openms.aspects.node:target", "=openms.aspects.node:express", "=::aspects core::", "=::aspects express::", "=::aspects sql::"],
+      }
   },
 }, Workspace.globalRoot, Project.elementFactories);
 if (reporter.diagnostics.length)

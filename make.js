@@ -234,7 +234,10 @@ module.exports =  {
       "mstests", "-c", "-t", "5000", ...tests_buildsystem("dist/bs-aspects")
     ]) },
     "build-aspects=": { is: "task", components: ["=cmd"], cmd: Value([
-      "node", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.cli/index.js", "build", "-w", "dist/aspects/"
+      "node", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.cli/index.js", "build", "-w", "dist/aspects/", 
+      "-p", ".", 
+      "-p", "typescript/examples/angular2/",
+      "--env", "js",
     ]) },
     "tests-aspects=": { is: "task", components: ["=cmd"],
       env: { is: "component", "OCI_LIB_DIR": "/opt/oracle/instantclient", "OCI_INC_DIR": "/opt/oracle/instantclient/sdk/include" }, 
