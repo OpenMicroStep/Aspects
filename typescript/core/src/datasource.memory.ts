@@ -20,7 +20,7 @@ export class InMemoryDataSource extends DataSource
     version: 0,
     aspects: DataSource.definition.aspects
   };
-  static installAspect(on: ControlCenter, name: 'client'): { new(ds?: InMemoryDataSource.DataStore): DataSource.Aspects.client };
+  static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
   static installAspect(on: ControlCenter, name: 'server'): { new(ds?: InMemoryDataSource.DataStore): DataSource.Aspects.server };
   static installAspect(on: ControlCenter, name:string): any {
     return on.cache().createAspect(on, name, this);

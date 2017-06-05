@@ -6,10 +6,28 @@ export * from './mapper';
 import {SqlQuery, SqlMappedQuery, mapValue} from './query';
 import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, Pool} from './index';
 
-export class SqlDataSourceImpl extends DataSource {
-  connector: DBConnector;
-  mappers: { [s: string] : SqlMappedObject };
-  maker: SqlMaker;
+export class SqlDataSource extends DataSource 
+{
+  constructor(manager: VersionedObjectManager<SqlDataSource>,
+    public mappers: { [s: string] : SqlMappedObject },
+    private connector: DBConnector,
+    private maker: SqlMaker
+  ) {
+    super(manager);
+  }
+
+  static parent = DataSource;
+  static definition = {
+    is: "class",
+    name: "SqlDataSource",
+    version: 0,
+    aspects: DataSource.definition.aspects
+  };
+  static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
+  static installAspect(on: ControlCenter, name: 'server'): { new(mappers?: { [s: string] : SqlMappedObject }, connector?: DBConnector, maker?: SqlMaker): DataSource.Aspects.server };
+  static installAspect(on: ControlCenter, name:string): any {
+    return on.cache().createAspect(on, name, this);
+  }
 
   execute(db: DBConnector, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
     let ctx = {
@@ -185,5 +203,3 @@ export class SqlDataSourceImpl extends DataSource {
     }
   }
 }
-
-export const SqlDataSource = VersionedObject.cluster(SqlDataSourceImpl, DataSource);

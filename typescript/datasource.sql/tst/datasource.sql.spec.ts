@@ -61,11 +61,7 @@ function createSqlControlCenter(flux) {
   let C = Car.installAspect(cc, 'test1');
   let P = People.installAspect(cc, 'test1');
   let DB = SqlDataSource.installAspect(cc, "server");
-  let db = new DB();
-  let mdb = db as any;
-  mdb.mappers = mappers;
-  mdb.connector = flux.context.connector;
-  mdb.maker = flux.context.connector.maker;
+  let db = new DB(mappers, flux.context.connector, flux.context.connector.maker);
   Object.assign(flux.context, {
     Car: C,
     People: P,
