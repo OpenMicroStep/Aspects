@@ -20,24 +20,25 @@ module.exports =  {
       ]},
   ]},
   "targets=": { is: 'group',
-    "app=":  {
+    "angular2 app=":  {
       is: 'target',
-      //tsConfig: [{ traceResolution: true }],
       environments: ["=::openms.aspects.angular::"],
+      components: ["=::openms.aspects.angular.dev::"],
       files: ["=files:app ? tsc", "=files:shared ? tsc"],
-      copyFiles: [{ is: "associate", elements: ["=files:app ? copy"], dest: "" }],
-      interfaces: [{ is: "associate", elements: ['=files:shared ? interface'], header: `import {DataSource} from '@openmicrostep/aspects';` }]
+      copyFiles: [{ is: "group", elements: ["=files:app ? copy"], dest: "" }],
+      interfaces: [{ is: "group", elements: ['=files:shared ? interface'], header: `import {DataSource} from '@openmicrostep/aspects';` }]
     },
-    "server=":  {
+    "angular2 server=":  {
       is: 'target',
       environments: ["=::openms.aspects.node::"],
+      components: ["=::openms.aspects.node.dev::"],
       files: ["=files:server", "=files:shared ? tsc"],
-      interfaces: [{ is: "associate", elements: ['=files:shared ? interface'], header: `import {DataSource} from '@openmicrostep/aspects';` }],
-      npmPackage: [{ is: "component",
-        dependencies: [{ is: "component",
+      interfaces: [{ is: "group", elements: ['=files:shared ? interface'], header: `import {DataSource} from '@openmicrostep/aspects';` }],
+      npmPackage: { is: "component",
+        dependencies: { is: "component",
           "sqlite3": "^3.1.8",
-        }]
-      }],
+        }
+      },
     }
   }
 };

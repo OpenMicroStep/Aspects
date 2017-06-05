@@ -1,5 +1,5 @@
-import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, installPublicTransport, registerQuery, InvocationState} from '@openmicrostep/aspects';
-import {SequelizeDataSource, SqlMaker, Pool, SqliteDBConnector, loadSqlMappers} from '@openmicrostep/aspects.sql';
+import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, InvocationState, DataSourceQuery} from '@openmicrostep/aspects';
+import {SqliteDBConnectorFactory, SqlDataSource, SqlMaker, loadSqlMappers} from '@openmicrostep/aspects.sql';
 import {ExpressTransport} from '@openmicrostep/aspects.express';
 import {Person, DemoApp} from '../shared/index';
 import * as express from 'express';
@@ -27,14 +27,15 @@ const mappers = loadSqlMappers({
     ]
   }
 });
-const pool = new Pool(SqliteDBConnector.provider(sqlite3, ':memory:'));
-pool.scoped(async db => {
+const connector = SqliteDBConnectorFactory(sqlite3, { filename: ':memory:' }, { max: 1 });
+(async db => {
   await db.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
   await db.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
   await db.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` DATETIME)', bind: [] });
-});
+})(connector);
 
-registerQuery("allpersons", (query) => {
+let queries = new Map<string, DataSourceQuery>();
+queries.set("allpersons", (reporter, query) => {
   return {
     name: 'persons',
     where: { $instanceOf: Person, $text: query.text }, 
@@ -43,25 +44,23 @@ registerQuery("allpersons", (query) => {
 });
 
 const router = express.Router();
-const transport = new ExpressTransport(router, (cstor, id) => {
+const transport = new ExpressTransport(router, async (cstor, id) => {
   const controlCenter = new ControlCenter();
   const DemoAppServer = DemoApp.installAspect(controlCenter, "server");
   const PersonServer = Person.installAspect(controlCenter, "server");
-  const dataSource = new (SequelizeDataSource.installAspect(controlCenter, "server"))();
+  const DB = SqlDataSource.installAspect(controlCenter, "server");
+  const db = new DB(mappers, connector, connector.maker);
   const demoapp: DemoApp = new DemoAppServer();
-  let mdb = dataSource as any;
-  mdb.mappers = mappers;
-  mdb.pool = pool;
-  mdb.maker = new SqlMaker();
-
+  db.setQueries(queries);
   demoapp.manager().setId('__root');
-  dataSource.manager().setId('__dataSource');
+  db.manager().setId('__dataSource');
+
   if (id === demoapp.id())
       return Promise.resolve(demoapp);
-  if (id === dataSource.id())
-      return Promise.resolve(dataSource);
+  if (id === db.id())
+      return Promise.resolve(db);
   let [name, dbid] = id.toString().split(':');
-  return dataSource.farPromise('safeQuery', { name: "q", where: { _id: dbid, $instanceof: mdb.models.get("name").cstor } })
+  return db.farPromise('safeQuery', { name: "q", where: { _id: dbid, $instanceof: controlCenter.aspect(name)! } })
     .then((envelop) => {
       if (envelop.state() === InvocationState.Terminated)
         return Promise.resolve(envelop.result()["q"][0]);
@@ -69,9 +68,9 @@ const transport = new ExpressTransport(router, (cstor, id) => {
     });
 });
 
-installPublicTransport(transport, DataSource, ["server"]);
-installPublicTransport(transport, DemoApp, ["far"]);
-installPublicTransport(transport, Person, ["calculation"]);
+ControlCenter.globalCache.installPublicTransport(transport, DataSource, ["server"]);
+ControlCenter.globalCache.installPublicTransport(transport, DemoApp, ["far"]);
+ControlCenter.globalCache.installPublicTransport(transport, Person, ["calculation"]);
 
 const app = express();
 app.use('/', express.static(__dirname + "/../../../../openms.aspects.angular/node_modules/app/"));
