@@ -56,7 +56,7 @@ export class TypeElement extends Element {
       case 'array':
         return embedType(isAttribute, [`ImmutableList<`, ``], this.itemType ? this.itemType.__decl(isAttribute) : 'any' , [`>`, `[]`]);
       case 'set':
-        return embedType(isAttribute, [`ImmutableSet<`, ``], this.itemType ? this.itemType.__decl(isAttribute) : 'any' , [`>`, ``]);
+        return embedType(isAttribute, [`ImmutableSet<`, `Set<`], this.itemType ? this.itemType.__decl(isAttribute) : 'any' , [`>`, `>`]);
       case 'dictionary':
         return embedType(isAttribute, [`ImmutableObject<`, ``], `{${Object.keys(this.properties).map(k => `${k === '*' ? '[k: string]' : `${k}`}: ${this.properties![k].__decl(isAttribute)}`).join(', ')}}` , [`>`, ``]);
     }
