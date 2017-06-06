@@ -1,4 +1,4 @@
-import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, InvocationState, Transport } from '@openmicrostep/aspects';
+import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, Invocation, InvocationState, Transport } from '@openmicrostep/aspects';
 import { Router } from 'express';
 import * as bodyparser from 'body-parser';
 
@@ -28,7 +28,7 @@ export class ExpressTransport implements PublicTransport {
         let cc = entity.controlCenter();
         cc.registerComponent(component);
         let decodedWithLocalId = new Map<VersionedObject, Identifier>();
-        let inv = await entity.farPromise(method.name, isA0Void ? undefined : coder.decodeWithCC(req.body, cc, component));
+        let inv = await Invocation.farPromise(entity, method.name, isA0Void ? undefined : coder.decodeWithCC(req.body, cc, component));
         let ret = inv.hasResult() 
           ? { result: coder.encodeWithCC(inv.result(), cc, vo => decodedWithLocalId.get(vo) || vo.id()), diagnostics: inv.diagnostics() }
           : { diagnostics: inv.diagnostics() };

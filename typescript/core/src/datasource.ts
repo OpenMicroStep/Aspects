@@ -21,7 +21,7 @@ DataSource.category('queries', <DataSource.ImplCategories.queries<DataSource & {
 });
 
 DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.server>>{
-  query(request: { [k: string]: any }) {
+  query(request: { id: string, [k: string]: any }) {
     return this.farPromise('distantQuery', request);
   },
   load(w: {objects: VersionedObject[], scope: string[]}) {
@@ -63,7 +63,7 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
   }
 });
 
-async function validateConsistency(this: DataSource, reporter: any/*Reporter*/, objects: VersionedObject[]) {
+async function validateConsistency(this: DataSource.Categories.raw, reporter: any/*Reporter*/, objects: VersionedObject[]) {
   // Let N be the number of objects (we may want if N = 1000, this method to took less than 100ms)
   // Let M be the number of classes (M range should be mostly in [1 - 10])
   // Let K be the number of attributes
@@ -74,7 +74,7 @@ async function validateConsistency(this: DataSource, reporter: any/*Reporter*/, 
   let validators = new Map<any/*Validator*/, any/*VersionnedObject*/[]>();
   objects.forEach(o => classes.add(o.manager().aspect())); // O(N * log M)
   classes.forEach(c => (c as any).attributesToLoad('consistency').forEach(a => attributes.add(a))); // O(M * log K)
-  await this.farPromise('rawLoad', { objects: objects, scope: Array.from(attributes) }); // O(K + N * K)
+  await this.farPromise('rawLoad', { objects: objects, scope: Array.from<string>(attributes) }); // O(K + N * K)
   objects.forEach(o => (o as any).validateConsistency(reporter)); // O(N)
   objects.forEach(o => {
     let v = (o as any).validatorsForGraphConsistency();

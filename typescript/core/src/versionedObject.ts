@@ -301,16 +301,16 @@ export class VersionedObject {
   manager(): VersionedObjectManager<this> { return this.__manager; }
   controlCenter(): ControlCenter { return this.__manager.controlCenter(); }
 
-  farCallback<O extends VersionedObject, R>(this: O, method: string, argument: any, callback: (envelop: Invocation<R>) => void) {
+  farCallback<O extends VersionedObject, R>(this: O, method: never, argument: any, callback: (envelop: Invocation<R>) => void) {
     Invocation.farCallback(this, method, argument, callback);
   }
-  farEvent<O extends VersionedObject>(this: O, method: string, argument: any, eventName: string, onObject?: Object) {
+  farEvent<O extends VersionedObject>(this: O, method: never, argument: any, eventName: string, onObject?: Object) {
     Invocation.farEvent(this, method, argument, eventName, onObject);
   }
-  farPromise<O extends VersionedObject, R>(this: O, method: string, argument: any) : Promise<Invocation<R>> {
+  farPromise<O extends VersionedObject, R>(this: O, method: never, argument: any) : Promise<Invocation<R>> {
     return Invocation.farPromise(this, method, argument, );
   }
-  farAsync<O extends VersionedObject, R>(this: O, method: string, argument: any) : (flux: Flux<{ envelop: Invocation<R> }>) => void {
+  farAsync<O extends VersionedObject, R>(this: O, method: never, argument: any) : (flux: Flux<{ envelop: Invocation<R> }>) => void {
     return (flux: Flux<{ envelop: Invocation<R> }>) => {
       Invocation.farAsync(flux, this, method, argument);
     };

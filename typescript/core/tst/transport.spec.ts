@@ -79,7 +79,7 @@ function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string,
     p1.cc.registerComponent(component);
     let decodedWithLocalId = new Map<VersionedObject, Identifier>();
     let args = coder.decodeWithCC(request.args, p1.cc, component, new Set(), decodedWithLocalId);
-    let inv = await to.farPromise(request.method, args[0]);
+    let inv = await Invocation.farPromise(to, request.method, args[0]);
     let ret = inv.hasResult() 
       ? { result: coder.encodeWithCC(inv.result(), p1.cc, vo => decodedWithLocalId.get(vo) || vo.id()), diagnostics: inv.diagnostics() }
       : { diagnostics: inv.diagnostics() };
