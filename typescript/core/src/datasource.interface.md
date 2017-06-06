@@ -70,8 +70,7 @@ Méthodes à implémenter par les dataSources.
 
 #### implQuery(sets: [0, *, ObjectSet]): { * :[0, *, VersionedObject]}
 #### implLoad(l: { objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
-
-#### implSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
+#### implSave(objects: <0, *, VersionedObject>): void
 
 Enregistre la liste d'objets fournis et retourne la forme en base des objets.
 

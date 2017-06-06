@@ -115,13 +115,15 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
     return this.farPromise('implLoad', w);
   },
   rawSave(objects: VersionedObject[]) {
-    let changed = objects.filter(o => {
+    let changed = new Set<VersionedObject>();
+    for (let o of objects) {
       let manager = o.manager();
       let state = manager.state();
       if (state === VersionedObjectManager.State.NEW)
         manager.setNewObjectMissingValues();
-      return state !== VersionedObjectManager.State.UNCHANGED;
-    });
+      if (state !== VersionedObjectManager.State.UNCHANGED)
+        changed.add(o);
+    }
     return this.farPromise('implSave', changed).then((envelop) => {
       return new Invocation(envelop.diagnostics(), true, objects);
     });

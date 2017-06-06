@@ -1,4 +1,5 @@
-import {DataSource, areEquals, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect} from './core';
+import {DataSource, areEquals, DataSourceConstructor, VersionedObject, VersionedObjectManager, Invocation, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect} from './core';
+import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
 
@@ -130,31 +131,45 @@ export class InMemoryDataSource extends DataSource
     return ret;
   }
 
-  implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
-    let willFail = false;
-    for (let i = 0; !willFail && i < objects.length; i++) {
-      let object = objects[i];
-      let version = object.manager()._version;
-      let dbId = dbPrefix + object.id();
-      if (version === VersionedObjectManager.DeletedVersion) {
-        willFail = !this.ds.objects.has(dbId);
+  implSave(objects: Set<VersionedObject>) : Promise<Invocation<void>> {
+    let cc = this.controlCenter();
+    let diags: Diagnostic[] = [];
+    let component = {};
+    cc.registerComponent(component);
+    for (let lObject of objects) {
+      let lVersion = lObject.manager().versionVersion();
+      let dbId = dbPrefix + lObject.id();
+      if (lVersion === VersionedObjectManager.DeletedVersion) {
+        if (!this.ds.objects.has(dbId))
+          diags.push({ type: "error", msg: `cannot delete ${lObject.id()}: object not found` });
       }
-      else if (version !== VersionedObjectManager.NoVersion) { // Update
-        let dbObject = this.ds.objects.get(dbId);
-        if (!(willFail = !dbObject)) {
-          let dbManager = dbObject!.manager();
-          let obManager = object.manager();
+      else if (lVersion !== VersionedObjectManager.NoVersion) { // Update
+        let dObject = this.ds.objects.get(dbId);
+        if (!dObject)
+          diags.push({ type: "error", msg: `cannot update ${lObject.id()}: object not found` });
+        if (dObject) {
+          let dbManager = dObject!.manager();
+          let obManager = lObject.manager();
+          let n = diags.length;
           for (let k of obManager._localAttributes.keys()) {
             let dbv = dbManager._versionAttributes.get(k);
             let exv = obManager._versionAttributes.get(k);
-            if ((willFail = !areEquals(exv,dbv))) 
-              break;
+            if (!areEquals(exv,dbv)) 
+              diags.push({ type: "error", msg: `cannot update ${lObject.id()}: attribute ${k} mismatch` });
+          }
+          if (diags.length > n) {
+            let remoteAttributes = new Map<keyof VersionedObject, any>();
+            cc.registerObjects(component, [lObject]);
+            for (let k of obManager._localAttributes.keys())
+              remoteAttributes.set(k, this.fromDb(dbManager._versionAttributes.get(k), component));
+            obManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version());
           }
         }
       }
     }
+    cc.unregisterComponent(component);
 
-    if (!willFail) {
+    if (diags.length === 0) {
       for (let lObject of objects) {
         let lManager = lObject.manager();
         let lVersion = lManager._version;
@@ -184,8 +199,7 @@ export class InMemoryDataSource extends DataSource
         }
       }
     }
-
-    return willFail ? Promise.reject(objects) : Promise.resolve(objects);
+    return Promise.resolve(new Invocation(diags, false, undefined));
   }
 };
 export namespace InMemoryDataSource {

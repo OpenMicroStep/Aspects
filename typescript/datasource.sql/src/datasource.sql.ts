@@ -1,4 +1,5 @@
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
+import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Invocation} from '@openmicrostep/aspects';
+import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlMappedObject} from './mapper';
@@ -41,8 +42,9 @@ export class SqlDataSource extends DataSource
     let query = SqlQuery.build(ctx, set);
     return query.execute(ctx, set.scope || [], db, component);
   }
-  async save(transaction: DBConnectorTransaction, object: VersionedObject): Promise<{ _id: Identifier, _version: number }> {
+  async save(tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
     let manager = object.manager();
+    let state = manager.state();
     let aspect = manager.aspect();
     let id = manager.id();
     let version = manager.versionVersion();
@@ -50,7 +52,7 @@ export class SqlDataSource extends DataSource
     if (!mapper)
       return Promise.reject(`mapper not found for: ${aspect.name}`);
     let idAttr = mapper.get("_id");
-    let isNew = VersionedObjectManager.isLocalId(id);
+    let isNew = state === VersionedObjectManager.State.NEW;
     let valuesByTable = new Map<SqlInsert, Map<string, any>>();
     let valuesByPath = new Map<string, { table: string, sets: SqlBinding[], checks: SqlBinding[], where: SqlBinding }>(); // [table, key]value*[table, key]
     if (isNew) {
@@ -126,19 +128,23 @@ export class SqlDataSource extends DataSource
           }
         }
         let sql_insert = this.maker.insert(c.table, this.maker.values(Array.from(values.keys()), Array.from(values.values())), output_columns);
-        let result = await transaction.insert(sql_insert, output_columns); // sequential insertion
+        let result = await tr.insert(sql_insert, output_columns); // sequential insertion
         output_columns.forEach((c, i) => values.set(c, result[i]));
-        if (c === idAttr.insert)
+        if (c === idAttr.insert) {
           id = mapper.fromDbKey(idAttr.fromDbKey(values.get(idAttr.last().value)));
+          versions.set(object, { _id: id, _version: version });
+        }
       }
+    }
+    else {
+      versions.set(object, { _id: id, _version: version });
     }
     for (let entry of valuesByPath.values()) {
       let sql_update = this.maker.update(entry.table, entry.sets, this.maker.and([entry.where, ...entry.checks]));
-      let changes = await transaction.update(sql_update); // TODO: test for any advantage to parallelize this ?
+      let changes = await tr.update(sql_update); // TODO: test for any advantage to parallelize this ?
       if (changes !== 1)
         throw new Error(`cannot update`);
     }
-    return { _id: id, _version: version };
   }
 
   scoped<P>(scope: (component: AComponent) => Promise<P>) : Promise<P> {
@@ -183,23 +189,29 @@ export class SqlDataSource extends DataSource
     return ([] as VersionedObject[]).concat(...results);
   }
 
-  async implSave(objects: VersionedObject[]) : Promise<VersionedObject[]> {
+  async implSave(objects: Set<VersionedObject>) : Promise<Invocation<void>> {
     let tr = await this.connector.transaction();
-    let versions: { _id: Identifier, _version: number }[] = [];
-    try {
-      for (let obj of objects)
-        versions.push(await this.save(tr, obj));
+    let reporter = new Reporter();
+    let versions = new Map<VersionedObject, { _id: Identifier, _version: number }>();
+    for (let obj of objects) {
+      try {
+        if (!versions.has(obj))
+          await this.save(tr, reporter, objects, versions, obj);
+      } catch (e) {
+        reporter.error(e || `unknown error`);
+      }
+    }
+    if (reporter.diagnostics.length === 0) {
       await tr.commit();
-      versions.forEach((v, i) => {
-        let manager = objects[i].manager();
+      versions.forEach((v, vo) => {
+        let manager = vo.manager();
         manager.setId(v._id);
         manager.setVersion(v._version);
       });
-      return objects;
-    } catch(e) {
-      await tr.rollback();
-      // TODO: set oldVersion attributes for merging
-      return Promise.reject(e);
     }
+    else {
+      await tr.rollback();
+    }
+    return new Invocation(reporter.diagnostics, false, undefined);
   }
 }
