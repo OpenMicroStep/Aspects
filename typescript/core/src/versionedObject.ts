@@ -117,6 +117,11 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return this._versionAttributes.get(attribute);
     throw new Error(`attribute '${attribute}' is unaccessible and never was`);
   }
+
+  delete() {
+    this._localAttributes.clear();
+    this._version = VersionedObjectManager.State.DELETED;
+  }
   
   setId(id: Identifier) {
     if (this._id === id)
