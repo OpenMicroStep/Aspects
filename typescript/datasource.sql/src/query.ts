@@ -244,13 +244,13 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let aspect = cstor.aspect;
 
     let mono_attributes: string[] = ["_version"];
-    let mult_attributes: string[] = [];
+    let mult_attributes: Aspect.InstalledAttribute[] = [];
     for (let attribute of scope) {
       let a = aspect.attributes.get(attribute)!;
       if (a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary")
         mono_attributes.push(attribute);
       else if (a.type.type === "set" || a.type.type === "array")
-        mult_attributes.push(attribute);
+        mult_attributes.push(a);
     }
 
     let mono_query = ctx.maker.select(this.sql_columns(ctx, ["_id", ...mono_attributes]), this.sql_from(ctx), [], this.sql_where(ctx));
@@ -266,41 +266,36 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       ids.push(id);
       cc.registerObjects(component, [vo]);
       remotes.set(vo, remoteAttributes);
-      for (let i = 0; i < mono_attributes.length; i++) {
-        let attr = mono_attributes[i];
+      for (let attr of mono_attributes) {
         let aspectAttr = aspect.attributes.get(attr)!;
         let sqlattr = this.mapper!.get(attr);
         let value = this.loadValue(ctx, component, aspectAttr.type, sqlattr.fromDb(row[attr]));
         remoteAttributes.set(attr, value);
+      }
+      for (let mult_attribute of mult_attributes) {
+        let isSet = mult_attribute.type.type === "set";
+        remoteAttributes.set(mult_attribute.name, isSet ? new Set() : []);
       }
     }
     for (let mult_attribute of mult_attributes) {
       let q = new SqlMappedQuery();
       q.setMapper(ctx, this.mapper!.name);
       q.addConstraint(q.buildConstraintValue(ctx, aspect.attributes.get("_id")!, ConstraintType.In, ids));
-      let mult_columns = q.sql_columns(ctx, ["_id", mult_attribute]);
+      let mult_columns = q.sql_columns(ctx, ["_id", mult_attribute.name]);
       let mult_query = ctx.maker.select(mult_columns, q.sql_from(ctx), [], q.sql_where(ctx));
       let mult_rows = await db.select(mult_query);
-      let mult_attr = aspect.attributes.get(mult_attribute)!;
-      let mult_sql_attr = this.mapper!.get(mult_attribute);
-      let isSet = mult_attr.type.type === "set";
-      let isArray = mult_attr.type.type === "array";
+      let mult_sql_attr = this.mapper!.get(mult_attribute.name);
+      let isSet = mult_attribute.type.type === "set";
       for (let row of mult_rows) {
         let id = this.mapper!.fromDbKey(attribute_id.fromDbKey(row["_id"]));
         let vo = cc.registeredObject(id)!;
         let remoteAttributes = remotes.get(vo)!;
-        let value = this.loadValue(ctx, component, (mult_attr.type as any).itemType, mult_sql_attr.fromDb(row[mult_attribute]));
-        let c = remoteAttributes.get(mult_attribute);
-        if (isSet) {
-          if (!c) 
-            remoteAttributes.set(mult_attribute, c = new Set());
+        let value = this.loadValue(ctx, component, (mult_attribute.type as any).itemType, mult_sql_attr.fromDb(row[mult_attribute.name]));
+        let c = remoteAttributes.get(mult_attribute.name);
+        if (isSet)
           c.add(value);
-        }
-        else if (isArray) {
-          if (!c) 
-            remoteAttributes.set(mult_attribute, c = []);
+        else // is array
           c.push(value);
-        }
       }
     }
     return this.mergeRemotes(remotes);
