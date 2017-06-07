@@ -20,7 +20,7 @@ export class XHRTransport implements FarTransport {
       }
       if (!isVoid) {
         xhr.setRequestHeader('Content-Type', 'application/json+mste');
-        xhr.send(coder.encodeWithCC(args[0], cc));
+        xhr.send(JSON.stringify(coder.encodeWithCC(args[0], cc)));
       }
       else
         xhr.send();

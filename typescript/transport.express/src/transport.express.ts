@@ -28,7 +28,7 @@ export class ExpressTransport implements PublicTransport {
         let cc = entity.controlCenter();
         cc.registerComponent(component);
         let decodedWithLocalId = new Map<VersionedObject, Identifier>();
-        let inv = await Invocation.farPromise(entity, method.name, isA0Void ? undefined : coder.decodeWithCC(req.body, cc, component));
+        let inv = await Invocation.farPromise(entity, method.name, isA0Void ? undefined : coder.decodeWithCC(JSON.parse(req.body), cc, component));
         let ret = inv.hasResult() 
           ? { result: coder.encodeWithCC(inv.result(), cc, vo => decodedWithLocalId.get(vo) || vo.id()), diagnostics: inv.diagnostics() }
           : { diagnostics: inv.diagnostics() };
