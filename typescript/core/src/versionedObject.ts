@@ -267,17 +267,8 @@ export class VersionedObject {
       static __i() {}
     }
   }
-  static cluster<P extends VersionedObjectConstructor<VersionedObject>>(cstor: { new(manager: VersionedObjectManager<VersionedObject>): VersionedObject }, parent: P): P {
-    let c = cstor as any;
-    c.parent = parent;
-    c.definition = Object.assign({}, parent.definition, { name: cstor.name });
-    c.installAspect = function(this: VersionedObjectConstructor<VersionedObject>, on: ControlCenter, name: string) : { new(): VersionedObject } {
-      return on.cache().createAspect(on, name, this);
-    };
-    return cstor as P;
-  }
 
-  static parent = undefined;
+  static parent: VersionedObjectConstructor | undefined = undefined;
 
   static definition: Aspect.Definition = {
     name: "VersionedObject",
@@ -330,7 +321,7 @@ function isEqualVersionedObject(this: VersionedObject, other, level?: number) {
 }
 addIsEqualSupport(VersionedObject, isEqualVersionedObject);
 
-export interface VersionedObjectConstructor<C extends VersionedObject> {
+export interface VersionedObjectConstructor<C extends VersionedObject = VersionedObject> {
     new(manager: VersionedObjectManager<C>, ...args): C;
     definition: Aspect.Definition;
     parent?: VersionedObjectConstructor<VersionedObject>;
