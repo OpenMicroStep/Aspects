@@ -50,6 +50,7 @@ Element.load(reporter, {
           "@openmicrostep/async": "^0.1.1",
           "@openmicrostep/aspects": "^0.5.0",
           "@openmicrostep/aspects.xhr": "^0.5.0",
+          "@openmicrostep/msbuildsystem.shared": "^0.5.6",
         },
       },
     }],
@@ -98,6 +99,7 @@ Element.load(reporter, {
           "@openmicrostep/aspects": "^0.5.0",
           "@openmicrostep/aspects.express": "^0.5.0",
           "@openmicrostep/aspects.sql": "^0.5.0",
+          "@openmicrostep/msbuildsystem.shared": "^0.5.6",
         },
       },
     }],
@@ -115,7 +117,9 @@ Element.load(reporter, {
       is: "component",
       "js=": { is: "environment" },
       environments: ["=js"],
-      targets: ["aspects core", "aspects express", "aspects sql"],
+      targetsByEnvironment: {
+        "=js": ["aspects core", "aspects express", "aspects sql"]
+      },
       componentsByEnvironment: {
         "=js": ["=openms.aspects.node:target", "=openms.aspects.node:express", "=::aspects core::", "=::aspects express::", "=::aspects sql::"],
       }
