@@ -67,9 +67,8 @@ const jsonEncoders: ObjectCoding<any, any, JSONEncoder, JSONDecoder>[]= [
     encode(e, s) {
       let r: any;
       let m = s.manager();
-      r = { __is__: "VersionedObject", _id: m.id(), _rid: e.remoteId(s) };
+      r = { __is__: "VersionedObject", _id: m.id(), _rid: e.remoteId(s), __cls: m.name() };
       if (e.keepAttributes) {
-        r.__cls = m.name();
         r._version = m.versionVersion();
         r._localAttributes = {};
         r._versionAttributes = {}
@@ -85,7 +84,10 @@ const jsonEncoders: ObjectCoding<any, any, JSONEncoder, JSONDecoder>[]= [
       if (r && d.ccAllowed && d.ccAllowed.has(r))
         throw new Error(`reference to reserved cc object ${id}`);
       if (!r) {
-        r = new (d.cc.aspect(s.__cls)!)();
+        let cstor = d.cc.aspect(s.__cls);
+        if (!cstor)
+          throw new Error(`aspect ${s.__cls} not found`);
+        r = new cstor();
         d.cc.registerObjects(d.component, [r]);
         if (d.ccAllowed)
           d.ccAllowed.add(r);
@@ -109,7 +111,7 @@ const jsonEncoders: ObjectCoding<any, any, JSONEncoder, JSONDecoder>[]= [
       }
       return r;
     },
-  } as ObjectJSONCoding<VersionedObject, { __is__: "VersionedObject", __cls: string, _id: Identifier, _rid: Identifier, _version: number, _versionAttributes?: object, _localAttributes?: object }>,
+  } as ObjectJSONCoding<VersionedObject, { __is__: "VersionedObject", __cls: string, _id: Identifier, _rid: Identifier, _version?: number, _versionAttributes?: object, _localAttributes?: object }>,
   { is: undefined,
     canEncode(e, s) { return s.constructor === Object },
     canDecode(d, s) { return s.constructor === Object },
