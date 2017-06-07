@@ -39,10 +39,10 @@ function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
       case 'object': {
         if (bind instanceof Date) type = TYPES.DateTime;
         else if (bind instanceof Buffer) type = TYPES.VarBinary;
-        else if (bind === null) type = TYPES.Null;
+        else if (bind === null) type = TYPES.VarChar;
         break;
       }
-      case 'undefined': type = TYPES.Null; bind = null; break;
+      case 'undefined': type = TYPES.VarChar; bind = null; break;
     }
     if (!type)
       throw new Error(`unsupported binding type: ${typeof bind}`);

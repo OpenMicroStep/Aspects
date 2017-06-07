@@ -48,7 +48,7 @@ export class SqlMaker {
   }
 
   values(columns: string[], values: any[]) : SqlBinding[] {
-    return columns.map((c, i) => ({ sql: this.quote(c), bind: [values[i]] }));
+    return columns.map((c, i) => ({ sql: this.quote(c), bind: [values[i] !== undefined ? values[i] : null] }));
   }
 
   insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
@@ -89,6 +89,8 @@ export class SqlMaker {
   }
 
   set(sql_column: string, value: any) : SqlBinding {
+    if (value === undefined)
+      value = null;
     return { sql: `${sql_column} = ?`, bind: [value] };
   }
 

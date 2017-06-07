@@ -92,7 +92,7 @@ export const tests =
   }, destroy) },
   { name: "mysql (npm mysql2)", tests: createTests(async function mysqlCC(flux) {
     const mysql2 = require('mysql2');
-    const connector = MySQLDBConnectorFactory(mysql2, { host: 'localhost', user: 'root', password: "my-secret-pw", database: "" }, { max: 10 });
+    const connector = MySQLDBConnectorFactory(mysql2, { host: 'localhost', user: 'root', password: "my-secret-pw", database: "" }, { max: 1 });
     await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
@@ -110,7 +110,7 @@ export const tests =
     await init.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await init.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     init.close();
-    const connector = PostgresDBConnectorFactory(pg, { host: 'localhost', user: 'postgres', password: "my-secret-pw", database: "aspects" }, { max: 10 });
+    const connector = PostgresDBConnectorFactory(pg, { host: 'localhost', user: 'postgres', password: "my-secret-pw", database: "aspects" }, { max: 1 });
     await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" SERIAL PRIMARY KEY, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" SERIAL PRIMARY KEY, "idVersion" INTEGER REFERENCES "Version" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "name" VARCHAR(255))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" BIGINT)', bind: [] });
@@ -121,7 +121,7 @@ export const tests =
   }, destroy) },
   { name: "mssql (npm tedious)", tests: createTests(async function mssqlCC(flux) {
     const tedious = require('tedious');
-    const connector = MSSQLDBConnectorFactory(tedious, { server: 'localhost', userName: 'sa', password: "7wnjijM9JihtKok4RC6" }, { max: 10 });
+    const connector = MSSQLDBConnectorFactory(tedious, { server: 'localhost', userName: 'sa', password: "7wnjijM9JihtKok4RC6" }, { max: 1 });
     await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
