@@ -97,7 +97,6 @@ module.exports =  {
         ]},
         { is: 'group', name: 'tst', path: 'tst/', elements: [
           { is: 'file', name: 'datasource.sql.spec.ts', tags: ['tsc'] },
-          { is: 'file', name: 'resource.interface.md', tags: ['interface'] },
         ]},
       ]},
       { is: 'group', name: 'transport.express', path: 'typescript/transport.express/src', elements: [
@@ -179,7 +178,7 @@ module.exports =  {
       components: ["=test", "=::aspects core::", "=::aspects sql::", "=node"],
       environments: ["=envs:js"],
       files: ["=Files:datasource.sql:tst ? tsc"],
-      interfaces: ["=Files:datasource.sql:tst ? interface"],
+      interfaces: ["=Files:core:tst ? interface"],
       npmPackage: { is: "component",
         "dependencies": { is: "component",
           "sqlite3": "^3.1.8",
