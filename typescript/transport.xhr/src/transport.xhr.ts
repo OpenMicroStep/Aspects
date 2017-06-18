@@ -2,29 +2,28 @@ import { FarTransport, VersionedObject, ControlCenter, Transport, Invocation } f
 
 const coder = new Transport.JSONCoder();
 export class XHRTransport implements FarTransport {
-  remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
-    return new Promise((resolve, reject) => {
-      let isVoid = args.length === 0;
-      let xhr = new XMLHttpRequest();
-      let cc = to.controlCenter();
-      xhr.open(isVoid ? "GET" : "POST", this.httpUrl(to, method), true);
-      xhr.onreadystatechange = () => {
-        if (xhr.readyState === 4) {
-          let res = JSON.parse(xhr.responseText);
-          let component = {};
-          cc.registerComponent(component);
-          let inv = new Invocation(res.diagnostics, "result" in res, coder.decodeWithCC(res.result, cc, component));
-          cc.unregisterComponent(component);
-          resolve(inv);
+  async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<Invocation<any>> {
+    let res = await coder.encode_transport_decode(to.controlCenter(), args[0], (arg0) => {
+      return new Promise((resolve, reject) => {
+        let isVoid = args.length === 0;
+        let xhr = new XMLHttpRequest();
+        let cc = to.controlCenter();
+        xhr.open(isVoid ? "GET" : "POST", this.httpUrl(to, method), true);
+        xhr.onreadystatechange = () => {
+          if (xhr.readyState === 4) {
+            resolve(xhr.responseText);
+          }
         }
-      }
-      if (!isVoid) {
-        xhr.setRequestHeader('Content-Type', 'application/json+mste');
-        xhr.send(JSON.stringify(coder.encodeWithCC(args[0], cc)));
-      }
-      else
-        xhr.send();
+        if (!isVoid) {
+          xhr.setRequestHeader('Content-Type', 'application/json+mste');
+          xhr.send(arg0);
+        }
+        else
+          xhr.send();
+      });
     });
+    let inv = new Invocation(res.diagnostics, "result" in res, res.result);
+    return inv;
   }
 
   httpUrl(to: VersionedObject, method: string) {

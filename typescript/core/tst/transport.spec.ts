@@ -17,14 +17,9 @@ function createContext_C1(publicTransport: (json: string) => Promise<string>) {
   let coder = new Transport.JSONCoder();
   ret.cc.installTransport({
     async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
-      let req = { to: to.id(), method: method, args: args.map(a => coder.encodeWithCC(a, ret.cc)) };
-      let request = JSON.stringify(req, null, 2);
-      let response = await publicTransport(request);
-      let res = JSON.parse(response);
-      let component = {};
-      ret.cc.registerComponent(component);
-      let inv = new Invocation(res.diagnostics, "result" in res, coder.decodeWithCC(res.result, ret.cc, component));
-      ret.cc.unregisterComponent(component);
+      let req = { to: to.id(), method: method, args: args };
+      let res = await coder.encode_transport_decode(ret.cc, req, publicTransport);
+      let inv = new Invocation(res.diagnostics, "result" in res, res.result);
       return inv;
     }
   });
@@ -73,18 +68,16 @@ function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string,
   ctx.publicTransport = async (json: string) => {
     let p1 = createContext_S1(ds, queries);
     p1.cc.registerObjects(p1.component, [p1.db]);
-    let request = JSON.parse(json);
-    let to = p1.cc.registeredObject(request.to)!;
-    let component = {};
-    p1.cc.registerComponent(component);
-    let decodedWithLocalId = new Map<VersionedObject, Identifier>();
-    let args = coder.decodeWithCC(request.args, p1.cc, component, new Set(), decodedWithLocalId);
-    let inv = await Invocation.farPromise(to, request.method, args[0]);
-    let ret = inv.hasResult() 
-      ? { result: coder.encodeWithCC(inv.result(), p1.cc, vo => decodedWithLocalId.get(vo) || vo.id()), diagnostics: inv.diagnostics() }
-      : { diagnostics: inv.diagnostics() };
-    let response = JSON.stringify(ret);
-    return response;
+
+    let res = coder.decode_handle_encode(cc, json, async (request) => {
+      let to = p1.cc.registeredObject(request.to)!;
+      let inv = await Invocation.farPromise(to, request.method, request.args[0]);
+      let res = inv.hasResult()
+        ? { result: inv.result(), diagnostics: inv.diagnostics() }
+        : { diagnostics: inv.diagnostics() };
+      return res;
+    });
+    return res;
   };
   return ctx;
 }
@@ -118,6 +111,8 @@ async function distantQuery(flux) {
   let s1 = createContext_S1(ds, queries);
   let c1 = createContext_C1(s1.publicTransport);
   await s1.db.farPromise("rawSave", [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]);
+  c1.cc.registerComponent(c1.component);
+  c1.cc.registerObjects(c1.component, [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]);
 
   let inv = await c1.db.farPromise("query", { id: "s1cars" });
   let res = inv.result();

@@ -24,15 +24,18 @@ export class ExpressTransport implements PublicTransport {
     this.app[isA0Void ? "get" : "post"](path, (req, res) => {
       let id = req.params.id;
       this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id).then(async (entity) => {
-        let component = {}
         let cc = entity.controlCenter();
-        cc.registerComponent(component);
-        let decodedWithLocalId = new Map<VersionedObject, Identifier>();
-        let inv = await Invocation.farPromise(entity, method.name, isA0Void ? undefined : coder.decodeWithCC(JSON.parse(req.body), cc, component));
-        let ret = inv.hasResult() 
-          ? { result: coder.encodeWithCC(inv.result(), cc, vo => decodedWithLocalId.get(vo) || vo.id()), diagnostics: inv.diagnostics() }
+        let inv: Invocation<any> | undefined;
+        let json = await coder.decode_handle_encode(cc, isA0Void ? undefined : req.body, async (decoded) => {
+          inv = await Invocation.farPromise(entity, method.name, decoded);
+          let ret = inv.hasResult() 
+          ? { result: inv.result(), diagnostics: inv.diagnostics() }
           : { diagnostics: inv.diagnostics() };
-        res.status(inv.hasDiagnostics() ? 400 : 200).json(ret);
+          return ret;
+        });
+        res.set('Content-Type', 'application/json');
+        res.status(inv && inv.hasDiagnostics() ? 400 : 200);
+        res.send(json);
       }).catch((error) => {
         console.info(error);
         res.status(501).send(error);
