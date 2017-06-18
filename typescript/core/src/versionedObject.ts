@@ -289,6 +289,27 @@ export namespace VersionedObjectManager {
   };
   export type Attributes<T extends VersionedObject> = Map<keyof T, T[keyof T]>;
   export type ROAttributes<T extends VersionedObject> = ImmutableMap<keyof T, T[keyof T]>;
+
+  function push(into: Set<VersionedObject>, o: Array<VersionedObject> | Set<VersionedObject> | VersionedObject) {
+    if (o instanceof VersionedObject)
+      into.add(o);
+    else {
+      for (let so of o)
+        into.add(so);
+    }
+  }
+  export function objectsInScope(objects: VersionedObject[], scope: string[]) : VersionedObject[] {
+    let s = new Set<VersionedObject>();
+    for (let o of objects) {
+      let m = o.manager();
+      s.add(o);
+      for (let attribute of scope) {
+        push(s, m.attributeValue(attribute));
+        push(s, m.versionAttributeValue(attribute));
+      }
+    }
+    return [...s];
+  }
 }
 export class VersionedObject {
   static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
