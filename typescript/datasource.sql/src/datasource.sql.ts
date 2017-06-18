@@ -1,12 +1,13 @@
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Invocation} from '@openmicrostep/aspects';
+import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Invocation} from '@openmicrostep/aspects';
 import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlMappedObject} from './mapper';
 export * from './mapper';
 import {SqlQuery, SqlMappedQuery, mapValue} from './query';
-import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, Pool} from './index';
+import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, DBConnectorCRUD, Pool} from './index';
 
+export type SqlDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
 export class SqlDataSource extends DataSource 
 {
   constructor(manager: VersionedObjectManager<SqlDataSource>,
@@ -30,7 +31,7 @@ export class SqlDataSource extends DataSource
     return on.cache().createAspect(on, name, this);
   }
 
-  execute(db: DBConnector, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
+  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
     let ctx = {
       cstor: SqlMappedQuery,
       controlCenter: this.controlCenter(),
@@ -155,19 +156,20 @@ export class SqlDataSource extends DataSource
       .catch(v => { this.controlCenter().unregisterComponent(component); return Promise.reject(v); })
   }
 
-  implQuery(sets: ObjectSet[]): Promise<{ [k: string]: VersionedObject[] }> {
+  implQuery({ tr, sets }: { tr?: SqlDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
     let ret = {};
     return this.scoped(component => 
       Promise.all(sets
         .filter(s => s.name)
-        .map(s => this.execute(this.connector, s, component)
+        .map(s => this.execute(tr ? tr.tr : this.connector, s, component)
         .then(obs => ret[s.name!] = obs))
       ).then(() => ret));
   }
 
-  async implLoad({objects, scope} : {
-      objects: VersionedObject[];
-      scope?: string[];
+  async implLoad({tr, objects, scope} : {
+    tr?: SqlDataSourceTransaction;
+    objects: VersionedObject[];
+    scope?: string[];
   }): Promise<VersionedObject[]> {
     let types = new Map<Aspect.Installed, VersionedObject[]>();
     for (let object of objects) {
@@ -185,33 +187,39 @@ export class SqlDataSource extends DataSource
       set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set.aspectAttribute("_id"), list));
       sets.push(set);
     });
-    let results = await this.scoped(component => Promise.all(sets.map(s => this.execute(this.connector, s, component))));
+    let results = await this.scoped(component => Promise.all(sets.map(s => this.execute(tr ? tr.tr : this.connector, s, component))));
     return ([] as VersionedObject[]).concat(...results);
   }
 
-  async implSave(objects: Set<VersionedObject>) : Promise<Invocation<void>> {
+  async implBeginTransaction(): Promise<SqlDataSourceTransaction> {
     let tr = await this.connector.transaction();
+    return { tr: tr, versions: new Map<VersionedObject, { _id: Identifier, _version: number }>() };
+  }
+
+  async implSave({tr, objects}: { tr: SqlDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Invocation<void>> {
     let reporter = new Reporter();
-    let versions = new Map<VersionedObject, { _id: Identifier, _version: number }>();
     for (let obj of objects) {
       try {
-        if (!versions.has(obj))
-          await this.save(tr, reporter, objects, versions, obj);
+        if (!tr.versions.has(obj))
+          await this.save(tr.tr, reporter, objects, tr.versions, obj);
       } catch (e) {
         reporter.error(e || `unknown error`);
       }
     }
-    if (reporter.diagnostics.length === 0) {
-      await tr.commit();
-      versions.forEach((v, vo) => {
+    return new Invocation(reporter.diagnostics, false, undefined);
+  }
+
+  async implEndTransaction({tr, commit}: { tr: SqlDataSourceTransaction, commit: boolean }) : Promise<void> {
+    if (commit) {
+      await tr.tr.commit();
+      tr.versions.forEach((v, vo) => {
         let manager = vo.manager();
         manager.setId(v._id);
         manager.setVersion(v._version);
       });
     }
     else {
-      await tr.rollback();
+      await tr.tr.rollback();
     }
-    return new Invocation(reporter.diagnostics, false, undefined);
   }
 }

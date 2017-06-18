@@ -1,5 +1,4 @@
-import {Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Invocation, InvocationState, Invokable, Aspect } from './core';
-import {DataSource} from '../../../generated/aspects.interfaces';
+import {Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Invocation, InvocationState, Invokable, Aspect, DataSource } from './core';
 import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 
 DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
@@ -11,13 +10,17 @@ DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
     });
   }
 });
-
+export type DataSourceTransaction = {};
+export type DataSourceOptionalTransaction = DataSourceTransaction | undefined;
 export type DataSourceQuery = (reporter: Reporter, query: { id: string, [s: string]: any }) => DataSourceInternal.Request;
 export type DataSourceQueries = Map<string, DataSourceQuery>;
-DataSource.category('queries', <DataSource.ImplCategories.queries<DataSource & { _queries?:DataSourceQueries }>>{
+DataSource.category('initServer', <DataSource.ImplCategories.initServer<DataSource & { _queries?:DataSourceQueries, _safeValidators?: SafeValidators }>>{
   setQueries(queries) {
     this._queries = queries;
-  }
+  },
+  setSafeValidators(validators) {
+    this._safeValidators = validators;
+  },
 });
 
 DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.server>>{
@@ -28,16 +31,28 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     let diagnostics: Diagnostic[] = [];
     let saved: VersionedObject[]= [];
     for (let vo of w.objects) {
-      if (vo.manager().state() === VersionedObjectManager.State.NEW)
-        diagnostics.push({ type: "warning", msg: `trying to load attributes on a non saved object`});
-      else
+      if (vo.manager().state() !== VersionedObjectManager.State.NEW)
         saved.push(vo);
     }
-    return this.farPromise('distantLoad', { objects: saved, scope: w.scope });
+    if (saved.length > 0) {
+      return this.farPromise('distantLoad', { objects: saved, scope: w.scope }).then((envelop) => {
+        return new Invocation(envelop.diagnostics(), true, w.objects);
+      });
+    }
+    else {
+      return Promise.resolve(new Invocation([], true, w.objects));
+    }
   },
-  save(objects: VersionedObject[]) {
-    // TODO: add some local checks
-    return this.farPromise('distantSave', objects);
+  save(objects: VersionedObject.Categories.validation[]) {
+    let reporter = new Reporter();
+    let changed = filterToOnlyChangedObjects(objects);
+    for (let o of changed)
+      o.validate(reporter);
+    if (reporter.diagnostics.length > 0)
+      return new Invocation(reporter.diagnostics, true, objects);
+    return this.farPromise('distantSave', [...changed]).then((inv) => {
+      return new Invocation(inv.diagnostics(), true, objects);
+    });
   }
 });
 
@@ -63,43 +78,106 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
   }
 });
 
-async function validateConsistency(this: DataSource.Categories.raw, reporter: any/*Reporter*/, objects: VersionedObject[]) {
-  // Let N be the number of objects (we may want if N = 1000, this method to took less than 100ms)
-  // Let M be the number of classes (M range should be mostly in [1 - 10])
-  // Let K be the number of attributes
-  // Let V be the number of validators (V range should be mostly in [1 - 5])
-  let ok = true;
-  let classes = new Set<Aspect.Installed>();
-  let attributes = new Set();
-  let validators = new Map<any/*Validator*/, any/*VersionnedObject*/[]>();
-  objects.forEach(o => classes.add(o.manager().aspect())); // O(N * log M)
-  classes.forEach(c => (c as any).attributesToLoad('consistency').forEach(a => attributes.add(a))); // O(M * log K)
-  await this.farPromise('rawLoad', { objects: objects, scope: Array.from<string>(attributes) }); // O(K + N * K)
-  objects.forEach(o => (o as any).validateConsistency(reporter)); // O(N)
-  objects.forEach(o => {
-    let v = (o as any).validatorsForGraphConsistency();
-    if (v)
-      v.forEach(v => {
-        let l = validators.get(v);
-        if (!l) validators.set(v, l = []);
-        l.push(o);
-      });
-  }); // O(N * V * log V)
-  validators.forEach((l, v) => v(reporter, l) || (ok = false)); // O(V)
-  return reporter.failed; 
-  // O(N * (log M + K + V * log V + 1) + M * log K + K + V) this is quite heavy
-  // perfect O= O(N * (K + V)) this is quite heavy
+export type SafeValidator<T extends VersionedObject = VersionedObject> = {
+  filterObject?: (object: VersionedObject) => void,
+  preSaveAttributes?: string[],
+  preSavePerObject?: (reporter: Reporter, set: { add(object: VersionedObject) }, object: T) => void,
+  preSavePerDomain?: (reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => void,
+}
+export type SafeValidators = Map<string, SafeValidator>;
+
+function filterObjects(validators: SafeValidators | undefined, objects: VersionedObject[]) {
+  if (validators) {
+    for (let o of objects) {
+      let validator = validators.get(o.manager().name());
+      if (validator && validator.filterObject)
+        validator.filterObject(o);
+    }
+  }
 }
 
-DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.raw>>{
-  safeQuery(request: { [k: string]: any }) {
-    return this.farPromise('rawQuery', request);
+function filterToOnlyChangedObjects<T extends VersionedObject>(objects: T[]) : Set<T> {
+  let changed = new Set<T>();
+  for (let o of objects) {
+    let manager = o.manager();
+    let state = manager.state();
+    if (state === VersionedObjectManager.State.NEW)
+      manager.setNewObjectMissingValues();
+    if (state !== VersionedObjectManager.State.UNCHANGED)
+      changed.add(o);
+  }
+  return changed;
+}
+
+DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.implementation & { _safeValidators?: SafeValidators }>>{
+  async safeQuery(request: { [k: string]: any }) {
+    let sets = DataSourceInternal.parseRequest(<any>request, (name) => {
+      let cstor = this.controlCenter().aspect(name);
+      return cstor && cstor.aspect;
+    });
+    let inv = await this.farPromise('implQuery', { tr: undefined, sets: sets });
+    if (inv.hasResult()) {
+      let r = inv.result();
+      for (let k in r)
+        filterObjects(this._safeValidators, r[k]);
+    }
+    return inv;
   },
-  safeLoad(w: {objects: VersionedObject[], scope: string[]}) {
-    return this.farPromise('rawLoad', w);
+  async safeLoad(w: {objects: VersionedObject[], scope: string[]}) {
+    let inv = await this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
+    if (inv.hasResult())
+      filterObjects(this._safeValidators, inv.result());
+    return inv;
   },
-  async safeSave(objects: VersionedObject[]) {
-    return this.farPromise('rawSave', objects);
+  async safeSave(objects: VersionedObject.Categories.validation[]) {
+    // TODO: Do we want to force load attributes in case of failure or for unchanged objects ?
+    let changed = filterToOnlyChangedObjects(objects);
+    if (changed.size === 0)
+      return new Invocation([], true, objects);
+    
+    let begin = await this.farPromise('implBeginTransaction', undefined);
+    if (!begin.hasResult())
+      return new Invocation(begin.diagnostics(), true, objects);
+
+    let tr = begin.result();
+    let reporter = new Reporter();
+    let cc = this.controlCenter();
+    let validators = new Map<SafeValidator, VersionedObject[]>();
+    let domainValidators = new Map<(reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => void, VersionedObject[]>();
+    for (let o of changed) {
+      o.validate(reporter);
+      let validator = this._safeValidators && this._safeValidators.get(o.manager().name());
+      if (validator) {
+          if (validator.preSaveAttributes || validator.preSavePerObject) {
+          let list = validators.get(validator);
+          list ? list.push(o) : validators.set(validator, [o]);
+        }
+        if (validator.preSavePerDomain) {
+          let list = domainValidators.get(validator.preSavePerDomain);
+          list ? list.push(o) : validators.set(validator.preSavePerDomain, [o]);
+        }
+      }
+    }
+    if (reporter.diagnostics.length > 0)
+      return new Invocation(reporter.diagnostics, true, objects);
+    for (let [validator, objects] of validators) {
+      if (validator.preSaveAttributes && validator.preSaveAttributes.length > 0)
+        await this.farPromise('implLoad', { tr: tr, objects: objects, scope: validator.preSaveAttributes });
+      if (validator.preSavePerObject) {
+        for (let o of objects)
+          validator.preSavePerObject(reporter, changed, o);
+      }
+    }
+    for (let [validator, objects] of domainValidators)
+      validator(reporter, changed, objects);
+    
+    if (reporter.diagnostics.length === 0) {
+      let save = await this.farPromise('implSave', { tr: tr, objects: changed });
+      reporter.diagnostics.push(...save.diagnostics());
+    }
+    let end = await this.farPromise('implEndTransaction', { tr: tr, commit: reporter.diagnostics.length === 0 });
+    reporter.diagnostics.push(...end.diagnostics());
+    return new Invocation(reporter.diagnostics, true, objects); // TODO: clean object scope
   }
 });
 
@@ -109,24 +187,23 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
       let cstor = this.controlCenter().aspect(name);
       return cstor && cstor.aspect;
     });
-    return this.farPromise('implQuery', sets);
+    return this.farPromise('implQuery', { tr: undefined, sets: sets });
   },
   rawLoad(w: {objects: VersionedObject[], scope: string[]}) {
-    return this.farPromise('implLoad', w);
+    return this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
   },
-  rawSave(objects: VersionedObject[]) {
-    let changed = new Set<VersionedObject>();
-    for (let o of objects) {
-      let manager = o.manager();
-      let state = manager.state();
-      if (state === VersionedObjectManager.State.NEW)
-        manager.setNewObjectMissingValues();
-      if (state !== VersionedObjectManager.State.UNCHANGED)
-        changed.add(o);
+  async rawSave(objects: VersionedObject[]) {
+    let changed = filterToOnlyChangedObjects(objects);
+    if (changed.size === 0)
+      return new Invocation([], true, objects);
+    let begin = await this.farPromise('implBeginTransaction', undefined);
+    if (begin.hasResult()) {
+      let tr = begin.result();
+      let save = await this.farPromise('implSave', { tr: tr, objects: changed });
+      let end = await this.farPromise('implEndTransaction', { tr: tr, commit: !save.hasDiagnostics() });
+      return new Invocation([...begin.diagnostics(), ...save.diagnostics(), ...end.diagnostics()], true, objects);
     }
-    return this.farPromise('implSave', changed).then((envelop) => {
-      return new Invocation(envelop.diagnostics(), true, objects);
-    });
+    return new Invocation(begin.diagnostics(), true, objects);
   }
 });
 
@@ -144,8 +221,8 @@ export namespace DataSourceInternal {
   };
   export const versionedObjectMapper: Mapper<VersionedObject> = {
     aspect(vo: VersionedObject) { return vo.manager().aspect(); },
-    has(vo: VersionedObject, attribute: string) { return vo.manager().hasAttributeValue(attribute as keyof VersionedObject); },
-    get(vo: VersionedObject, attribute: string) { return vo.manager().attributeValue(attribute as keyof VersionedObject); },
+    has(vo: VersionedObject, attribute: string) { return vo.manager().hasAttributeValue(attribute); },
+    get(vo: VersionedObject, attribute:  keyof VersionedObject) { return vo.manager().attributeValue(attribute); },
     todb(vo: VersionedObject, attribute: string, value) { return value; }
   }
   export class FilterContext<T> {
@@ -641,7 +718,8 @@ export namespace DataSourceInternal {
     $text: (context, set, value) => {
       if (typeof value !== "string")
         throw new Error(`$text value must be a string`);
-      set.and(c_value(ConstraintType.Text, set.aspectAttribute("_id"), value));
+      if (value) // No constraint on empty string
+        set.and(c_value(ConstraintType.Text, set.aspectAttribute("_id"), value));
     },
   }
 
@@ -782,12 +860,17 @@ export namespace DataSourceInternal {
         if (!s) {
           s = this.createSet(k);
           let attr = set.aspectAttribute(parts[i]);
-          switch(attr.type.type) {
-            case "class": s.setAspect(ConstraintType.InstanceOf, this.aspect(attr.type.name)); break;
-            default: throw new Error(`invalid constraint attribute type ${attr.type.type} on ${parts[i]}`);
+          let type = attr.type;
+          if (type.type === "class") {
+            s.setAspect(ConstraintType.InstanceOf, this.aspect(type.name));
+            decl(k, s, c_var(ConstraintType.Equal, set._name, attr, k, s.aspectAttribute("_id")));
           }
-          let c = c_var(ConstraintType.Equal, set._name, attr, k, s.aspectAttribute("_id"));
-          decl(k, s, c);
+          else if ((type.type === "set" || type.type === "array") && type.itemType.type === "class") {
+            s.setAspect(ConstraintType.InstanceOf, this.aspect(type.itemType.name));
+            decl(k, s, c_var(ConstraintType.Equal, set._name, attr, k, s.aspectAttribute("_id")));
+          }
+          else 
+            throw new Error(`invalid constraint attribute type ${attr.type.type} on ${parts[i]}`);
         }
         set = s;
       }
@@ -920,8 +1003,8 @@ export namespace DataSourceInternal {
 
   export function applySets(sets: ObjectSet[], objects: VersionedObject[], namedOnly: true): Map<ObjectSet & { name: string }, VersionedObject[]>
   export function applySets(sets: ObjectSet[], objects: VersionedObject[], namedOnly?: boolean): Map<ObjectSet, VersionedObject[]>
-  export function applySets<T>(sets: ObjectSet[], objects: T[], namedOnly: true, mapper: Mapper<T>): Map<ObjectSet & { name: string }, VersionedObject[]>
-  export function applySets<T>(sets: ObjectSet[], objects: T[], namedOnly: boolean, mapper: Mapper<T>): Map<ObjectSet, VersionedObject[]>
+  export function applySets<T>(sets: ObjectSet[], objects: T[], namedOnly: true, mapper: Mapper<T>): Map<ObjectSet & { name: string }, T[]>
+  export function applySets<T>(sets: ObjectSet[], objects: T[], namedOnly: boolean, mapper: Mapper<T>): Map<ObjectSet, T[]>
   export function applySets(sets: ObjectSet[], objects: any[], namedOnly = true, mapper: Mapper<any> = versionedObjectMapper): Map<ObjectSet, VersionedObject[]> {
     let ret = new Map<ObjectSet, VersionedObject[]>();
     let sctx = new FilterContext(objects, mapper);

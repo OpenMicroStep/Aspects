@@ -2,21 +2,19 @@ import {DataSourceInternal} from '@openmicrostep/aspects';
 import {Pool, SqlMaker, SqlBinding} from './index';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
-export interface DBConnector {
+export interface DBConnectorCRUD {
+  select(sql_select: SqlBinding) : Promise<object[]>;
+  insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
+  update(sql_update: SqlBinding) : Promise<number>;
+  delete(sql_update: SqlBinding) : Promise<number>;
+}
+export interface DBConnector extends DBConnectorCRUD {
   maker: SqlMaker;
   transaction(): Promise<DBConnectorTransaction>;
   unsafeRun(sql: SqlBinding) : Promise<void>;
-  select(sql_select: SqlBinding) : Promise<object[]>;
-  insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
-  update(sql_update: SqlBinding) : Promise<number>;
-  delete(sql_update: SqlBinding) : Promise<number>;
   close(): void;
 }
-export interface DBConnectorTransaction {
-  select(sql_select: SqlBinding) : Promise<object[]>;
-  insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
-  update(sql_update: SqlBinding) : Promise<number>;
-  delete(sql_update: SqlBinding) : Promise<number>;
+export interface DBConnectorTransaction extends DBConnectorCRUD {
   commit() : Promise<void>;
   rollback() : Promise<void>;
 }

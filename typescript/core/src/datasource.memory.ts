@@ -1,14 +1,9 @@
-import {DataSource, areEquals, DataSourceConstructor, VersionedObject, VersionedObjectManager, Invocation, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect} from './core';
+import {DataSource, areEquals, VersionedObject, VersionedObjectManager, Invocation, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect, ImmutableMap} from './core';
 import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
 
-const dbPrefix = "db:";
-
-function fromDbId(id: Identifier) : Identifier {
-  return (id as string).substring(dbPrefix.length);
-}
-
+export type MemoryDataSourceTransaction = { tr: InMemoryDataSource.DataStoreTransaction };
 export class InMemoryDataSource extends DataSource 
 {
   constructor(manager: VersionedObjectManager<InMemoryDataSource>, private ds: InMemoryDataSource.DataStore) {
@@ -27,75 +22,38 @@ export class InMemoryDataSource extends DataSource
     return on.cache().createAspect(on, name, this);
   }
 
-  fromDb(v, component: AComponent) {
-    if (v instanceof Array)
-      return v.map(v => this.fromDb(v, component));
-    if (v instanceof Set)
-      return new Set([...v].map(v => this.fromDb(v, component)));
-    if (v instanceof VersionedObject) {
-      let rObject = v;
-      let lId = fromDbId(rObject.id());
-      let cc = this.controlCenter();
-      v = cc.registeredObject(lId);
-      if (!v) {
-        v = new (cc.aspect(rObject.manager().aspect().name)!)();
-        v.manager().setId(lId);
-        cc.registerObjects(component, [v]);
-      }
-    }
-    return v;
-  }
-
-  toDb(v, allowCreate: boolean) {
-    if (v instanceof Array)
-      return v.map(v => this.toDb(v, allowCreate));
-    if (v instanceof Set)
-      return new Set([...v].map(v => this.toDb(v, allowCreate)));
-    if (v instanceof VersionedObject) {
-      let dbId = dbPrefix + v.id();
-      let dbObject = this.ds.objects.get(dbId);
-      if (!dbObject && allowCreate) {
-        dbObject = new (this.controlCenter().aspect(v.manager().name())!)();
-        dbObject.manager().setId(dbId);
-        this.ds.objects.set(dbId, dbObject);
-      }
-      v = dbObject;
-    }
-    return v;
-  }
-
-  implQuery(sets: ObjectSet[]): { [k: string]: VersionedObject[] } {
+  implQuery({ tr, sets }: { tr?: InMemoryDataSource.DataStoreTransaction, sets: ObjectSet[] }): { [k: string]: VersionedObject[] } {
+    let ds = tr || this.ds;
     let ret = {};
     let cc = this.controlCenter();
     let component = {};
     cc.registerComponent(component);
-    let res = DataSourceInternal.applySets(sets, [...this.ds.objects.values()], true, {
-      aspect: (vo: VersionedObject) => vo.manager().aspect(),
-      has: (vo: VersionedObject, attribute: string) => vo.manager().hasAttributeValue(attribute as keyof VersionedObject),
-      get: (vo: VersionedObject, attribute: string) => {
+    let res = DataSourceInternal.applySets(sets, ds.objectsAsArray(), true, {
+      aspect: (vo: InMemoryDataSource.DataStoreObject) => cc.aspect(vo.is)!.aspect,
+      has: (vo: InMemoryDataSource.DataStoreObject, attribute: string) => vo.has(attribute),
+      get: (vo: InMemoryDataSource.DataStoreObject, attribute: string) => {
         if (attribute === "_id")
-          return vo;
-        return vo.manager().attributeValue(attribute as keyof VersionedObject);
+          return ds.get(vo.id);
+        return ds.fixValue(vo.get(attribute));
       },
-      todb: (vo: VersionedObject, attribute: string, value) => {
+      todb: (vo: InMemoryDataSource.DataStoreObject, attribute: string, value) => {
         if (attribute === "_id" && typeof value !== "object")
-          return this.ds.objects.get(dbPrefix + value);
-        return this.toDb(value, false);
+          return ds.get(this.ds.toDSId(value));
+        return ds.toDSValue(value);
       }
     });
     res.forEach((objs, set) => {
       ret[set.name] = objs.map(dObject => {
-        let dManager = dObject.manager();
-        let cstor = cc.aspect(dManager.aspect().name)!;
-        let lId = fromDbId(dObject.id());
+        let cstor = cc.aspect(dObject.is)!;
+        let lId = this.ds.fromDSId(dObject.id);
         let lObject = cc.registeredObject(lId) || new cstor();
         let remoteAttributes = new Map<keyof VersionedObject, any>();
         let lManager = lObject.manager();
         cc.registerObjects(component, [lObject]);
         if (set.scope) for (let k of set.scope as (keyof VersionedObject)[])
-          remoteAttributes.set(k, this.fromDb(dManager._versionAttributes.get(k), component));
+          remoteAttributes.set(k, ds.fromDSValue(cc, component, dObject.get(k)));
         lManager.setId(lId);
-        lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version());
+        lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
         return lObject;
       });
     });
@@ -103,26 +61,27 @@ export class InMemoryDataSource extends DataSource
     return ret;
   }
 
-  implLoad({objects, scope} : {
-      objects?: VersionedObject[];
-      scope?: string[];
+  implLoad({tr, objects, scope} : {
+    tr?: InMemoryDataSource.DataStoreTransaction;
+    objects: VersionedObject[];
+    scope?: string[];
   }): VersionedObject[] {
+    let ds = tr || this.ds;
     let cc = this.controlCenter();
     let component = {};
     let ret: VersionedObject[] = [];
     cc.registerComponent(component);
     if (objects) {
       for (let lObject of objects) {
-        let dbId = dbPrefix + lObject.id();
-        let dObject = this.ds.objects.get(dbId);
+        let dbId = this.ds.toDSId(lObject.id());
+        let dObject = ds.get(dbId);
         if (dObject) {
           let lManager = lObject.manager();
-          let dManager = dObject.manager();
           let remoteAttributes = new Map<keyof VersionedObject, any>();
           cc.registerObjects(component, [lObject]);
           if (scope) for (let k of scope as (keyof VersionedObject)[])
-            remoteAttributes.set(k, this.fromDb(dManager._versionAttributes.get(k), component));
-          lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version());
+            remoteAttributes.set(k, ds.fromDSValue(cc, component, dObject.get(k)));
+          lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
           ret.push(lObject);
         }
       }
@@ -131,81 +90,260 @@ export class InMemoryDataSource extends DataSource
     return ret;
   }
 
-  implSave(objects: Set<VersionedObject>) : Promise<Invocation<void>> {
+  implBeginTransaction(): InMemoryDataSource.DataStoreTransaction {
+    return this.ds.beginTransaction();
+  }
+
+  implSave({tr, objects} : { tr: InMemoryDataSource.DataStoreTransaction ,objects: Set<VersionedObject> }) : Promise<Invocation<void>> {
     let cc = this.controlCenter();
     let diags: Diagnostic[] = [];
     let component = {};
     cc.registerComponent(component);
     for (let lObject of objects) {
       let lVersion = lObject.manager().versionVersion();
-      let dbId = dbPrefix + lObject.id();
+      let dbId = this.ds.toDSId(lObject.id());
       if (lVersion === VersionedObjectManager.DeletedVersion) {
-        if (!this.ds.objects.has(dbId))
+        if (!tr.delete(dbId))
           diags.push({ type: "error", msg: `cannot delete ${lObject.id()}: object not found` });
       }
       else if (lVersion !== VersionedObjectManager.NoVersion) { // Update
-        let dObject = this.ds.objects.get(dbId);
+        let dObject = tr.get(dbId);
         if (!dObject)
           diags.push({ type: "error", msg: `cannot update ${lObject.id()}: object not found` });
         if (dObject) {
-          let dbManager = dObject!.manager();
-          let obManager = lObject.manager();
+          dObject = tr.willUpdate(dObject);
+          dObject.version++;
+          let lManager = lObject.manager();
           let n = diags.length;
-          for (let k of obManager._localAttributes.keys()) {
-            let dbv = dbManager._versionAttributes.get(k);
-            let exv = obManager._versionAttributes.get(k);
-            if (!areEquals(exv,dbv)) 
+          for (let [k, lv] of lManager._localAttributes) {
+            let dbv = dObject.attributes.get(k);
+            let exv = lManager._versionAttributes.get(k);
+            if (!areEquals(exv,dbv))
               diags.push({ type: "error", msg: `cannot update ${lObject.id()}: attribute ${k} mismatch` });
+            else
+              dObject.attributes.set(k, tr.toDSValue(lv));
           }
           if (diags.length > n) {
             let remoteAttributes = new Map<keyof VersionedObject, any>();
             cc.registerObjects(component, [lObject]);
-            for (let k of obManager._localAttributes.keys())
-              remoteAttributes.set(k, this.fromDb(dbManager._versionAttributes.get(k), component));
-            obManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version());
+            for (let k of lManager._localAttributes.keys())
+              remoteAttributes.set(k, tr.fromDSValue(cc, component, dObject.attributes.get(k)));
+            lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
+          }
+          else {
+            tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.id), _version: dObject.version });
           }
         }
       }
-    }
-    cc.unregisterComponent(component);
-
-    if (diags.length === 0) {
-      for (let lObject of objects) {
+      else { // new
         let lManager = lObject.manager();
-        let lVersion = lManager._version;
-        if (lVersion === VersionedObjectManager.NoVersion) {
-          let id = `${this.ds.prefix}${++this.ds.idCounter}`;
-          let dbId = dbPrefix + id;
-          let dObject = new (this.controlCenter().aspect(lManager.aspect().name)!)();
-          let dManager = dObject.manager();
-          for (let [lk, lv] of lManager._localAttributes)
-            dManager._versionAttributes.set(lk, this.toDb(lv, true));
-          dManager.setId(dbId);
-          dManager.setVersion(0);
-          lManager.setId(id);
-          lManager.setVersion(dManager.versionVersion());
-          this.ds.objects.set(dbId, dObject);
-        }
-        else if (lVersion === VersionedObjectManager.DeletedVersion) {
-          this.ds.objects.delete(dbPrefix + lObject.id());
-        }
-        else {
-          let dObject = this.ds.objects.get(dbPrefix + lObject.id())!;
-          let dManager = dObject.manager();
-          for (let [lk, lv] of lManager._localAttributes)
-            dManager._versionAttributes.set(lk, this.toDb(lv, true));
-          dManager.setVersion(dManager._version + 1);
-          lManager.setVersion(dManager.versionVersion());
-        }
+        let dObject = new InMemoryDataSource.DataStoreObject(lManager.aspect().name, this.ds.nextId(), 0);
+        for (let [k, lv] of lManager._localAttributes)
+          dObject.attributes.set(k, tr.toDSValue(lv));
+        tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.id), _version: dObject.version });
+        tr.add(dObject);
       }
     }
+    cc.unregisterComponent(component);
     return Promise.resolve(new Invocation(diags, false, undefined));
+  }
+
+  async implEndTransaction({tr, commit}: { tr: InMemoryDataSource.DataStoreTransaction, commit: boolean }) : Promise<void> {
+    if (commit) {
+      tr.commit();
+      tr.versions.forEach((v, vo) => {
+        let manager = vo.manager();
+        manager.setId(v._id);
+        manager.setVersion(v._version);
+      });
+    }
   }
 };
 export namespace InMemoryDataSource {
-  export class DataStore {
-    prefix = "memory:";
-    idCounter = 0;
-    objects = new Map<Identifier, VersionedObject>();
+  export class DataStoreObject {
+    is: string;
+    id: string;
+    version: number;
+    attributes: Map<string, any>;
+
+    constructor(is : string, id: string, version: number, attributes = new Map<string, any>()) {
+      this.is = is;
+      this.id = id;
+      this.version = version;
+      this.attributes = attributes;
+    }
+
+    has(name: string) {
+      return name === "_id" || name === "_version" || this.attributes.has(name);
+    }
+
+    get(name: string) {
+      if(name === "_id") return this.id;
+      if (name === "_version") return this.version;
+      return this.attributes.get(name);
+    }
+
+    copy() {
+      return new DataStoreObject(this.is, this.id, this.version, new Map(this.attributes));
+    }
+  }
+  export interface DataStoreCRUD {
+    objectsAsArray(): DataStoreObject[];
+    delete(id: Identifier);
+    add(obj: DataStoreObject): void;    
+    get(id: Identifier) : DataStoreObject | undefined;
+    fixValue(value): any;
+    toDSValue(value): any;
+    fromDSValue(cc: ControlCenter, cmp: AComponent, value): any;
+  }
+
+  function fixValue(ds: DataStoreCRUD, value): any { 
+    if (value instanceof Set)
+      return new Set([...value].map(v => fixValue(ds, v)));
+    if (value instanceof Array)
+      return value.map(v => fixValue(ds, v));
+    if (value instanceof DataStoreObject)
+      return ds.get(value.id);
+    return value;
+  }
+
+  function toDSValue(ds: DataStore, tr: DataStoreCRUD, value): any {
+    if (value instanceof Set)
+      return new Set([...value].map(v => toDSValue(ds, tr, v)));
+    if (value instanceof Array)
+      return value.map(v => toDSValue(ds, tr, v));
+    if (value instanceof VersionedObject) {
+      let dsId = ds.toDSId(value.id());
+      return tr.get(dsId) || new DataStoreObject(value.manager().name(), dsId, -1);
+    }
+    return value;
+  }
+
+  function fromDSValue(ds: DataStore, tr: DataStoreCRUD, cc: ControlCenter, cmp: AComponent, value): any {
+    if (value instanceof Set)
+      return new Set([...value].map(v => fromDSValue(ds, tr, cc, cmp, v)));
+    if (value instanceof Array)
+      return value.map(v => fromDSValue(ds, tr, cc, cmp, v));
+    if (value instanceof DataStoreObject) {
+      let lId = ds.fromDSId(value.id);
+      let vo = cc.registeredObject(lId);
+      if (!vo) {
+        vo = new (cc.aspect(value.is)!)();
+        vo.manager().setId(lId);
+        cc.registerObjects(cmp, [vo]);
+      }
+      return vo;
+    }
+    return value;
+  }
+
+  export class DataStore implements DataStoreCRUD {
+    private prefix = "memory:";
+    private idCounter = 0;
+    private _objects = new Map<Identifier, DataStoreObject>();
+    private _locks = new Map<VersionedObject, Set<DataStoreTransaction>>();
+
+    beginTransaction() {
+      return new DataStoreTransaction(this);
+    }
+    objectsAsArray() {
+      return [...this._objects.values()];
+    }
+
+    objects() : ImmutableMap<Identifier, DataStoreObject> {
+      return this._objects;
+    }
+
+    nextId() {
+      return `ds:${this.prefix}${++this.idCounter}`;
+    }
+
+    toDSId(id: Identifier) {
+      return `ds:${id}`;
+    }
+
+    fromDSId(id: Identifier) {
+      return (id as string).substring(3);
+    }
+
+    delete(id: Identifier) {
+      this._objects.delete(id);
+    }
+
+    add(object: DataStoreObject) {
+      this._objects.set(object.id, object);
+    }
+    
+    get(id: Identifier) {
+      return this._objects.get(id);
+    }
+    fixValue(value): any { return value; }
+    toDSValue(value): any { return toDSValue(this, this, value); }
+    fromDSValue(cc: ControlCenter, cmp: AComponent, value): any { return fromDSValue(this, this, cc, cmp, value); }
+  }
+
+  export class DataStoreTransaction implements DataStoreCRUD {
+    private edt_objects = new Map<Identifier, DataStoreObject>();
+    private del_objects = new Set<Identifier>();
+    versions = new Map<VersionedObject, { _id: Identifier, _version: number }>();
+    constructor(private ds: DataStore) {}
+
+    objectsAsArray() {
+      let ret: DataStoreObject[] = [];
+      if (this.del_objects.size > 0) {
+        for (let [id, vo] of this.ds.objects())
+          if (!this.del_objects.has(id))
+            ret.push(vo);
+      }
+      else
+        ret.push(...this.ds.objects().values());
+      ret.push(...this.edt_objects.values());
+      return ret;
+    }
+
+    nextId() { return this.ds.nextId(); }
+    toDSId(id: Identifier) { return this.ds.toDSId(id); }
+    fromDSId(id: Identifier) { return this.ds.fromDSId(id); }
+    
+    delete(id: Identifier) : boolean {
+      let can = this.ds.get(id) !== undefined;
+      if (can)
+        this.del_objects.add(id);
+      return can;
+    }
+
+    add(object: DataStoreObject) {
+      this.edt_objects.set(object.id, object);
+    }
+    willUpdate(object: DataStoreObject) : DataStoreObject {
+      object = object.copy();
+      this.edt_objects.set(object.id, object);
+      return object;
+    }
+    
+    get(id: Identifier) {
+      return this.del_objects.has(id) ? undefined : (this.edt_objects.get(id) || this.ds.get(id));
+    }
+    fixValue(value): any {
+      return fixValue(this, value);
+    }
+    toDSValue(value): any { return toDSValue(this.ds, this, value); }
+    fromDSValue(cc: ControlCenter, cmp: AComponent, value): any { return fromDSValue(this.ds, this, cc, cmp, value); }
+
+    commit() {
+      for (let deleted of this.del_objects)
+        this.ds.delete(deleted);
+      for (let edited of this.edt_objects.values()) {
+        for (let [k, v] of edited.attributes)
+          edited.attributes.set(k, fixValue(this.ds, v));
+        let o = this.ds.get(edited.id);
+        if (o) {
+          o.version = edited.version;
+          o.attributes = edited.attributes;
+        }
+        else
+          this.ds.add(edited);
+      }
+    }
   }
 }

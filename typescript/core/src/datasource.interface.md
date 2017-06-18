@@ -5,9 +5,10 @@ Sous-classable.
 
 ### attributes
 
-### category queries
+### category initServer
 
 #### setQueries(queries: DataSourceQueries): void
+#### setSafeValidators(validators: SafeValidators): void
 
 ### category local
 
@@ -49,18 +50,27 @@ Retourne un ensemble d'objets sous forme de dico avec pour clé les identifiants
 Pas de profondeur, quand la valeur est un objet la valeur retournée est juste l'identifiant.
 
 #### safeSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
-Sauve un ensemble d'objets et retourne null si la sauvegarde n'a pas marché et sinon un dico des objets complet dans leur nouvelle version.
+Enregistre la liste d'objets fournis et renvoie les objets modifiés (nouvelle version courante ou conflits).
+
+Appelle `implSave` pour réaliser effectivement l'enregistrement sur la liste filtré d'objets qui ont effectivement des modifications.
 
 ### farCategory raw
 
-Accès direct aux méthodes de base sans aucune vérification de droit ni de cohérence.
+Accès direct aux méthodes de base sans __aucune vérification de droit ni de cohérence__.
 A utiliser le plus rarement possible, jamais si possible.
 
 #### rawQuery(query: dictionary): { * :[0, *, VersionedObject]}
-#### rawLoad(l: { objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
-#### rawSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 
+> __Attention__: `rawQuery` n'effectue aucune vérification de droits sur les objets à charger (contrairement à `rawQuery`). A utiliser en connaissance de causes.
+
+#### rawLoad(l: { objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
+
+> __Attention__: `rawLoad` n'effectue aucune vérification de droits sur les objets à charger (contrairement à `safeLoad`). A utiliser en connaissance de causes.
+
+#### rawSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 Enregistre la liste d'objets fournis et renvoie les objets modifiés (nouvelle version courante ou conflits).
+
+> __Attention__: `rawSave` n'effectue aucune vérification de cohérence et de droits sur les objets à sauver (contrairement à `safeSave`). A utiliser en connaissance de causes.
 
 Appelle `implSave` pour réaliser effectivement l'enregistrement sur la liste filtré d'objets qui ont effectivement des modifications.
 
@@ -68,19 +78,38 @@ Appelle `implSave` pour réaliser effectivement l'enregistrement sur la liste fi
 
 Méthodes à implémenter par les dataSources.
 
-#### implQuery(sets: [0, *, ObjectSet]): { * :[0, *, VersionedObject]}
-#### implLoad(l: { objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
-#### implSave(objects: <0, *, VersionedObject>): void
+#### implBeginTransaction(): DataSourceTransaction
+
+Démarre une transaction
+
+#### implLock(a: { tr: DataSourceTransaction, on: [0, *, string] }): void
+
+Vérouille la datasource sur le tuple `on`. Tant que `implEndTransaction` n'a pas été appelée et que l'application tourne, personne ne peut prendre le véroux si le tuple `on`.
+
+#### implQuery(a: { tr: DataSourceOptionalTransaction, sets: [0, *, ObjectSet] }): { * :[0, *, VersionedObject]}
+
+Effectue une requête et retourne le résultat
+
+#### implLoad(a: { tr: DataSourceOptionalTransaction, objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
+
+Charge les attributs de `objects` et retourne les objets.
+
+#### implSave(a: { tr: DataSourceTransaction, objects: <0, *, VersionedObject> }): void
 
 Enregistre la liste d'objets fournis et retourne la forme en base des objets.
+Tous les objets ont des modifications en attentes.
 
-Tous les objets sans modification ont déjà été filtré par `rawSave`.
 Les valeurs locales en attente d'enregistrement sont passé en valeurs version courante que si tous les objets sont sauvés avec succès.
 En cas de conflits, rien n'est sauvé et les informations sur les conflits sont passés aux objets.
+
+#### implEndTransaction(a: { tr: DataSourceTransaction, commit: boolean }): void
+
+Valide une transaction si `commit` est vrai, sinon annule la transaction.
+
 
 ### aspect client
 #### categories: local client
 #### farCategories: server
 
 ### aspect server
-#### categories: local server safe raw implementation queries
+#### categories: local server safe raw implementation initServer
