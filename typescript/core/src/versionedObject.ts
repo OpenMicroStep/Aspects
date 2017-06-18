@@ -261,27 +261,39 @@ export class VersionedObject {
       static parent = cstor;
       static definition = definition;
       static displayName = `base ${definition.name}`;
-      static category(name: string, implementation: any, on?: VersionedObjectConstructor<VersionedObject>) {
-        on = on || this;
-        Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
+      static installAspect(cc: ControlCenter, name: string): { new(): VersionedObject } {
+        return cc.cache().createAspect(cc, name, this);
       }
-      static installAspect(on: ControlCenter, name: string): { new(): VersionedObject } {
-        return on.cache().createAspect(on, name, this);
-      }
-      static __c() {}
-      static __i() {}
+
+      static __c(n: string): any {}
+      static __i(n: string): any {}
     }
   }
 
   static parent: VersionedObjectConstructor | undefined = undefined;
 
   static definition: Aspect.Definition = {
+    is: "class",
     name: "VersionedObject",
     version: 0,
     attributes: [],
-    categories: [],
+    categories: [{
+      is: "category",
+      name: "validation",
+      methods: [
+        { is: "method", 
+          name: "validate",
+          argumentTypes: [{ is: "type", type: "class", name: "Reporter"} as Aspect.Type],
+          returnType: { is: "type", type: "void" } as Aspect.Type,
+        },
+      ]
+    }],
     farCategories: [],
     aspects: []
+  };
+
+  static readonly category: VersionedObject.Categories = function category(this: typeof VersionedObject, name: string, implementation) {
+    Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
   };
 
   /** @internal */ __manager: VersionedObjectManager<this>;
@@ -311,7 +323,21 @@ export class VersionedObject {
       Invocation.farAsync(flux, this, method, argument);
     };
   }
+
+  static __c(name: string): any {}
+  static __i<T extends VersionedObject>(name: string): any {}
 }
+
+Object.defineProperty(VersionedObject, "category", {
+  value: function category(this: typeof VersionedObject, name: string, implementation) {
+    Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
+  }
+});
+Object.defineProperty(VersionedObject, "installAspect", {
+  value: function installAspect(this: typeof VersionedObject, on: ControlCenter, name: string): { new(): VersionedObject } {
+    return on.cache().createAspect(on, name, this);
+  }
+});
 Object.defineProperty(VersionedObject.prototype, '_id', {
   enumerable: true,
   get(this: VersionedObject) { return this.__manager._id; },
@@ -327,7 +353,26 @@ function isEqualVersionedObject(this: VersionedObject, other, level?: number) {
 addIsEqualSupport(VersionedObject, isEqualVersionedObject);
 
 export interface VersionedObjectConstructor<C extends VersionedObject = VersionedObject> {
-    new(manager: VersionedObjectManager<C>, ...args): C;
-    definition: Aspect.Definition;
-    parent?: VersionedObjectConstructor<VersionedObject>;
+  new(manager: VersionedObjectManager<C>, ...args): C;
+  definition: Aspect.Definition;
+  parent?: VersionedObjectConstructor<VersionedObject>;
+
+  category(name: 'validation', implementation: VersionedObject.ImplCategories.validation);
+  category(name: string, implementation: {});
+}
+
+export namespace VersionedObject {
+  export interface Categories<C extends VersionedObject = VersionedObject> {
+    (name: 'validation', implementation: VersionedObject.ImplCategories.validation<C>): void;
+  }
+  export namespace Categories {
+    export type validation = VersionedObject & {
+      validate(reporter: Reporter): void;
+    }
+  }
+  export namespace ImplCategories {
+    export type validation<C extends VersionedObject = VersionedObject> = {
+      validate: (this: C, reporter: Reporter) => void;
+    }
+  }
 }

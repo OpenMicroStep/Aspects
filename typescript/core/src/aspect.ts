@@ -1,6 +1,7 @@
 import { 
   ControlCenter, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, Invocation, InvocationState, Identifier, DataSourceInternal,
   ImmutableSet, ImmutableList, ImmutableMap,
+  Validation,
 } from './core';
 import {Async, Flux} from '@openmicrostep/async';
 import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
@@ -43,8 +44,10 @@ export namespace Aspect {
   export type TypeValidator = AttributeTypes.Validator0<any>;
   export type AttributeTypeValidator = AttributeTypes.Validator<any, VersionedObjectManager<VersionedObject>>;
   export interface Definition {
+    is: string;
     name: string;
     version: number;
+    queries?: never[];
     attributes?: Attribute[];
     categories?: Category[];
     farCategories?: Category[];
@@ -54,6 +57,7 @@ export namespace Aspect {
     is: string;
     name: string;
     type: Type;
+    validator?: AttributeTypeValidator;
     relation?: string;
   };
   export interface Category {
@@ -289,7 +293,7 @@ export class AspectCache {
   private installAttribute(from: VersionedObjectConstructor<VersionedObject>, attribute: Aspect.Attribute) {
     const data: Aspect.InstalledAttribute = {
       name: attribute.name as keyof VersionedObject,
-      validator: this.createValidator(true, attribute.type),
+      validator: attribute.validator || this.createValidator(true, attribute.type),
       type: attribute.type,
       relation: undefined
     };
@@ -398,7 +402,9 @@ export class AspectCache {
         return value;
       if (value instanceof VersionedObject) {
         let cstor: Function | undefined = value.controlCenter().aspect(classname);
-        if (!cstor)
+        if (!cstor && classname === "VersionedObject")
+          return value;
+        else if (!cstor)
           path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, unable to find aspect`});
         else if (value instanceof cstor)
           return value;

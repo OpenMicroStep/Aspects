@@ -1,5 +1,5 @@
 import {Element, AttributePath, ElementDefinition, ProviderMap, Reporter} from '@openmicrostep/msbuildsystem.shared';
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, VersionedObjectConstructor} from '@openmicrostep/aspects';
+import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, VersionedObjectConstructor} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 

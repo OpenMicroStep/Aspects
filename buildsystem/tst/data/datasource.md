@@ -12,9 +12,9 @@ Traitements faisable en local, c'est à dire sans accéder à la base de donnée
 #### filter(objects: [0, *, VersionedObject], conditions: dictionary): [0, *, VersionedObject]
 Filtre un ensemble d'objets d'après les conditions données.
 
-### farCategory client_
+### farCategory client
 
-Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes implémentent des vérifications locales autour des appels distants (farCategory server_)
+Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes implémentent des vérifications locales autour des appels distants (farCategory server)
 
 #### query(q: dictionary): { * :[0, *, VersionedObject]}
 
@@ -22,7 +22,7 @@ Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes imp
 
 #### save(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 
-### farCategory server_
+### farCategory server
 
 Partie accessible depuis l'exterieur de la DataSource
 
@@ -65,11 +65,11 @@ Méthodes à implémenter par les dataSources.
 #### implSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 
 ### aspect client
-#### categories: local client_
-#### farCategories: server_
+#### categories: local client
+#### farCategories: server
 
 ### aspect server
-#### categories: local server_ safe raw
+#### categories: local server safe raw
 
 ### aspect impl
 #### categories: implementation

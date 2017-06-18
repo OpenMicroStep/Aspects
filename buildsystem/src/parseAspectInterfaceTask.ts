@@ -26,7 +26,12 @@ export class ParseAspectInterfaceTask extends InOutTask {
             step.continue();
           }
           else {
+            step.context.reporter.transform.push(d => {
+              d.path = d.path || inputFile.path;
+              return d;
+            });
             let ret = parseInterface(step.context.reporter, content);
+            step.context.reporter.transform.pop();
             if (!step.context.reporter.failed)
               Element.load(step.context.reporter, ret as ElementDefinition,  root, elementFactories);
             step.continue();
@@ -34,7 +39,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
         });
       }),
       (step: Step<{}>) => {
-        let r = this.src.customHeader || `import {ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
+        let r = this.src.customHeader || `import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
         r += `\n${this.src.header}\n`;
         root.__classes.forEach(cls => {
           r += cls.__decl();

@@ -93,7 +93,7 @@ export class ClassElement extends Element {
 
   __decl() {
     let parent = this.superclass;
-    let cats = this.categories.concat(this.farCategories);
+    let categories = [...this.categories, ...this.farCategories];
     let workaround = '';
     if (parent !== "VersionedObject") {
       workaround = `${this.categories.map(category => `\n${category.__const(this)}`).join('')}${
@@ -101,24 +101,42 @@ export class ClassElement extends Element {
                       this.categories.map(category => `\n${category.__constImpl(this)}`).join('')}${
                       this.farCategories.map(category => `\n${category.__constImpl(this)}`).join('')}`;
     }
-    return `export interface ${this.name}Constructor<C extends ${this.name}> extends VersionedObjectConstructor<C> {
-  parent: ${parent}Constructor<${parent}>;
-${cats.map(category => `\n  category(name: '${category.name}', implementation: ${this.name}.ImplCategories.${category.name}<${this.name}>);`).join('')}
-${this.aspects.map(aspect => `\n  installAspect(on: ControlCenter, name: '${aspect.name}'): { new(): ${this.name}.Aspects.${aspect.name} };`).join('')}
-${cats.map(category => `\n  __c(name: '${category.name}'): ${this.name}.Categories.${category.name};`).join('')}
-  __c(name: string): ${this.name};${
-  cats.map(category => `\n  __i<T extends ${this.name}>(name: '${category.name}'): ${this.name}.ImplCategories.${category.name}<T>;`).join('')}
-  __i<T extends ${this.name}>(name: string): {};
-}
-export interface ${this.name} extends ${parent} {
-${[...this.attributes, ...this.queries].map(attribute => 
-  `  ${
-  attribute instanceof QueryElement ? 'readonly ' : ''}${
-  attribute.name}: ${
-  attribute.type.__decl(true, true, attribute instanceof AttributeElement && !!attribute.relation)};\n`).join('')}}
-export const ${this.name} = VersionedObject.extends<${this.name}Constructor<${this.name}>>(${parent}, ${JSON.stringify(this, null, 2)});
-${workaround}
-export namespace ${this.name} {
+    let decl = `export class ${this.name} extends ${parent} {`;
+    let attributes = [...this.attributes, ...this.queries];
+    for (let attribute of attributes) {
+      let type = attribute.type.__decl(true, true, attribute instanceof AttributeElement && !!attribute.relation);
+      decl += `\n  ${attribute instanceof QueryElement ? 'readonly ' : ''}${attribute.name}: ${type};`;
+    }
+    if (attributes.length) 
+      decl += `\n`;
+    decl += `\n  static readonly definition: Aspect.Definition = <any>${JSON.stringify(this, null, 2).replace(/\n/g, '\n  ')};`;
+    decl += `\n  static readonly parent = ${parent};`;
+    decl += `\n  static readonly category: ${this.name}.Categories;`;
+    decl += `\n}`;
+    if (parent !== "VersionedObject") {
+      decl += `\nexport namespace ${this.name} {`;
+      for (let category of categories)
+        decl += `\n  ${category.__const(this)}`;
+      for (let category of categories)
+        decl += `\n  ${category.__constImpl(this)}`;
+      decl += `\n}`;
+    }
+    decl += `\nexport declare namespace ${this.name} {`;
+    for (let aspect of this.aspects)
+      decl += `\n  function installAspect(on: ControlCenter, name: '${aspect.name}'): { new(): ${this.name}.Aspects.${aspect.name} };`;
+    if (this.aspects.length) 
+      decl += `\n`;
+    for (let category of categories)
+      decl += `\n  function __c(name: '${category.name}'): ${this.name}.Categories.${category.name};`;
+    for (let category of categories)
+      decl += `\n  function __i<T extends ${this.name}>(name: '${category.name}'): ${this.name}.ImplCategories.${category.name}<T>;`;
+    if (categories.length)
+      decl += `\n`;
+    decl += `\n  export interface Categories<C extends ${this.name} = ${this.name}> extends ${parent}.Categories<C> {`;
+    for (let category of categories)
+      decl += `\n    (name: '${category.name}', implementation: ${this.name}.ImplCategories.${category.name}<C>);`
+    decl += `\n  }`;
+    decl += `
   export namespace Categories {${
     this.categories.map(category => category.__decl(this, !!workaround)).join('')}${
     this.farCategories.map(category => category.__decl(this, !!workaround)).join('')}
@@ -129,11 +147,11 @@ export namespace ${this.name} {
   }
   export namespace Aspects {
     ${this.aspects.map(aspect => `export type ${aspect.name} = ${
-      aspect.categories.concat(aspect.farCategories).map(c => `Categories.${c.name}`).join(' & ')
+      aspect.categories.concat(aspect.farCategories).map(c => `Categories.${c.name}`).join(' & ') || this.name
     };`).join('\n    ')}
-  }
-}
-`;
+  }`;
+    decl += `\n}\n`;
+    return decl;
   }
 
   toJSON() {
@@ -230,7 +248,7 @@ ${this.is === 'farCategory' ? this.__declFarMethods(clazz.name) : this.__declMet
   }
   __declImpl(clazz: ClassElement, workaround: boolean) {
     return `
-    export type ${this.name}<C extends ${clazz.name}> = ${workaround ? `typeof ${this.__constNameImpl(clazz)} & ` : ''}{
+    export type ${this.name}<C extends ${clazz.name} = ${clazz.name}> = ${workaround ? `typeof ${this.__constNameImpl(clazz)} & ` : ''}{
 ${this.is === 'farCategory' ? this.__declImplFarMethods('C') : this.__declImplMethods('C')}    }`;
   }
   __declMethods() {
