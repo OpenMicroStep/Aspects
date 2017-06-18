@@ -1,5 +1,6 @@
 import {ControlCenter, areEquals, Identifier, Invocation, Invokable, Aspect, addIsEqualSupport, ImmutableMap} from './core';
 import { Flux } from '@openmicrostep/async';
+import { Reporter, Diagnostic } from '@openmicrostep/msbuildsystem.shared';
 
 function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
   let ret = { add: [] as T[], del: [] as T[] };
@@ -25,6 +26,7 @@ function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[]
 }
 
 export class VersionedObjectManager<T extends VersionedObject = VersionedObject> {
+  static UndefinedVersion = -3;
   static NoVersion = -1;
   static DeletedVersion = -2;
   static NextVersion = Number.MAX_SAFE_INTEGER; // 2^56 version should be more than enought
@@ -82,13 +84,32 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (this._localAttributes.size > 0)
       return VersionedObjectManager.State.MODIFIED;
     return VersionedObjectManager.State.UNCHANGED;
-    //INCONFLICT,
+    // TODO INCONFLICT
+  }
+
+  attributeState(attribute: string) : VersionedObjectManager.AttributeState {
+    if (this._localAttributes.has(attribute as keyof T))
+      return VersionedObjectManager.AttributeState.MODIFIED;
+    if (this._versionAttributes.has(attribute as keyof T))
+      return VersionedObjectManager.AttributeState.UNCHANGED;
+    if (this._version === VersionedObjectManager.NoVersion)
+      return VersionedObjectManager.AttributeState.NEW;
+    if (attribute === '_id' || attribute === '_version')
+      return VersionedObjectManager.AttributeState.UNCHANGED;
+    return VersionedObjectManager.AttributeState.NOTLOADED;
+    // TODO INCONFLICT
   }
   
-  hasAttributeValue<K extends keyof T>(attribute: K) : boolean {
-    return attribute === '_id' || attribute === '_version' || this._localAttributes.has(attribute) || this._versionAttributes.has(attribute);
+  hasAttributeValue(attribute: string) : boolean {
+    return attribute === '_id' 
+        || attribute === '_version' 
+        || this._localAttributes.has(attribute as keyof T) 
+        || this._versionAttributes.has(attribute as keyof T)
+        || (this._version === VersionedObjectManager.NoVersion && this._aspect.attributes.has(attribute));
   }
-  
+
+  attributeValue(attribute: string) : any;
+  attributeValue<K extends keyof T>(attribute: K) : T[K];
   attributeValue<K extends keyof T>(attribute: K) : T[K] {
     if (this._localAttributes.has(attribute))
       return this._localAttributes.get(attribute);
@@ -100,27 +121,29 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return this.localVersion();
     if (this._oldVersionAttributes.has(attribute))
       throw new Error(`attribute '${attribute}' is unaccessible due to version change`);
-    
-    let a = this._aspect.attributes.get(attribute);
-    if (!a)
-      throw new Error(`attribute '${attribute}' doesn't exists on ${this.name()}`);
-    if (this.state() === VersionedObjectManager.State.NEW) {
-      let ret = this.missingValue(a);
-      this._localAttributes.set(attribute, ret);
-      return ret;
-    }
-    throw new Error(`attribute '${attribute}' is unaccessible and never was`);
+    return this.couldBeMissingValue(attribute);
   }
 
+  versionAttributeValue(attribute: string) : any;
+  versionAttributeValue<K extends keyof T>(attribute: K) : T[K];
   versionAttributeValue<K extends keyof T>(attribute: K) : T[K] {
     if (this._versionAttributes.has(attribute))
       return this._versionAttributes.get(attribute);
+    return this.couldBeMissingValue(attribute);
+  }
+
+  private couldBeMissingValue(attribute: string) {
+    let a = this._aspect.attributes.get(attribute);
+    if (!a)
+      throw new Error(`attribute '${attribute}' doesn't exists on ${this.name()}`);
+    if (this.state() === VersionedObjectManager.State.NEW)
+      return this.missingValue(a);
     throw new Error(`attribute '${attribute}' is unaccessible and never was`);
   }
 
   delete() {
     this._localAttributes.clear();
-    this._version = VersionedObjectManager.State.DELETED;
+    this._version = VersionedObjectManager.DeletedVersion;
   }
   
   setId(id: Identifier) {
@@ -132,9 +155,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       throw new Error(`id can't be modified once assigned (not local)`);
     this._controlCenter.changeObjectId(this._id, id);
     this._id = id; // local -> real id (ie. object _id attribute got loaded)
+    if (this._version === VersionedObjectManager.NoVersion)
+      this._version = VersionedObjectManager.UndefinedVersion;
   }
 
   setVersion(version: number) {
+    if (VersionedObjectManager.isLocalId(this._id)) 
+      throw new Error(`version can't be set on a locally identifier object`);
     this._localAttributes.forEach((v, k) => this._versionAttributes.set(k, v));
     this._localAttributes.clear();
     this._version = version;
@@ -142,8 +169,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   setNewObjectMissingValues() {
     for (let attribute of this._aspect.attributes.values()) {
-      if (!this.hasAttributeValue(attribute.name as keyof VersionedObject))
-        this._localAttributes.set(attribute.name as keyof VersionedObject, this.missingValue(attribute));
+      if (attribute.name !== '_id' && attribute.name !== '_version' && !this._localAttributes.has(attribute.name as keyof T))
+        this._localAttributes.set(attribute.name as keyof T, this.missingValue(attribute));
     }
   }
 
@@ -164,6 +191,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let isNew = this.state() === VersionedObjectManager.State.NEW;
     let oldValue;
     let hasVersionAttribute = this._versionAttributes.has(attribute);
+    let hasLocalAttribute = this._localAttributes.has(attribute);
     if (!hasVersionAttribute && !isNew)
       throw new Error(`attribute '${attribute}' is unaccessible and never was`);
     if (hasVersionAttribute && areEquals(this._versionAttributes.get(attribute), value)) {
@@ -171,10 +199,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         oldValue = this._localAttributes.get(attribute);
       hasChanged = this._localAttributes.delete(attribute);
     }
-    else if (!this._localAttributes.has(attribute) || !areEquals(this._localAttributes.get(attribute), value)) {
-      if (this._localAttributes.has(attribute))
+    else if (!hasLocalAttribute || !areEquals(this._localAttributes.get(attribute), value)) {
+      if (hasLocalAttribute)
         oldValue = this._localAttributes.get(attribute);
-      if (this._versionAttributes.has(attribute))
+      else if (hasVersionAttribute)
         oldValue = this._versionAttributes.get(attribute);
       this._localAttributes.set(attribute, value);
       hasChanged = true;
@@ -187,7 +215,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       while ((add = ai < sadd.length) || di < sdel.length) {
         let other = add ? sadd[ai++] : sdel[di++];
         let other_manager = other.manager();
-        if (other_manager.hasAttributeValue(data.relation.attribute as keyof VersionedObject)) {
+        if (other_manager.hasAttributeValue(data.relation.attribute)) {
           let v = other[data.relation.attribute];
           switch (otype.type) {
             case 'set':   v = (new Set<VersionedObject>(v))[add ? 'add' : 'delete'](this._object); break;
@@ -251,6 +279,13 @@ export namespace VersionedObjectManager {
     MODIFIED,
     INCONFLICT,
     DELETED,
+  };
+  export enum AttributeState {
+    NEW,
+    UNCHANGED,
+    MODIFIED,
+    INCONFLICT,
+    NOTLOADED
   };
   export type Attributes<T extends VersionedObject> = Map<keyof T, T[keyof T]>;
   export type ROAttributes<T extends VersionedObject> = ImmutableMap<keyof T, T[keyof T]>;
@@ -338,6 +373,11 @@ Object.defineProperty(VersionedObject, "installAspect", {
     return on.cache().createAspect(on, name, this);
   }
 });
+
+VersionedObject.category('validation', {
+  validate(reporter: Reporter): void {}
+});
+
 Object.defineProperty(VersionedObject.prototype, '_id', {
   enumerable: true,
   get(this: VersionedObject) { return this.__manager._id; },

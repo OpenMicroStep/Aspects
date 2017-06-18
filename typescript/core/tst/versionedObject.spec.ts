@@ -70,18 +70,13 @@ function basics() {
   assert.equal(v1.version(), v1.version());
   assert.equal(v2.version(), v2.version());
 
+  assert.equal(v1.name(), undefined);
   assert.doesNotThrow(() => { v1.manager().setId(v1.id()) });
   assert.throw(() => { v1.manager().setId(v2.id()) }, `cannot change identifier to a local identifier`);
   v1.manager().setId(2);
   assert.equal(v1.id(), 2);
   assert.throw(() => { v1.manager().setId(3) }, `id can't be modified once assigned (not local)`);
-
-  assert.equal(v1.name(), undefined);
-  v1._name = "Resource Name";
-  assert.equal(v1.name(), "Resource Name");
-  v1._name = "Resource Name 2";
-  assert.equal(v1.name(), "Resource Name 2");
-
+  assert.throw(() => { v1.name() }, `attribute '_name' is unaccessible and never was`);
   v1.manager().setVersion(2);
 }
 
