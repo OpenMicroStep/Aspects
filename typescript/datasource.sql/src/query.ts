@@ -1,4 +1,4 @@
-import {Aspect, DataSource, DataSourceConstructor, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, ImmutableSet, ImmutableList} from '@openmicrostep/aspects';
+import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, ImmutableSet, ImmutableList} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlBinding, SqlMaker} from './index';
@@ -45,6 +45,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   tables = new Map<string, string>(); // [table, ref]"value"*[table, ref] -> table alias 
   from: SqlBinding[] = [];
   fromConditions: SqlBinding[] = [];
+  joins: SqlBinding[] = [];
   variables: Set<SqlQuery<SharedContext>> = new Set();
   subs = new Map<SqlQuery<SharedContext>, { table: string, scope: string[] }>();
   where: SqlBinding[] = [];
@@ -157,10 +158,17 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     for (let variable of this.variables)
       from.push(...variable.from);
     for (let [sub, desc] of this.subs) {
-      let sql_select = ctx.maker.select(sub.sql_columns(ctx, desc.scope), sub.sql_from(ctx), [], sub.sql_where(ctx));
+      let sql_select = ctx.maker.select(sub.sql_columns(ctx, desc.scope), sub.sql_from(ctx), sub.sql_join(ctx), sub.sql_where(ctx));
       from.push(ctx.maker.from_sub(sql_select, desc.table));
     }
     return from;
+  }
+
+  sql_join(ctx: SharedContext) : SqlBinding[] {
+    let join: SqlBinding[] = [];
+    for (let variable of this.variables)
+      join.push(...variable.joins);
+    return join;
   }
 
   sql_where(ctx: SharedContext) : SqlBinding {
@@ -253,7 +261,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         mult_attributes.push(a);
     }
 
-    let mono_query = ctx.maker.select(this.sql_columns(ctx, ["_id", ...mono_attributes]), this.sql_from(ctx), [], this.sql_where(ctx));
+    let mono_query = ctx.maker.select(this.sql_columns(ctx, ["_id", ...mono_attributes]), this.sql_from(ctx), this.sql_join(ctx), this.sql_where(ctx));
     let mono_rows = await db.select(mono_query);
     let attribute_id = this.mapper!.get("_id");
     let ids: any[] = [];
@@ -282,7 +290,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       q.setMapper(ctx, this.mapper!.name);
       q.addConstraint(q.buildConstraintValue(ctx, aspect.attributes.get("_id")!, ConstraintType.In, ids));
       let mult_columns = q.sql_columns(ctx, ["_id", mult_attribute.name]);
-      let mult_query = ctx.maker.select(mult_columns, q.sql_from(ctx), [], q.sql_where(ctx));
+      let mult_query = ctx.maker.select(mult_columns, q.sql_from(ctx), q.sql_join(ctx), q.sql_where(ctx));
       let mult_rows = await db.select(mult_query);
       let mult_sql_attr = this.mapper!.get(mult_attribute.name);
       let isSet = mult_attribute.type.type === "set";

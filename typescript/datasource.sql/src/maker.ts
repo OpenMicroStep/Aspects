@@ -18,7 +18,7 @@ export class SqlMaker {
     push_bindings(bind, sql_from);
     if (sql_joins.length) {
       sql += `\n${join_sqls(sql_joins, '\n')}`;
-      push_bindings(bind, sql_from);
+      push_bindings(bind, sql_joins);
     }
     if (sql_where && sql_where.sql) {
       sql += `\nWHERE ${sql_where.sql}`;
@@ -72,6 +72,14 @@ export class SqlMaker {
     let r = this.sub(sql_select);
     r.sql += ` ${this.quote(alias)}`;
     return r;
+  }
+
+  left_join(table: string, alias: string, on: SqlBinding) {
+    return { sql: `LEFT OUTER JOIN ${this.quote(table)} ${this.quote(alias)} ON ${on.sql}`, bind: on.bind };
+  }
+  
+  inner_join(table: string, alias: string, on: SqlBinding) {
+    return { sql: `INNER JOIN ${this.quote(table)} ${this.quote(alias)} ON ${on.sql}`, bind: on.bind };
   }
 
   sub(sql_select: SqlBinding) : SqlBinding {
