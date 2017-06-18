@@ -38,7 +38,8 @@ export namespace Aspect {
   export type TypeArray      =  { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" };
   export type TypeSet        =  { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"};
   export type TypeDictionary =  { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
-  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary;
+  export type TypeOr         =  { is: 'type', type: 'or', types: Type[] }
+  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr ;
   export type TypeValidator = AttributeTypes.Validator0<any>;
   export type AttributeTypeValidator = AttributeTypes.Validator<any, VersionedObjectManager<VersionedObject>>;
   export interface Definition {
@@ -126,37 +127,16 @@ const voAttributes = {
 };
 installedAttributesOnImpl.set(VersionedObject.definition.name, voAttributes)
 
-export const validateId: AttributeTypes.Validator0<Identifier> = {
-  validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
-    if (typeof value !== "string" && typeof value !== "number")
-      path.diagnostic(reporter, { type: "warning", msg: `an identifier must be a string or a number, got ${typeof value}`});
-    else if (value === "")
-      path.diagnostic(reporter, { type: "warning", msg: `an identifier can't be an empty string `});
-    else
-      return value;
-    return undefined;
-  }
-};
-export const validateVersion: AttributeTypes.Validator0<number> = {
-  validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
-    if (typeof value !== "number" || !Number.isInteger(value))
-      path.diagnostic(reporter, { type: "warning", msg: `a version must be an integer, got ${typeof value}`});
-    else
-      return value;
-    return undefined;
-  }
-};
-
 voAttributes.attributes.set("_id", {
   name: "_id",
   type: { is: "type", type: "primitive", name: "any" as Aspect.PrimaryType },
-  validator: validateId,
+  validator: Validation.validateId,
   relation: undefined,
 });
 voAttributes.attributes.set("_version", {
   name: "_version",
   type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
-  validator: validateVersion,
+  validator: Validation.validateVersion,
   relation: undefined,
 });
 export class AspectCache {
@@ -433,14 +413,15 @@ export class AspectCache {
     }}
   }
   private createValidator(forAttribute: boolean, type: Aspect.Type, lvl = 0) : Aspect.TypeValidator {
-    if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class")
+    if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class" && type.type !== "or")
       throw new Error(`cannot create deep type validator for attribute`);
     switch (type.type) {
-      case "primitive": return primitiveValidator[type.name];
-      case "class": return this.classValidator(forAttribute, type.name, lvl === 0);
+      case "primitive": return forAttribute && lvl === 0 ? Validation.primitiveLevel0Validators[type.name] : Validation.primitiveValidators[type.name];
+      case "class": return this.classValidator(forAttribute, type.name, forAttribute && lvl === 0);
       case "array": return this.arrayValidator(forAttribute, lvl, type.itemType, type.min, type.max);
       case "set": return this.setValidator(forAttribute, lvl, type.itemType, type.min, type.max);
       case "dictionary": return this.propertiesValidator(forAttribute, lvl, type.properties);
+      case "or": return AttributeTypes.oneOf(...type.types.map(t => this.createValidator(forAttribute, t, lvl)));
     }
     throw new Error(`cannot create ${type.type} type validator`);
   }
@@ -460,53 +441,6 @@ function installPublicMethod(cc: ControlCenter, aspect: Aspect.Installed, public
   let publicImpl = localImplInPrototype(prototype, publicMethod);
   transport.register(cc, aspect, publicMethod, protectPublicImpl(prototype, publicMethod, publicImpl));
 }*/
-const primitiveValidator: { [s in Aspect.PrimaryType]: Aspect.TypeValidator } = {
-  'identifier': validateId,
-  'array': AttributeTypes.validateArray,
-  'any': AttributeTypes.validateAny,
-  'string': { validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
-    if (typeof value === "string")
-      return value;
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a string, got ${typeof value}`});
-    return undefined;
-  }},
-  'integer': { validate: function validateInteger(reporter: Reporter, path: AttributePath, value: any) {
-    if (typeof value === "number" && Number.isInteger(value))
-      return value;
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must be an integer, got ${typeof value}`});
-    return undefined;
-  }},
-  'decimal': { validate: function validateDecimal(reporter: Reporter, path: AttributePath, value: any) {
-    if (typeof value === "number" && Number.isFinite(value))
-      return value;
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a decimal, got ${typeof value}`});
-    return undefined;
-  }},
-  'dictionary': { validate: function validateDictionary(reporter: Reporter, path: AttributePath, value: any) {
-    if (typeof value === "object")
-      return value;
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a dictionary, got ${typeof value}`});
-    return undefined;
-  }},
-  'object': { validate: function validateObject(reporter: Reporter, path: AttributePath, value: any) {
-    if (typeof value === "object")
-      return value;
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must be an object, got ${typeof value}`});
-    return undefined;
-  }},
-  'date': { validate: function validateDate(reporter: Reporter, path: AttributePath, value: any) {
-    if (value instanceof Date)
-      return value;
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a Date, got ${typeof value}`});
-    return undefined;
-  }},
-  'localdate': { validate: function validateLocalDate(reporter: Reporter, path: AttributePath, value: any) {
-    if (value instanceof Date)
-      return value;
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must be a Date, got ${typeof value}`});
-    return undefined;
-  }},
-}
 function validate(
   reporter: Reporter, path: AttributePath,
   collection: any, validateItem: Aspect.TypeValidator, 
@@ -517,7 +451,8 @@ function validate(
     path.diagnostic(reporter, { type: "warning", msg: `attribute must contains at least ${min} elements`});
   if (max !== '*' && collection.size > max)
     path.diagnostic(reporter, { type: "warning", msg: `attribute must contains at most ${max} elements`});
-  collection.forEach((v, idx) => validateItem.validate(reporter, path.setArrayKey(idx), v));
+  let i = 0;
+  collection.forEach((v) => validateItem.validate(reporter, path.setArrayKey(i++), v));
   path.popArray();
   return collection;
 }

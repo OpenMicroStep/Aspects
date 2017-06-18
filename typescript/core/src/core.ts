@@ -1,3 +1,4 @@
+export * from './validation';
 export * from './deepEqual';
 export * from './notificationCenter';
 export * from './versionedObject';

@@ -31,9 +31,10 @@ elementFactories.registerSimple('type', (reporter, name, definition, attrPath, p
   return new TypeElement('type', name, parent);
 });
 export class TypeElement extends Element {
-  type: 'primitive' | 'class' | 'array' | 'set' | 'dictionary';
+  type: 'primitive' | 'class' | 'array' | 'set' | 'dictionary' | 'or';
   itemType?: TypeElement = undefined;
   properties?: { [s: string]: TypeElement } = undefined;
+  types?: TypeElement[] = undefined;
   min?: number;
   max?: number | '*';
 
@@ -59,6 +60,8 @@ export class TypeElement extends Element {
         return embedType(isAttribute, [`ImmutableSet<`, `Set<`], this.itemType ? this.itemType.__decl(isAttribute) : 'any' , [`>`, `>`]);
       case 'dictionary':
         return embedType(isAttribute, [`ImmutableObject<`, ``], `{${Object.keys(this.properties).map(k => `${k === '*' ? '[k: string]' : `${k}`}: ${this.properties![k].__decl(isAttribute)}`).join(', ')}}` , [`>`, ``]);
+      case 'or':
+        return this.types ? this.types.map(t => t.__decl(isAttribute)).join(' | ') : 'any';
     }
   }
 
@@ -66,6 +69,7 @@ export class TypeElement extends Element {
     let r: Partial<TypeElement> = { is: this.is };
     this.name                     && (r.name = this.name);
     this.itemType !== undefined   && (r.itemType = this.itemType);
+    this.types !== undefined      && (r.types = this.types);
     this.properties !== undefined && (r.properties = this.properties);
     this.type !== undefined       && (r.type = this.type);
     this.min !== undefined        && (r.min = this.min);

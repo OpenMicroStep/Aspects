@@ -158,7 +158,8 @@ namespace Element {
     { is: 'type', type: 'class', name: string } |
     { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" } |
     { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"} |
-    { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
+    { is: 'type', type: 'dictionary', properties: { [s: string]: Type } } |
+    { is: 'type', type: 'or', types: Type[] };
   export type Class = {
     is: 'class',
     name: string,
@@ -384,6 +385,16 @@ function parseQuotedString(parser: Parser, quote = `"`) {
 
 const primitiveTypes = new Set(['any', 'integer', 'decimal', 'date', 'localdate', 'string', 'array', 'dictionary', 'identifier', 'object', 'boolean']);
 function parseType(parser: Parser) : Element.Type {
+  let ret = [_parseType(parser)];
+  parser.skip(Parser.isSpaceChar);
+  while (parser.test('|')) {
+    parser.skip(Parser.isSpaceChar);
+    ret.push(_parseType(parser));
+    parser.skip(Parser.isSpaceChar);
+  }
+  return ret.length === 1 ? ret[0] : { is: 'type', type: 'or', types: ret };
+}
+function _parseType(parser: Parser) : Element.Type {
   let ret: Element.Type;
   let type: string;
   if ((type = parser.test('[') || parser.test('<'))) {
@@ -414,7 +425,6 @@ function parseType(parser: Parser) : Element.Type {
     } while (parser.test(','));
     parser.consume('}');
   }
-
   else {
     let name = parseName(parser);
     if (primitiveTypes.has(name))
