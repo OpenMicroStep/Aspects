@@ -1,14 +1,20 @@
 
-export interface Notification {
+export interface Notification<T = any> {
   name: string;
-  object: Object;
-  info?: any
+  object: object;
+  info: T
 }
+
+export type Event<T> = string & { __type__?: T };
 
 export class NotificationCenter {
   // TODO: move to a more efficient way to store/use observers
-  _observers: { observer: Object, method: string, event: string | undefined, onObject: Object | undefined }[] = [];
-  addObserver(observer: Object, method: string, event: string | undefined, onObject: Object | undefined) {
+  _observers: { observer: object, method: string, event: string | undefined, onObject: Object | undefined }[] = [];
+
+  addObserver<O extends { [K in M]: (notification: Notification) => void }, M extends string>(observer: O, method: M, event: string, onObject: Object | undefined);
+  addObserver<O extends { [K in M]: (notification: Notification) => void }, M extends string>(observer: O, method: M, event: string | undefined, onObject: Object);
+  addObserver<O extends { [K in M]: (notification: Notification<T>) => void }, M extends string, T>(observer: O, method: M, event: Event<T>, onObject: Object | undefined);
+  addObserver<O extends { [K in M]: (notification: Notification) => void }, M extends string>(observer: O, method: M, event: string | undefined, onObject: Object | undefined) {
     this._observers.push({ observer: observer, method: method, event: event, onObject: onObject });
   }
 
@@ -20,7 +26,7 @@ export class NotificationCenter {
     ));
   }
 
-  postNotification(notification: Notification) {
+  postNotification(notification: Notification & { name: Event<any> }) {
     this._observers.filter(o => (
       (o.event === undefined || o.event === notification.name) &&
       (o.onObject === undefined || o.onObject === notification.object)

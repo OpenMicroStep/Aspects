@@ -64,7 +64,7 @@ export class ControlCenter {
       let i = this._objects;
       let d = i.get(id);
       if (method)
-        (<(string | undefined)[]>(events || [undefined])).forEach(event => notificationCenter.addObserver(component, method, event, o));
+        (<(string | undefined)[]>(events || [undefined])).forEach(event => notificationCenter.addObserver(component as any, method, event, o));
       if (!d)
         i.set(id, d = o);
       if (d !== o)

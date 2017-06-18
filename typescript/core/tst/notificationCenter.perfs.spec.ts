@@ -3,7 +3,7 @@ import {assert} from 'chai';
 
 function add10k() { // must be fast
   let c = new NotificationCenter();
-  let obs = <Object[]>[];
+  let obs = <{ test() }[]>[];
   let i = 50;
   while (i-- > 0)
     obs.push({
@@ -17,7 +17,7 @@ function add10k() { // must be fast
 
 function add1k_rm1k() { // must be fast
   let c = new NotificationCenter();
-  let obs = <Object[]>[];
+  let obs = <{ test() }[]>[];
   let i = 50;
   while (i-- > 0)
     obs.push({
@@ -34,7 +34,7 @@ function add1k_rm1k() { // must be fast
 
 function add1k_emit10k() { // must be fast
   let c = new NotificationCenter();
-  let obs = <Object[]>[];
+  let obs = <{ test() }[]>[];
   let i = 50;
   while (i-- > 0)
     obs.push({
@@ -46,12 +46,12 @@ function add1k_emit10k() { // must be fast
     c.addObserver(obs[i % 50], "test", `${i % 50}`, i % 3 === 0 ? undefined : obs[i*i % 50]);
   i = 1 * 1e4;
   while (i-- > 0)
-    c.postNotification({ name: "test", object: obs[i*i % 50] });
+    c.postNotification({ name: "test", object: obs[i*i % 50], info: undefined });
 }
 
 function add1k_emit10k_rm1k() { // must be fast
   let c = new NotificationCenter();
-  let obs = <Object[]>[];
+  let obs = <{ test() }[]>[];
   let i = 50;
   while (i-- > 0)
     obs.push({
@@ -62,7 +62,7 @@ function add1k_emit10k_rm1k() { // must be fast
   while (i-- > 0) {
     if (i % 10 === 0)
         c.addObserver(obs[i % 50], "test", `${i % 50}`, i % 3 === 0 ? undefined : obs[i*i % 50]);
-    c.postNotification({ name: "test", object: obs[i*i % 50] });
+    c.postNotification({ name: "test", object: obs[i*i % 50], info: undefined });
     if (i % 9 === 0)
         c.removeObserver(obs[i % 50], "test", obs[i*i % 50]);
   }
