@@ -32,7 +32,7 @@ export namespace Aspect {
     }
   }
 
-  export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object';
+  export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object' | 'boolean';
   export type TypeVoid       =  { is: 'type', type: 'void' };
   export type TypePrimitive  =  { is: 'type', type: 'primitive', name: PrimaryType };
   export type TypeClass      =  { is: 'type', type: 'class', name: string };
