@@ -62,7 +62,7 @@ module.exports =  {
     },
     npmPackage: { is: "component",
       devDependencies: { is: "component", 
-        "@types/node": "^4.0.30"
+        "@types/node": "^6.0.78"
       }
     },
   },
