@@ -28,7 +28,10 @@ export namespace Aspect {
   }
   export const localTransport = {
     remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
-      return fastSafeCall(to[method], to, args[0]);
+      let impl = to[method];
+      if (typeof impl === "function")
+        return fastSafeCall(to[method], to, args[0]);
+      return Promise.reject(`method ${method} not found on ${to.manager().name()}`);
     }
   }
 
