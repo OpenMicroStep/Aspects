@@ -88,6 +88,19 @@ export class ControlCenter {
     });
   }
 
+  swapObjects<T extends VersionedObject>(component: AComponent, oldObjects: T[], newObjects: T[]) : T[] {
+    this.unregisterObjects(component, oldObjects);
+    this.registerObjects(component, newObjects);
+    return newObjects;
+  }
+
+  swapObject<T extends VersionedObject>(component: AComponent, oldObject: T | undefined, newObject: T) : T;
+  swapObject<T extends VersionedObject>(component: AComponent, oldObject: T | undefined, newObject: T | undefined) : T | undefined;
+  swapObject<T extends VersionedObject>(component: AComponent, oldObject: T | undefined, newObject: T | undefined) : T | undefined {
+    this.swapObjects(component, oldObject ? [oldObject] : [], newObject ? [newObject] : []);
+    return newObject;
+  }
+
   /// category VersionedObject
   cache() {
     return this._cache;
