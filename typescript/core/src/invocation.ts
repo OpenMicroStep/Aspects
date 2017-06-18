@@ -20,7 +20,7 @@ export class Invocation<R> {
     this._diagnostics = diagnostics;
     if (hasResult)
       this._state |= InvocationState.Terminated;
-    if (!hasResult || diagnostics.length > 0)
+    if (diagnostics.length > 0)
       this._state |= InvocationState.Aborted;
   }
 
@@ -29,6 +29,7 @@ export class Invocation<R> {
   hasResult(): boolean {
     return (this._state & InvocationState.Terminated) === InvocationState.Terminated;
   }
+
   result() {
     if (this.hasResult())
       return this._result;
@@ -49,7 +50,7 @@ export class Invocation<R> {
       receiver.manager().controlCenter().notificationCenter().postNotification({
         name: eventName,
         object: onObject || this,
-        info: { invocation: invocation }
+        info: invocation
       })
     });
   }
