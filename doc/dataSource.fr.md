@@ -113,54 +113,92 @@ Pour chaque objet définissant la sortie on a:
 
 ### Contraintes de recherche
 
-A la manière de __mongodb__ ou encore de __sequelize__, les contraintes de recherches sont définies sous une forme structuré.
-En plus des requêtes _simples_ possibles via la syntaxe __mongodb__, deux concepts: __ensemble__ et __élément__, sont disponible pour permettre l'écriture de requêtes bien plus puissante.
+Les contraintes de recherche sont définit à l'aide d'opérations sur les ensembles.
 
-Un __ensemble__ se définit par son nom et les contraintes qui permettent de définir la liste d'objet qu'il représente.
-Par le fait qu'un ensemble est nommé, celui-ci est réutilisable pour définir des contraintes sur d'autres ensembles.
-A chaque fois que l'on définit des contraintes, celles-ci définissent en fait un ensemble.
-Lors de la définition d'un ensemble nommée avec des contraintes sur des éléments, la propriété `$out` doit-être utilisé pour définir la liste des objets qui forment l'ensemble.   
-_Syntaxe_:
+Un __ensemble__ est définisable de plusieurs façons:
 
-  - Pour nommée un _ensemble_, il suffit que la clé associé à sa définition se termine par le caractère `=`. 
-  - De même, pour utiliser un ensemble, il suffit que la valeur commence par le caratère `=` suivi du nom de l'ensemble.
-  - Lorsque l'on référence un ensemble, le nom de celui-ci peut-être suivi de `:` puis du nom d'un attribut présent sur les éléments de cet ensemble.
-    Cela signifie alors toutes les valeurs de cet attribut pour tous les éléments de cet ensemble.
+ - par contraintes
+ - par parcours d'attributs des éléments d'un ensemble
+ - par construction
+ - par récursion
 
-Un __élément__ se définit par son nom et les contraintes qui permettent de définir la liste d'objet qui seront les valeurs successives qu'il représente.
-Par le fait qu'un élément est nommé, celui-ci est réutilisable pour définir des contraintes sur d'autres ensembles.   
-_Syntaxe_:
+Pour nommée un _ensemble_, il suffit que la clé associé à sa définition se termine par le caractère `=`.
+Cet _ensemble_ est alors référencable via `=` suivi du nom de l'ensemble. Cette référence peut-être suivi de `:` puis du nom d'un attribut présent sur les éléments de cet ensemble.
+Cela signifie alors toutes les éléments de cet attribut pour tous les éléments de cet ensemble (voir: Définition par parcours d'attributs des éléments d'un ensemble).
 
-  - Pour nommée un _élément_, il faut que la clé associé à sa définition se termine par le caractère `=` 
-    et que la définition contienne la clé `$elementOf` qui aura pour valeur un _ensemble_.
-  - De même, pour utiliser un élément, il suffit que la valeur commence par le caratère `=` suivi du nom de l'élément.
-  - Lorsque l'on référence un élément, le nom de celui-ci peut-être suivi de `.` puis du nom d'un attribut présent sur l'élément.
-    Cela signifie alors la valeur de cet attribut pour cet élément.
+#### Définition par parcours d'attributs des éléments d'un ensemble
 
-La différence entre __ensemble__ et __élément__ est qu'un ensemble est une liste d'objet tandis qu'un élément sera chaque valeur d'une liste d'objet, comprendre: _pour chaque élément d'un ensemble_.
-Ainsi, lorsque d'un ensemble est définit par un ou plusieurs éléments: ce sont toutes les combinaisons possibles de ces éléments (par rapport aux ensembles qu'ils représentent) qui valident les contraintes posées sur ces éléments, avec la propriété `$out` qui permet de prendre parmis l'ensemble de ces combinaisons valides, les valeurs d'un des éléments.
+C'est un raccourci de la définition par construction permettant de créer un ensemble qui contient l'ensemble des éléments présents dans les attributs des éléments d'un autre ensemble.
 
-__Attention__: Toutes les comparaisons sur les chaînes de caractères (tri, `$eq`, `$neq`, `$lt`, ...) sont insensibles à la casse et suivent la spécification _Unicode Collation Algorithm_.
-Donc `"abc": { $eq: "ABC" }` est vrai.
+La syntaxe est la suivante: `=ensemble[:attribut]*`
 
-Définition d'un ensemble:
+#### Définition par contraintes
 
-  - un dictionnaire dont chaque couple clé, valeur correspond à une contrainte supplémentaire (__AND__).   
-    Pour chaque clé, le contenu peut être:
-    - si elle commence pas `$`, c'est un opérateur
-    - si elle commence par `=`, c'est l'ensemble ou l'élément correspondant
-    - si elle termine par `=`, c'est un ensemble d'objets
-    - sinon, c'est le chemin à parcourir pour accéder à la valeur
-  - `=` suivi du nom d'un ensemble ou d'un élément, c'est l'ensemble ou l'élément correspondant
-  - directement à la valeur recherché
+C'est la forme la plus simple, à la manière de __mongodb__ ou encore de __sequelize__, les contraintes de recherches sont définies par des opérateurs s'appliquant sur les attributs.
+
+C'est un dictionnaire dont chaque couple clé, valeur correspond à une contrainte supplémentaire (__AND__).   
+Pour chaque clé, le contenu peut être:
+
+  - si elle commence pas `$`, c'est un opérateur
+  - sinon, c'est le chemin à parcourir pour accéder à la valeur
+
+
+#### Définition par construction
+
+La définition par construction permet de poser des contraintes entre _élements_ d'_ensembles_ afin de construire un nouvel _ensemble_ contenant les _éléments_ validant les contraintes posés. 
+
+Par exemple sous forme mathématiques, celui ce traduit par: `{x ∈ X | tel que pour tout y ∈ Y, x.a = y.a }`
+
+Cette forme utilise une syntaxe étendu de la définition par contraintes et s'active par présence de la propriété `$out`.
+Cette propriété doit référencer l'_élément_ à utiliser pour définir l'ensemble final ex: `$out: "=x"`.
+
+Tout élément est définit par son nom et l'ensemble qui le contient (ex: `"x=": { $elementOf: "=X" }`).
+
+A partir des éléments il est possible d'accéder aux valeurs des attributs: (ex: `=x.a`)
+
+Il est alors possible de poser des contraintes entres valeurs, commme pour la définition par contraintes (ex: `"=x.a": { $eq: "=y.a" }`).
+
+Ainsi si l'on reprend l'exemple précédent, on obtient: 
+
+```js
+{
+  $out: "=x",
+  "x=": { $elementOf: "=X" },
+  "y=": { $elementOf: "=Y" },
+  "=x.a": { $eq: "=y.a" },
+}
+```
+
+#### Définition par récursion
+
+Afin de répondre au probléme de la définition d'un ensemble par recursion, on part à nouveau de la définition mathématiques: 
+
+    U(0) = X
+    U(n + 1) = { y ∈ Y | tel que pour tout x ∈ U(n), y.parent = x }
+    E = U(0) ⋃ U(1) ⋃ ... ⋃ U(n) pour n tel que U(n) = U(n+1) ≠ U(n-1)
+
+et de la même façon on le définit pour datasource:
+
+```js
+{
+  $unionForAlln: "=U(n)",
+  "U(0)=": "=X",
+  "U(n + 1)=": {
+    $out: "=y",
+    "x=": { $elementOf: "=U(n)" },
+    "y=": { $elementOf: "=Y" },
+    "=y.parent": { $eq: "=x" },
+  }
+}
+```
 
 #### Opérateurs sur les ensembles
 
 Les opérateurs sur les ensembles permettent à partir d'ensembles de définir de nouveaux ensembles.
 
- - Union `$union: [<ensemble>, ...] => <ensemble A U B>`: l'ensemble des objets des ensembles de la liste;
- - Intersection `$intersection: [<ensemble>, ...] => <ensemble A & B>`: l'ensemble des objets commun aux ensembles de la liste;
- - Différence `$diff: [<ensemble A>, <ensemble B>] => <ensemble A / B>`: l'ensemble des objets de l'ensemble A qui ne sont pas présent dans l'ensemble B
+ - Union `$union: [<ensemble>, ...] => <ensemble A ⋃ B>`: l'ensemble des objets des ensembles de la liste;
+ - Intersection `$intersection: [<ensemble>, ...] => <ensemble A ⋂ B>`: l'ensemble des objets commun aux ensembles de la liste;
+ - Différence `$diff: [<ensemble A>, <ensemble B>] => <ensemble A ∖ B>`: l'ensemble des objets de l'ensemble A qui ne sont pas présent dans l'ensemble B
 
 #### Opérateurs sur les valeurs
 
@@ -179,16 +217,19 @@ Les opérateurs sur les valeurs permettent de définir des contraintes.
  - Plus petit ou égal à `$lte: <nombre | date | string>`
 
 
+ - A une valeur égal à `$has: <value>`
  - Est une valeur de la liste `$in: [<value>, ...]`
  - N'est pas une valeur de la liste `$nin: [<value>, ...]`
 
-
- - Fulltext search `$text: { $search: <string value>, ...options }`
+ - Fulltext search `$text: <string value>`
+ 
+__Attention__: Toutes les comparaisons sur les chaînes de caractères (tri, `$eq`, `$neq`, `$lt`, ...) sont insensibles à la casse et suivent la spécification _Unicode Collation Algorithm_.
+Donc `"abc": { $eq: "ABC" }` est vrai.
 
 ### Tri du résultat
 
 La définition du tri se fait par un tableau dont les valeurs sont les attributs sur lequel porte le tri.
-Chaque attribut peut être préfixé par `+` ou `-` pour définit que le tri est respectivement __croissant__ ou __décroissant__.
+Chaque attribut peut être préfixé par `+` ou `-` pour définir que le tri est respectivement __croissant__ ou __décroissant__.
 Le comportant par défaut est un tri __croissant__.
 La priorité du tri est définit par l'ordre des éléments dans le tableau, du plus prioritaire au moins prioritaire.
 
