@@ -68,10 +68,39 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   isRegistered() { return this._components.size > 0; }
 
-  hasChanges() { return this._localAttributes.size > 0; }
+  hasChanges(scope?: string[]) : boolean;
+  hasChanges(scope?: (keyof T)[]) : boolean;
+  hasChanges(scope?: (keyof T)[]) { 
+    if (this._localAttributes.size === 0)
+      return false;
+    return scope ? scope.some(attribute => this._localAttributes.has(attribute)) : true;
+  }
   localVersion(): number { return this._localAttributes.size > 0 ? VersionedObjectManager.NextVersion : this._version; }
   localAttributes(): VersionedObjectManager.ROAttributes<T> { return this._localAttributes; }
-  clear() { this._localAttributes.clear(); }
+  
+  clear(scope?: string[]) : void;
+  clear(scope?: (keyof T)[]) : void;
+  clear(scope?: (keyof T)[]) { 
+    if (!scope)
+      this._localAttributes.clear(); 
+    else
+      scope.forEach(attribute => this._localAttributes.delete(attribute));
+  }
+
+  unload(scope?: string[]) : void;
+  unload(scope?: (keyof T)[]) : void;
+  unload(scope?: (keyof T)[]) { 
+    if (!scope) {
+      this._localAttributes.clear();
+      this._versionAttributes.clear();
+    }
+    else {
+      scope.forEach(attribute => {
+        this._localAttributes.delete(attribute);
+        this._versionAttributes.delete(attribute);
+      });
+    }
+  }
   
   versionVersion(): number { return this._version; }
   versionAttributes(): VersionedObjectManager.ROAttributes<T> { return this._versionAttributes; }
@@ -87,10 +116,12 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     // TODO INCONFLICT
   }
 
-  attributeState(attribute: string) : VersionedObjectManager.AttributeState {
-    if (this._localAttributes.has(attribute as keyof T))
+  attributeState(attribute: string) : VersionedObjectManager.AttributeState;
+  attributeState(attribute: keyof T) : VersionedObjectManager.AttributeState;
+  attributeState(attribute: keyof T) : VersionedObjectManager.AttributeState {
+    if (this._localAttributes.has(attribute))
       return VersionedObjectManager.AttributeState.MODIFIED;
-    if (this._versionAttributes.has(attribute as keyof T))
+    if (this._versionAttributes.has(attribute))
       return VersionedObjectManager.AttributeState.UNCHANGED;
     if (this._version === VersionedObjectManager.NoVersion)
       return VersionedObjectManager.AttributeState.NEW;
@@ -100,12 +131,20 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     // TODO INCONFLICT
   }
   
-  hasAttributeValue(attribute: string) : boolean {
+  hasAttributeValue(attributes: string) : boolean;
+  hasAttributeValue(attributes: keyof T) : boolean;
+  hasAttributeValue(attribute: keyof T) : boolean {
     return attribute === '_id' 
         || attribute === '_version' 
-        || this._localAttributes.has(attribute as keyof T) 
-        || this._versionAttributes.has(attribute as keyof T)
+        || this._localAttributes.has(attribute) 
+        || this._versionAttributes.has(attribute)
         || (this._version === VersionedObjectManager.NoVersion && this._aspect.attributes.has(attribute));
+  }
+
+  hasAttributeValues(attributes: string[]) : boolean;
+  hasAttributeValues(attributes: (keyof T)[]) : boolean;
+  hasAttributeValues(attributes: (keyof T)[]) : boolean {
+    return attributes.every(attribute => this.hasAttributeValue(attribute));
   }
 
   attributeValue(attribute: string) : any;
