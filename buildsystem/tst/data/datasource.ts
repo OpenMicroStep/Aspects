@@ -645,13 +645,13 @@ export declare namespace DataSource {
   function __i<T extends DataSource>(name: 'raw'): DataSource.ImplCategories.raw<T>;
   function __i<T extends DataSource>(name: 'implementation'): DataSource.ImplCategories.implementation<T>;
 
-  export interface Categories extends VersionedObject.Categories {
-    (name: 'local', implementation: DataSource.ImplCategories.local);
-    (name: 'client', implementation: DataSource.ImplCategories.client);
-    (name: 'server', implementation: DataSource.ImplCategories.server);
-    (name: 'safe', implementation: DataSource.ImplCategories.safe);
-    (name: 'raw', implementation: DataSource.ImplCategories.raw);
-    (name: 'implementation', implementation: DataSource.ImplCategories.implementation);
+  export interface Categories<C extends DataSource = DataSource> extends VersionedObject.Categories<C> {
+    (name: 'local', implementation: DataSource.ImplCategories.local<C>);
+    (name: 'client', implementation: DataSource.ImplCategories.client<C>);
+    (name: 'server', implementation: DataSource.ImplCategories.server<C>);
+    (name: 'safe', implementation: DataSource.ImplCategories.safe<C>);
+    (name: 'raw', implementation: DataSource.ImplCategories.raw<C>);
+    (name: 'implementation', implementation: DataSource.ImplCategories.implementation<C>);
   }
   export namespace Categories {
     export type local = DataSource & {

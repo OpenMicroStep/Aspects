@@ -171,9 +171,9 @@ export declare namespace Person {
   function __i<T extends Person>(name: 'core'): Person.ImplCategories.core<T>;
   function __i<T extends Person>(name: 'calculation'): Person.ImplCategories.calculation<T>;
 
-  export interface Categories extends VersionedObject.Categories {
-    (name: 'core', implementation: Person.ImplCategories.core);
-    (name: 'calculation', implementation: Person.ImplCategories.calculation);
+  export interface Categories<C extends Person = Person> extends VersionedObject.Categories<C> {
+    (name: 'core', implementation: Person.ImplCategories.core<C>);
+    (name: 'calculation', implementation: Person.ImplCategories.calculation<C>);
   }
   export namespace Categories {
     export type core = Person & {
@@ -231,7 +231,7 @@ export class Cat extends VersionedObject {
   static readonly category: Cat.Categories;
 }
 export declare namespace Cat {
-  export interface Categories extends VersionedObject.Categories {
+  export interface Categories<C extends Cat = Cat> extends VersionedObject.Categories<C> {
   }
   export namespace Categories {
   }

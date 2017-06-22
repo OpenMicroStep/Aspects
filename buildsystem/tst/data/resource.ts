@@ -58,8 +58,8 @@ export declare namespace Resource {
   function __c(name: 'local'): Resource.Categories.local;
   function __i<T extends Resource>(name: 'local'): Resource.ImplCategories.local<T>;
 
-  export interface Categories extends VersionedObject.Categories {
-    (name: 'local', implementation: Resource.ImplCategories.local);
+  export interface Categories<C extends Resource = Resource> extends VersionedObject.Categories<C> {
+    (name: 'local', implementation: Resource.ImplCategories.local<C>);
   }
   export namespace Categories {
     export type local = Resource & {
@@ -157,9 +157,9 @@ export declare namespace Car {
   function __i<T extends Car>(name: 'local'): Car.ImplCategories.local<T>;
   function __i<T extends Car>(name: 'local2'): Car.ImplCategories.local2<T>;
 
-  export interface Categories extends Resource.Categories {
-    (name: 'local', implementation: Car.ImplCategories.local);
-    (name: 'local2', implementation: Car.ImplCategories.local2);
+  export interface Categories<C extends Car = Car> extends Resource.Categories<C> {
+    (name: 'local', implementation: Car.ImplCategories.local<C>);
+    (name: 'local2', implementation: Car.ImplCategories.local2<C>);
   }
   export namespace Categories {
     export type local = Car & typeof __Car_Categories_local & {
