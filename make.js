@@ -259,6 +259,15 @@ module.exports =  {
       "sh", "-c",
       "cat ./coverage/coverage-final.json | remap-istanbul --output coverage --type html"
     ]) },
+
+    "deploy-msbuildsystem.aspects=": { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.aspects"]) },
+    "deploy-aspects="              : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects"]) },
+    "deploy-aspects.express="      : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects.express"]) },
+    "deploy-aspects.sql="          : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects.sql"]) },
+    "deploy-aspects.xhr="          : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects.xhr"]) },
+    "deploy=": { is: "target", components: ["=shell"], targets: ["build"],
+      preTasks: Value(["=deploy-msbuildsystem.aspects", "=deploy-aspects", "=deploy-aspects.express", "=deploy-aspects.sql", "=deploy-aspects.xhr"]) },
+
     "build=":     { is: "target", components: ["=shell"], preTasks: Value(["=build-bs", /*"=tests-bs",*/ "=build-aspects", "=tests-aspects" ]) },
   }
 };
