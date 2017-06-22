@@ -1,6 +1,6 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
-export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: string, user: string, password: string, database: string }, any>({
+export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: string, port: number, user: string, password: string, database: string }, any>({
   maker: new SqlMaker(),
   create(mysql2, options) {
     return new Promise((resolve, reject) => {

@@ -1,40 +1,40 @@
-before_script:
- - npm set registry $NPM_REGISTRY
+services:
+  - "microsoft/mssql-server-linux"
+  - "mysql"
+  - "postgres:alpine"
 
-build:
-  image: node:6-alpine
+variables:
+  ACCEPT_EULA: "Y"
+  SA_PASSWORD: "7wnjijM9JihtKok4RC6"
+  MYSQL_ROOT_PASSWORD: "my-secret-pw"
+  POSTGRES_PASSWORD: "my-secret-pw"
+
+.build_tpl: &build_tpl
   stage: build
   script:
-   - npm install -q -g @openmicrostep/msbuildsystem.cli
-   - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript @openmicrostep/msbuildsystem.aspects @openmicrostep/msbuildsystem.js.logitud
-   - msbuildsystem build -w dist/
-  artifacts:
-    expire_in: 31d
-    paths:
-     - dist/
+   - apk add --no-cache git
+   - npm install -q -g @openmicrostep/msbuildsystem.cli@^0.5.0 @openmicrostep/tests istanbul coveralls remap-istanbul
+   - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript@^0.5.0
+   - git clone https://github.com/OpenMicroStep/MSBuildSystem.git
+   - msbuildsystem build -w dist/gitlab/ --target build --env gitlab --no-progress
 
-test:
+build-6:
+  <<: *build_tpl
   image: node:6-alpine
-  stage: test
-  dependencies:
-   - build
-  script:
-   - npm install -q -g @openmicrostep/tests
-   - mstests dist/js/debug/node_modules/@openmicrostep/aspects.tests/typescript/core/tst/core.spec.js 
-             dist/js/debug/node_modules/@openmicrostep/aspects.sequelize.tests/typescript/datasource.sequelize/tst/datasource.sequelize.spec.js
 
-publish:
-  image: node:6-alpine
+build-8:
+  <<: *build_tpl
+  image: node:8-alpine
+
+deploy:
   stage: deploy
-  script:
-    - echo "$NPM_AUTH" >> ~/.npmrc
-    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects
-    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects.express
-    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects.sequelize
-    - npm publish dist/js/debug/node_modules/@openmicrostep/aspects.xhr
-  dependencies:
-   - build
+  image: node:6-alpine
   only:
-    - master
-  when: manual
-  environment: production
+    - tags
+  script:
+   - echo "$NPM_AUTH" >> ~/.npmrc
+   - apk add --no-cache git python g++
+   - npm install -q -g @openmicrostep/msbuildsystem.cli@^0.5.0 @openmicrostep/tests istanbul coveralls remap-istanbul
+   - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript@^0.5.0
+   - git clone https://github.com/OpenMicroStep/MSBuildSystem.git
+   - msbuildsystem build -w dist/gitlab/ --target deploy --env gitlab --no-progress

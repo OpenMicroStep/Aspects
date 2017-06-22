@@ -4,20 +4,16 @@ mssql:
    - ACCEPT_EULA=Y
    - SA_PASSWORD=7wnjijM9JihtKok4RC6
   ports:
-   - 1433:1433
+   - 127.0.0.1:1433:1433
 mysql:
   image: mysql
   environment: 
    - MYSQL_ROOT_PASSWORD=my-secret-pw
   ports:
-   - 3306:3306
+   - 127.0.0.1:3306:3306
 postgres:
   image: postgres:alpine
   environment: 
    - POSTGRES_PASSWORD=my-secret-pw
   ports:
-   - 5432:5432
-oracle:
-  image: wnameless/oracle-xe-11g
-  ports:
-   - 1521:1521
+   - 127.0.0.1:5432:5432

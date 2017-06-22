@@ -194,7 +194,7 @@ module.exports =  {
           "mysql2": "^1.2.0",
           "pg": "^6.1.5",
           "tedious": "^2.0.0",
-          "oracledb": "^1.13.1",
+          //"oracledb-pb": "^1.12.3",
           "@openmicrostep/msbuildsystem.shared": "^0.5.6",
         },
       },
