@@ -391,6 +391,92 @@ function query_elementof_c1c2(f: Flux<Context>) {
   });
 }
 
+function select(vo: object, attr: string[]) {
+  let ret = {};
+  for (let a of attr)
+    ret[a] = vo[a];
+  return ret;
+}
+function deepEqual(a, b, attr: string[]) {
+  assert.deepEqual(select(a, attr), select(b, attr));
+}
+async function load_mixed_attributes(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+
+  c0.manager().unload();
+  p0.manager().unload();
+
+  let inv = await db.farPromise('safeLoad', { objects: [c0, p0], scope: ['_name', '_owner', '_model', '_firstname', '_lastname'] });
+  assert.deepEqual(inv.diagnostics(), []);
+  assert.isTrue(inv.hasResult());
+  let u = inv.result();
+  assert.sameMembers(u, [p0, c0]);
+  deepEqual(c0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: p0 }, ["_id", "_name", "_owner", "_model"]);
+  deepEqual(p0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+
+  f.continue();
+}
+async function load_sub_attributes(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  c0.manager().unload();
+  p0.manager().unload();
+
+  let inv = await db.farPromise('safeLoad', { objects: [c0], scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] });
+  assert.deepEqual(inv.diagnostics(), []);
+  assert.isTrue(inv.hasResult());
+  let u = inv.result();
+  assert.sameMembers(u, [c0]);
+  deepEqual(c0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: p0 }, ["_id", "_name", "_owner", "_model"]);
+  deepEqual(c0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+
+  f.continue();
+}
+
+async function query_union_cars_peoples(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  cc.unregisterObjects(component, [c0, p0]);
+
+  let inv = await db.farPromise('rawQuery', { 
+    "cars=": { $instanceOf: Car, _id: c0.id() },
+    "peoples=": { $instanceOf: People, _id: p0.id() },
+    results: [
+      { name: "u", where: { $union: ["=cars", "=peoples"] }, scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] },
+    ]
+  });
+  assert.deepEqual(inv.diagnostics(), []);
+  assert.isTrue(inv.hasResult());
+  let u = inv.result()['u'];
+  let lc0 = u.find(v => v instanceof Car) as typeof c0;
+  let lp0 = u.find(v => v instanceof People);
+  assert.equal(u.length, 2);
+  deepEqual(lc0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: lp0 }, ["_id", "_name", "_owner", "_model"]);
+  deepEqual(lp0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+  
+  cc.registerObjects(component, [c0, p0]);
+  f.continue();
+}
+async function query_cars_sub_scope(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  cc.unregisterObjects(component, [c0, p0]);
+
+  let inv = await db.farPromise('rawQuery', {
+    "cars=": { $instanceOf: Car, _id: c0.id() },
+    results: [
+      { name: "u", where: "=cars", scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] },
+    ]
+  });
+  assert.deepEqual(inv.diagnostics(), []);
+  assert.isTrue(inv.hasResult());
+  let u = inv.result()['u'];
+  let lc0 = u.find(v => v instanceof Car) as typeof c0;
+  assert.equal(u.length, 1);
+  deepEqual(lc0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: lc0._owner }, ["_id", "_name", "_owner", "_model"]);
+  deepEqual(lc0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+  
+  cc.registerObjects(component, [c0, p0]);
+  f.continue();
+}
+
 function createWithCC(flux, nb) {
   let {Car, People, db, cc} = flux.context as Context;
   let objects: VersionedObject[] = [];
@@ -474,7 +560,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_id_c2,
       query_peoples,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
-    ]}, 
+    ]},
     { name: "relations", tests: [
       { name: "init", test: (f: any) => { f.setFirstElements([createControlCenter, init]); f.continue(); } },
       save_c0_c1_c2_c3_p0_p1_p2,
@@ -488,6 +574,17 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_elementof_sub,
       query_elementof_c1c2,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
-    ]}]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
+    ]},
+    { name: "mixed", tests: [
+      { name: "init", test: (f: any) => { f.setFirstElements([createControlCenter, init]); f.continue(); } },
+      save_c0_c1_c2_c3_p0_p1_p2,
+      save_relation_c0p0_c1p0_c2p1,
+      load_mixed_attributes,
+      load_sub_attributes,
+      query_union_cars_peoples,
+      query_cars_sub_scope,
+      { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
+    ]},
+    ]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
 }
 
