@@ -26,8 +26,16 @@ export class ControlCenter {
   notificationCenter() { return this._notificationCenter; }
 
   /// category component
-  registeredObject(id: Identifier) : VersionedObject | undefined {
-    return this._objects.get(id);
+  registeredObject(id: Identifier, classname: string) : VersionedObject;
+  registeredObject(id: Identifier) : VersionedObject | undefined;
+  registeredObject(id: Identifier, classname?: string) : VersionedObject | undefined {
+    let vo = this._objects.get(id);
+    if (!vo && classname) {
+      let cstor = this.aspect(classname)!;
+      vo = new cstor();
+      vo.manager().setId(id);
+    }
+    return vo;
   }
   
   registeredObjects(component: AComponent) : VersionedObject[] {
