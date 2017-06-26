@@ -303,7 +303,7 @@ export namespace DataSourceInternal {
             ok = this.mapper.aspect(object).name === (set.aspect as Aspect.Installed).name; // TODO: real instanceof/memberof
             break;
           case ConstraintType.UnionOf:
-            ok = (set.aspect as ObjectSet[]).some(s => this.solveFull(set).has(object));
+            ok = (set.aspect as ObjectSet[]).some(s => this.solveFull(s).has(object));
             break;
         }
         ok = ok && set.constraints.every(c => this.pass(set, c, "", object));
