@@ -45,9 +45,15 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
   },
   save(objects: VersionedObject.Categories.validation[]) {
     let reporter = new Reporter();
-    let changed = filterToOnlyChangedObjects(objects);
-    for (let o of changed)
-      o.validate(reporter);
+    let changed = new Set<VersionedObject>();
+    for (let o of objects) {
+      let manager = o.manager();
+      let state = manager.state();
+      if (state !== VersionedObjectManager.State.UNCHANGED) {
+        changed.add(o);
+        o.validate(reporter);
+      }
+    }
     if (reporter.diagnostics.length > 0)
       return new Invocation(reporter.diagnostics, true, objects);
     return this.farPromise('distantSave', [...changed]).then((inv) => {
@@ -96,7 +102,7 @@ function filterObjects(validators: SafeValidators | undefined, objects: Versione
   }
 }
 
-function filterToOnlyChangedObjects<T extends VersionedObject>(objects: T[]) : Set<T> {
+function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T[]) : Set<T> {
   let changed = new Set<T>();
   for (let o of objects) {
     let manager = o.manager();
@@ -131,7 +137,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
   },
   async safeSave(objects: VersionedObject.Categories.validation[]) {
     // TODO: Do we want to force load attributes in case of failure or for unchanged objects ?
-    let changed = filterToOnlyChangedObjects(objects);
+    let changed = filterChangedObjectsAndPrepareNew(objects);
     if (changed.size === 0)
       return new Invocation([], true, objects);
     
@@ -193,7 +199,7 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
     return this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
   },
   async rawSave(objects: VersionedObject[]) {
-    let changed = filterToOnlyChangedObjects(objects);
+    let changed = filterChangedObjectsAndPrepareNew(objects);
     if (changed.size === 0)
       return new Invocation([], true, objects);
     let begin = await this.farPromise('implBeginTransaction', undefined);
