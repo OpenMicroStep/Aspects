@@ -87,8 +87,8 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
 export type SafeValidator<T extends VersionedObject = VersionedObject> = {
   filterObject?: (object: VersionedObject) => void,
   preSaveAttributes?: string[],
-  preSavePerObject?: (reporter: Reporter, set: { add(object: VersionedObject) }, object: T) => void,
-  preSavePerDomain?: (reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => void,
+  preSavePerObject?: (reporter: Reporter, set: { add(object: VersionedObject) }, object: T) => Promise<void>,
+  preSavePerDomain?: (reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => Promise<void>,
 }
 export type SafeValidators = Map<string, SafeValidator>;
 
@@ -149,7 +149,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     let reporter = new Reporter();
     let cc = this.controlCenter();
     let validators = new Map<SafeValidator, VersionedObject[]>();
-    let domainValidators = new Map<(reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => void, VersionedObject[]>();
+    let domainValidators = new Map<(reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => Promise<void>, VersionedObject[]>();
     for (let o of changed) {
       o.validate(reporter);
       let validator = this._safeValidators && this._safeValidators.get(o.manager().name());
@@ -171,11 +171,11 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
         await this.farPromise('implLoad', { tr: tr, objects: objects, scope: validator.preSaveAttributes });
       if (validator.preSavePerObject) {
         for (let o of objects)
-          validator.preSavePerObject(reporter, changed, o);
+          await validator.preSavePerObject(reporter, changed, o);
       }
     }
     for (let [validator, objects] of domainValidators)
-      validator(reporter, changed, objects);
+      await validator(reporter, changed, objects);
     
     if (reporter.diagnostics.length === 0) {
       let save = await this.farPromise('implSave', { tr: tr, objects: changed });

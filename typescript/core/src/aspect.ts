@@ -397,36 +397,12 @@ export class AspectCache {
     }
     return AttributeTypes.objectValidator(extensions, objectForKeyValidator);
   }
-  private classValidator(forAttribute: boolean, classname: string, allowUndefined: boolean) : Aspect.TypeValidator {
-    if (!forAttribute) return AttributeTypes.validateAny;
-
-    return { validate: function validateClass(reporter: Reporter, path: AttributePath, value: any) {
-      if (value === undefined && allowUndefined)
-        return value;
-      if (value instanceof VersionedObject) {
-        let cstor: Function | undefined = value.controlCenter().aspect(classname);
-        if (!cstor && classname === "VersionedObject")
-          return value;
-        else if (!cstor)
-          path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, unable to find aspect`});
-        else if (value instanceof cstor)
-          return value;
-        else
-          path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.manager().name()}`});
-      }
-      else if (typeof value === "object")
-        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.constructor ? value.constructor.name : value}`});
-      else
-        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${typeof value}`});
-      return value;
-    }}
-  }
   private createValidator(forAttribute: boolean, type: Aspect.Type, lvl = 0) : Aspect.TypeValidator {
     if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class" && type.type !== "or")
       throw new Error(`cannot create deep type validator for attribute`);
     switch (type.type) {
       case "primitive": return forAttribute && lvl === 0 ? Validation.primitiveLevel0Validators[type.name] : Validation.primitiveValidators[type.name];
-      case "class": return this.classValidator(forAttribute, type.name, forAttribute && lvl === 0);
+      case "class": return forAttribute ? Validation.classValidator(type.name, forAttribute && lvl === 0) : AttributeTypes.validateAny;
       case "array": return this.arrayValidator(forAttribute, lvl, type.itemType, type.min, type.max);
       case "set": return this.setValidator(forAttribute, lvl, type.itemType, type.min, type.max);
       case "dictionary": return this.propertiesValidator(forAttribute, lvl, type.properties);

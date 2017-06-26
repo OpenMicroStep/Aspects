@@ -1,4 +1,4 @@
-import { Aspect, Identifier, VersionedObject } from './core';
+import { Aspect, Identifier, VersionedObject, VersionedObjectManager } from './core';
 import { Async, Flux } from '@openmicrostep/async';
 import { Reporter, AttributeTypes as V, AttributePath } from '@openmicrostep/msbuildsystem.shared';
 
@@ -26,12 +26,55 @@ export const validateVersion: V.Validator0<number> = {
   }
 };
 
-export function attributesValidator<T extends VersionedObject>(extensions: V.Extensions0<T>) {
+export const validateHasValue: V.Validator0<any> = {
+  validate: function validateHasValue(reporter: Reporter, path: AttributePath, value: any) {
+    if (value === undefined)
+      path.diagnostic(reporter, { type: "warning", msg: `required` });
+    return value;
+  }
+};
+
+
+export function classValidator(classname: string, allowUndefined: boolean) : Aspect.TypeValidator {
+  return { validate: function validateClass(reporter: Reporter, path: AttributePath, value: any) {
+    if (value === undefined && allowUndefined)
+      return value;
+    if (value instanceof VersionedObject) {
+      let cstor: Function | undefined = value.controlCenter().aspect(classname);
+      if (!cstor && classname === "VersionedObject")
+        return value;
+      else if (!cstor)
+        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, unable to find aspect`});
+      else if (value instanceof cstor)
+        return value;
+      else
+        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.manager().name()}`});
+    }
+    else if (typeof value === "object")
+      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.constructor ? value.constructor.name : value}`});
+    else
+      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${typeof value}`});
+    return value;
+  }}
+}
+
+export function categoryValidation<T extends VersionedObject>(on: { new(manager: VersionedObjectManager<any>): T, category(name: 'validation', implementation: VersionedObject.ImplCategories.validation<T>): void }, extensions: V.Extensions0<Partial<T>>) {
+  const validate = Validation.attributesValidator(extensions);
+  on.category('validation', {
+    validate(reporter) {
+      validate(reporter, this);
+    }
+  });
+}
+
+export function attributesValidator<T extends VersionedObject>(extensions: V.Extensions0<Partial<T>>) {
   return function validateAttributes(reporter: Reporter, object: T): void {
     let at = new AttributePath();
+    let m = object.manager();
     at.push('.', '');
     for (let attribute in extensions) {
-      extensions[attribute].validate(reporter, at.set(attribute), object[attribute]);
+      if (m.hasAttributeValue(attribute))
+        extensions[attribute].validate(reporter, at.set(attribute), m.attributeValue(attribute));
     }
   }
 }
