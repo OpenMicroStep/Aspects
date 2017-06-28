@@ -32,6 +32,8 @@ _relation_: `_drivenCars`
 ### attributes
 #### _firstname: string
 #### _lastname: string
+#### _father: People
+#### _mother: People
 #### _cars: [0, *, Car]
 _relation_: `_owner`
 #### _drivenCars: [0, *, Car]

@@ -20,6 +20,8 @@ type Context = {
   p0: People.Aspects.test1,
   p1: People.Aspects.test1,
   p2: People.Aspects.test1,
+  p3: People.Aspects.test1,
+  p4: People.Aspects.test1,
   component: {},
 };
 
@@ -30,18 +32,21 @@ function init(flux: Flux<Context>) {
   ctx.c1 = Object.assign(new Car(), { _name: "Renault", _model: "Clio 2" });
   ctx.c2 = Object.assign(new Car(), { _name: "Peugeot", _model: "3008 DKR" });
   ctx.c3 = Object.assign(new Car(), { _name: "Peugeot", _model: "4008 DKR" });
-  ctx.p0 = Object.assign(new People(), { _name: "Lisa Simpsons" , _firstname: "Lisa" , _lastname: "Simpsons", _birthDate: new Date()  });
-  ctx.p1 = Object.assign(new People(), { _name: "Bart Simpsons" , _firstname: "Bart" , _lastname: "Simpsons", _birthDate: new Date(0) });
-  ctx.p2 = Object.assign(new People(), { _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: new Date()  });
+  ctx.p4 = Object.assign(new People(), { _name: "Abraham Simpson", _firstname: "Abraham", _lastname: "Simpson", _birthDate: new Date()  });
+  ctx.p2 = Object.assign(new People(), { _name: "Homer Simpson"  , _firstname: "Homer"  , _lastname: "Simpson", _birthDate: new Date(), _father: ctx.p4 });
+  ctx.p3 = Object.assign(new People(), { _name: "Marge Simpson"  , _firstname: "Marge"  , _lastname: "Simpson", _birthDate: new Date()  });
+  ctx.p0 = Object.assign(new People(), { _name: "Lisa Simpson"   , _firstname: "Lisa"   , _lastname: "Simpson", _birthDate: new Date(), _father: ctx.p2, _mother: ctx.p3 });
+  ctx.p1 = Object.assign(new People(), { _name: "Bart Simpson"   , _firstname: "Bart"   , _lastname: "Simpson", _birthDate: new Date(), _father: ctx.p2, _mother: ctx.p3 });
   ctx.component = {};
   cc.registerComponent(ctx.component);
-  cc.registerObjects(ctx.component, [ctx.c0, ctx.c1, ctx.c2, ctx.c3, ctx.p0, ctx.p1, ctx.p2]);
+  cc.registerObjects(ctx.component, [ctx.c0, ctx.c1, ctx.c2, ctx.c3, ctx.p0, ctx.p1, ctx.p2, ctx.p3, ctx.p4]);
   flux.continue();
 }
 
 function clean(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  cc.unregisterObjects(component, [c0, c1, c2, c3, p0, p1, p2]);
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
+  cc.unregisterObjects(component, [c0, c1, c2, c3, p0, p1, p2, p3, p4]);
+  assert.deepEqual(cc.registeredObjects(component), []);
   cc.unregisterComponent(component);
   f.continue();
 }
@@ -142,10 +147,10 @@ function query_peoples(f: Flux<Context>) {
 }
 
 
-function save_c0_c1_c2_c3_p0_p1_p2(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  db.farPromise('rawSave', [c0, c1, c2, c3, p0, p1, p2]).then(envelop => { 
-    assert.sameMembers(envelop.result(), [c0, c1, c2, c3, p0, p1, p2]);
+function save_c0_c1_c2_c3_p0_p1_p2_p3_p4(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
+  db.farPromise('rawSave', [c0, c1, c2, c3, p0, p1, p2, p3, p4]).then(envelop => { 
+    assert.sameMembers(envelop.result(), [c0, c1, c2, c3, p0, p1, p2, p3, p4]);
     f.continue(); 
   });
 }
@@ -412,7 +417,7 @@ async function load_mixed_attributes(f: Flux<Context>) {
   let u = inv.result();
   assert.sameMembers(u, [p0, c0]);
   deepEqual(c0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: p0 }, ["_id", "_name", "_owner", "_model"]);
-  deepEqual(p0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+  deepEqual(p0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
 
   f.continue();
 }
@@ -427,7 +432,7 @@ async function load_sub_attributes(f: Flux<Context>) {
   let u = inv.result();
   assert.sameMembers(u, [c0]);
   deepEqual(c0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: p0 }, ["_id", "_name", "_owner", "_model"]);
-  deepEqual(c0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+  deepEqual(c0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
 
   f.continue();
 }
@@ -450,7 +455,7 @@ async function query_union_cars_peoples(f: Flux<Context>) {
   let lp0 = u.find(v => v instanceof People);
   assert.equal(u.length, 2);
   deepEqual(lc0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: lp0 }, ["_id", "_name", "_owner", "_model"]);
-  deepEqual(lp0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+  deepEqual(lp0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
   
   cc.registerObjects(component, [c0, p0]);
   f.continue();
@@ -471,9 +476,37 @@ async function query_cars_sub_scope(f: Flux<Context>) {
   let lc0 = u.find(v => v instanceof Car) as typeof c0;
   assert.equal(u.length, 1);
   deepEqual(lc0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: lc0._owner }, ["_id", "_name", "_owner", "_model"]);
-  deepEqual(lc0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpsons" }, ["_id", "_firstname", "_lastname"]);
+  deepEqual(lc0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
   
   cc.registerObjects(component, [c0, p0]);
+  f.continue();
+}
+
+async function query_parents(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
+
+  let inv = await db.farPromise('rawQuery', {
+    "parents=": {
+      $unionForAlln: "=U(n)",
+      "U(0)=": { $instanceOf: "People", _firstname: "Lisa", _lastname: "Simpson" },
+      "U(n + 1)=": {
+        $out: "=p",
+        "s=": { $elementOf: "=U(n)" },
+        "p=": { $elementOf: { $instanceOf: "People" } },
+        $or: [
+          { "=p": { $eq: "=s._mother" } },
+          { "=p": { $eq: "=s._father" } },
+        ]
+      }
+    },
+    results: [
+      { name: "u", where: "=parents", scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] },
+    ]
+  });
+  assert.deepEqual(inv.diagnostics(), []);
+  assert.isTrue(inv.hasResult());
+  let u = inv.result()['u'];
+  assert.sameMembers(u, [p0, p2, p3, p4]);
   f.continue();
 }
 
@@ -563,7 +596,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
     ]},
     { name: "relations", tests: [
       { name: "init", test: (f: any) => { f.setFirstElements([createControlCenter, init]); f.continue(); } },
-      save_c0_c1_c2_c3_p0_p1_p2,
+      save_c0_c1_c2_c3_p0_p1_p2_p3_p4,
       save_relation_c0p0_c1p0_c2p1,
       query_cars_peoples,
       query_cars_peoples_relation_in_scope,
@@ -577,12 +610,13 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
     ]},
     { name: "mixed", tests: [
       { name: "init", test: (f: any) => { f.setFirstElements([createControlCenter, init]); f.continue(); } },
-      save_c0_c1_c2_c3_p0_p1_p2,
+      save_c0_c1_c2_c3_p0_p1_p2_p3_p4,
       save_relation_c0p0_c1p0_c2p1,
       load_mixed_attributes,
       load_sub_attributes,
       query_union_cars_peoples,
       query_cars_sub_scope,
+      query_parents,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]},
     ]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];

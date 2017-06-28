@@ -81,8 +81,10 @@ export namespace DataSourceInternal {
         }
       }
       else if (constraint instanceof ConstraintValue) {
-        ok = this.mapper.has(object, constraint.attribute.name) &&
-             pass_value(constraint.type, this.mapper.get(object, constraint.attribute.name), this.mapper.todb(object, constraint.attribute.name, constraint.value));
+        if (set.variable(prefix + constraint.leftVariable) === set) {
+          ok = this.mapper.has(object, constraint.leftAttribute) &&
+              pass_value(constraint.type, this.mapper.get(object, constraint.leftAttribute), this.mapper.todb(object, constraint.leftAttribute, constraint.value));
+        }
       }
       return ok;
     }
@@ -91,13 +93,56 @@ export namespace DataSourceInternal {
       let ret = new Set<T>();
       for (let object of this.objects) {
         let ok = false;
-        switch (set.type) {
-          case ConstraintType.InstanceOf:
-          case ConstraintType.MemberOf: 
-            ok = this.mapper.aspect(object).name === (set.aspect as Aspect.Installed).name; // TODO: real instanceof/memberof
-            break;
-          case ConstraintType.UnionOf:
-            ok = (set.aspect as ObjectSet[]).some(s => this.solveFull(s).has(object));
+        for (let c of set.typeConstraints) {
+          switch (c.type) {
+            case ConstraintType.InstanceOf:
+              ok = this.mapper.aspect(object).name === c.value.name; // TODO: real instanceof
+              break;
+            case ConstraintType.MemberOf: 
+              ok = this.mapper.aspect(object).name === c.value.name;
+              break;
+            case ConstraintType.UnionOf:
+              ok = [...c.value].some(s => this.solveFull(s).has(object));
+              break;
+            case ConstraintType.UnionOfAlln: {
+              let u_0 = c.value[0];
+              let s = this._resolution.get(u_0);
+              if (!s) {
+                let u_n = c.value[1];
+                let u_np1 = c.value[2];
+                let sol_u_0 = this.solveFull(u_0);
+                let sol_u_n = new Set(sol_u_0);
+                let sol_u_np1: Set<T>;
+                let size = 0;
+                s = { partial: sol_u_n, full: sol_u_n };
+                this._resolution.set(u_n, s);
+                let resolution = new Map(this._resolution);
+                while (size < sol_u_0.size) {
+                  // Iterate
+                  size = sol_u_0.size;
+                  sol_u_np1 = this.solveFull(u_np1);
+                  for (let o of sol_u_np1)
+                    sol_u_0.add(o);
+
+                  // Prepare the next iteration
+                  this._resolution = resolution;
+                  s.partial = sol_u_np1;
+                  s.full = sol_u_np1;
+                }
+                this._resolution.delete(u_n);
+                // Write the final solution
+                s.partial = sol_u_0;
+                s.full = sol_u_0;
+              }
+              ok = s.full!.has(object);
+              break;
+            }
+            case ConstraintType.Recursion: {
+              ok = this.solveFull(c.value).has(object);
+              break;
+            }
+          }
+          if (!ok)
             break;
         }
         ok = ok && set.constraints.every(c => this.pass(set, c, "", object));
@@ -122,8 +167,15 @@ export namespace DataSourceInternal {
         if ((lset === set1 || lset === set2) && (rset === set1 || rset === set2)) {
           let lo = (lset === set1 ? o1 : o2);
           let ro = (rset === set1 ? o1 : o2);
-          ok = this.mapper.has(lo, constraint.leftAttribute.name) && this.mapper.has(ro, constraint.rightAttribute.name)
-            && pass_value(constraint.type, this.mapper.get(lo, constraint.leftAttribute.name), this.mapper.get(ro, constraint.rightAttribute.name));
+          ok = this.mapper.has(lo, constraint.leftAttribute) && this.mapper.has(ro, constraint.rightAttribute)
+            && pass_value(constraint.type, this.mapper.get(lo, constraint.leftAttribute), this.mapper.get(ro, constraint.rightAttribute));
+        }
+      }
+      else if (constraint instanceof ConstraintValue) {
+        let lset = set.variable(prefix + constraint.leftVariable)!;
+        if (lset === set2) {
+          ok = this.mapper.has(o2, constraint.leftAttribute) &&
+              pass_value(constraint.type, this.mapper.get(o2, constraint.leftAttribute), this.mapper.todb(o2, constraint.leftAttribute, constraint.value));
         }
       }
       return ok;
@@ -174,6 +226,8 @@ export namespace DataSourceInternal {
     InstanceOf,
     MemberOf,
     UnionOf,
+    UnionOfAlln,
+    Recursion,
     Or,
     And,
     CustomStart = 100 // The first 100 ([0-99]) are reserved
@@ -194,7 +248,12 @@ export namespace DataSourceInternal {
     ConstraintBetweenSetTypes |
     ConstraintType.Text |
     ConstraintType.Exists;
-  export type ConstraintOnTypeTypes = ConstraintType.InstanceOf | ConstraintType.MemberOf | ConstraintType.UnionOf;
+
+  export type ConstraintOnType =
+     { type: ConstraintType.InstanceOf | ConstraintType.MemberOf, value: Aspect.Installed } | 
+     { type: ConstraintType.UnionOf, value: Set<ObjectSet> } | 
+     { type: ConstraintType.UnionOfAlln, value: [ObjectSet, ObjectSet, ObjectSet] } | 
+     { type: ConstraintType.Recursion, value: ObjectSet };
 
   export class ConstraintTree {
     constructor(
@@ -206,7 +265,8 @@ export namespace DataSourceInternal {
   export class ConstraintValue {
     constructor(
       public type: ConstraintOnValueTypes,
-      public attribute: Aspect.InstalledAttribute,
+      public leftVariable: string,
+      public leftAttribute: string,
       public value: any) {}
   }
   
@@ -214,47 +274,118 @@ export namespace DataSourceInternal {
     constructor(
       public type: ConstraintBetweenColumnsTypes,
       public leftVariable: string,
-      public leftAttribute: Aspect.InstalledAttribute,
+      public leftAttribute: string,
       public rightVariable: string,
-      public rightAttribute: Aspect.InstalledAttribute) {}
+      public rightAttribute: string) {}
   }
   
   export class ConstraintSub {
     constructor(
       public type: ConstraintType.SubIn | ConstraintType.SubNotIn,
-      public attribute: Aspect.InstalledAttribute,
+      public attribute: string,
       public sub: string) {}
   }
 
   export type Constraint = ConstraintTree | ConstraintValue | ConstraintVariable | ConstraintSub;
 
-  function isCompatible(
-    typeA: ConstraintOnTypeTypes | undefined, aspectA: Aspect.Installed | ObjectSet[] | undefined, 
-    typeB: ConstraintOnTypeTypes | undefined, aspectB: Aspect.Installed | ObjectSet[] | undefined
-  ) : boolean {
-    return aspectA ? aspectA === aspectB : true; // use type to check compatibility
+  const type_any: Aspect.Type = { is: "type", type: "primitive", name: "any" as Aspect.PrimaryType };
+  const attribute_id: Aspect.InstalledAttribute = {
+    name: "_id",
+    type: type_any,
+    validator: Validation.validateId,
+    relation: undefined,
+  };
+  function attribute_any(name: string): Aspect.InstalledAttribute {
+    return {
+      name: name,
+      type: type_any,
+      validator: V.validateAny,
+      relation: undefined,
+    };
+  }
+
+  function hasVariableAttribute(aspect: Aspect.Installed, set: ObjectSet, attributes: Set<string>, variable: string, attribute: string) {
+    if (set.variable(variable) === set) {
+      attributes.add(attribute);
+      return aspect.attributes.has(attribute);
+    }
+    return false;
+  }
+  function hasAttribute(aspect: Aspect.Installed, set: ObjectSet, attributes: Set<string>, constraint: Constraint): boolean {
+    if (constraint instanceof ConstraintTree) {
+      return constraint.value.some(c => hasAttribute(aspect, set, attributes, c));
+    }
+    else if (constraint instanceof ConstraintValue) {
+      return hasVariableAttribute(aspect, set, attributes, constraint.leftVariable, constraint.leftAttribute);
+    }
+    else if (constraint instanceof ConstraintVariable) {
+      return hasVariableAttribute(aspect, set, attributes, constraint.leftVariable , constraint.leftAttribute )
+          || hasVariableAttribute(aspect, set, attributes, constraint.rightVariable, constraint.rightAttribute);
+    }
+    else if (constraint instanceof ConstraintSub) {
+      attributes.add(constraint.attribute);
+      return aspect.attributes.has(constraint.attribute);
+    }
+    return false;
+  }
+  function hasAllAttributes(aspect: Aspect.Installed, set: ObjectSet, attributes: Set<string>) {
+    for (let c of set.constraints) {
+      if (!hasAttribute(aspect, set, attributes, c))
+        return false;
+    }
+    return true;
+  }
+  function _compatibleAspects(cc: ControlCenter, set: ObjectSet, aspects: Set<Aspect.Installed>, attributes: Set<string>, union: boolean) {
+    for (let c of set.typeConstraints) {
+      if (c.type === ConstraintType.InstanceOf || c.type === ConstraintType.MemberOf) {
+        if (!union)
+          aspects.clear(); // TODO: real memberof/instanceof
+        aspects.add(c.value);
+      }
+      else if (c.type === ConstraintType.UnionOf) {
+        for (let s of c.value)
+          _compatibleAspects(cc, s, aspects, attributes, true);
+      }
+      else if (c.type === ConstraintType.UnionOfAlln) {
+        _compatibleAspects(cc, c.value[0], aspects, attributes, false);
+      }
+    }
+    if (aspects.size === 0) {
+      for (let cstor of cc._aspects.values()) {
+        if (hasAllAttributes(cstor.aspect, set, attributes))
+          aspects.add(cstor.aspect);
+      }
+    }
+    else {
+      for (let aspect of aspects) {
+        if (!hasAllAttributes(aspect, set, attributes))
+          aspects.delete(aspect);
+      }
+    }
   }
 
   export class ObjectSet {
     _name: string;
-    type?: ConstraintOnTypeTypes = undefined;
-    aspect?: Aspect.Installed | ObjectSet[] = undefined;
+    typeConstraints: ConstraintOnType[] = [];
     name?: string = undefined;
     scope?: string[] = undefined;
     sort?: string[] = undefined;
     constraints: Constraint[] = [];
     variables?: Map<string, ObjectSet> = undefined;
     subs?: Map<string, ObjectSet> = undefined;
+    _compatibleAspects?: Set<Aspect.Installed> = undefined;
+    _attributes?: Set<string> = undefined;
 
     clone(name: string) {
       let ret = new ObjectSet(name);
-      ret.setAspect(this.type!, this.aspect);
-      ret.constraints = this.constraints;
+      ret.typeConstraints = this.typeConstraints.slice(0);
+      ret.constraints = this.constraints.slice(0);
       if (this.variables) {
         for (let [name, variable] of this.variables)
           ret.setVariable(name, variable === this ? ret : variable);
       }
-      ret.subs = this.subs;
+      if (this.subs)
+        ret.subs = new Map(this.subs);
       return ret;
     }
 
@@ -276,30 +407,60 @@ export namespace DataSourceInternal {
       return this.variables && this.variables.get(name);
     }
 
-    isCompatible(type: ConstraintOnTypeTypes, aspect?: Aspect.Installed | ObjectSet[]) {
-      return isCompatible(this.type, this.aspect, type, aspect);
-    }
-
-    setAspect(type: ConstraintOnTypeTypes, aspect?: Aspect.Installed | ObjectSet[]) {
-      if (!this.isCompatible(type, aspect)) {
-        throw new Error(`incompatible aspect`);
+    protected canAddType(c_with: ConstraintOnType) : boolean | undefined {
+      for (let c_self of this.typeConstraints) {
+        if (c_self.type === c_with.type) {
+          if (areEquals(c_self.value, c_with.value))
+            return undefined;
+          return false;
+        }
       }
-      this.type = type;
-      this.aspect = aspect;
+      return true;
     }
 
-    setAspectIfCompatible(other: ObjectSet) : boolean {
-      let ret = other.type !== undefined && this.isCompatible(other.type, other.aspect);
-      if (ret)
-        this.setAspect(other.type!, other.aspect);
-      return ret;
+    addType(c_with: ConstraintOnType) {
+      if (this.canAddType(c_with) === true)
+        this.typeConstraints.push(c_with);
     }
 
-    aspectAttribute(name: string) {
-      let attr = (this.aspect as Aspect.Installed).attributes.get(name);
-      if (!attr)
-        throw new Error(`attribute ${name} not found in ${(this.aspect as Aspect.Installed).name}`);
-      return attr;
+    addTypeIfMergeable(other: ObjectSet) : boolean {
+      let r: ConstraintOnType[] = [];
+      for (let c_with of other.typeConstraints) {
+        let can = this.canAddType(c_with);
+        if (can === false)
+          return false;
+        if (can === true)
+          r.push(c_with);
+      }
+      this.typeConstraints.push(...r);
+      return true;
+    }
+
+    aspectAttribute(name: string): Aspect.InstalledAttribute {
+      if (name === "_id")
+        return attribute_id;
+      let attr: Aspect.InstalledAttribute | undefined = undefined;
+      for (let c_self of this.typeConstraints) {
+        if (c_self.type === ConstraintType.InstanceOf || c_self.type === ConstraintType.MemberOf) {
+          setAttr(c_self.value.attributes.get(name));
+        }
+        else if (c_self.type === ConstraintType.UnionOf) {
+          for (let u of c_self.value)
+            setAttr(u.aspectAttribute(name));
+        }
+        else if (c_self.type === ConstraintType.UnionOfAlln) {
+          setAttr(c_self.value[0].aspectAttribute(name));
+        }
+      }
+      return attr || attribute_any(name);
+
+      function setAttr(a: Aspect.InstalledAttribute | undefined) {
+        if (a) {
+          if (attr && a !== attr)
+            throw new Error(`attribute ${name} refer to multiple aspect attributes`);
+          attr = a;
+        }
+      }
     }
 
     sub(sub: ObjectSet) : string {
@@ -331,6 +492,20 @@ export namespace DataSourceInternal {
       return c_and(this.constraints);
     }
 
+    compatibleAspects(cc: ControlCenter) : Set<Aspect.Installed> {
+      let aspects = this._compatibleAspects;
+      if (!this._compatibleAspects)
+        _compatibleAspects(cc, this, this._compatibleAspects = new Set(), this._attributes = new Set(this.scope), false);
+      return this._compatibleAspects;
+    }
+
+    attributes(cc: ControlCenter) : Set<string> {
+      let aspects = this._attributes;
+      if (!this._attributes)
+        _compatibleAspects(cc, this, this._compatibleAspects = new Set(), this._attributes = new Set(this.scope), false);
+      return this._attributes;
+    }
+
     constructor(name: string) {
       this._name = name;
     }
@@ -338,12 +513,12 @@ export namespace DataSourceInternal {
 
   function c_or (constraints: Constraint[] = [], prefix = "") { return new ConstraintTree(ConstraintType.Or , prefix, constraints); }
   function c_and(constraints: Constraint[] = [], prefix = "") { return new ConstraintTree(ConstraintType.And, prefix, constraints); }
-  function c_value(type: ConstraintOnValueTypes, attribute: Aspect.InstalledAttribute, value: any): ConstraintValue 
-  { return new ConstraintValue(type, attribute, value); }
-  function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: Aspect.InstalledAttribute, rightVariable: string, rightAttribute: Aspect.InstalledAttribute): ConstraintVariable
+  function c_value(type: ConstraintOnValueTypes, leftVariable: string, leftAttribute: string, value: any): ConstraintValue 
+  { return new ConstraintValue(type, leftVariable, leftAttribute, value); }
+  function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: string, rightVariable: string, rightAttribute: string): ConstraintVariable
   { return new ConstraintVariable(type, leftVariable, leftAttribute, rightVariable, rightAttribute); }
-  function c_subin (sub: string, attribute: Aspect.InstalledAttribute): ConstraintSub { return new ConstraintSub(ConstraintType.SubIn   , attribute, sub); }
-  function c_subnin(sub: string, attribute: Aspect.InstalledAttribute): ConstraintSub { return new ConstraintSub(ConstraintType.SubNotIn, attribute, sub); }
+  function c_subin (sub: string, attribute: string): ConstraintSub { return new ConstraintSub(ConstraintType.SubIn   , attribute, sub); }
+  function c_subnin(sub: string, attribute: string): ConstraintSub { return new ConstraintSub(ConstraintType.SubNotIn, attribute, sub); }
 
 
   function map(value) {
@@ -408,12 +583,15 @@ export namespace DataSourceInternal {
     $in: Instance<ObjectSetDefinition> | (Value[]),
     $nin: Instance<ObjectSetDefinition> | (Value[]),
     $union : Instance<ObjectSetDefinition>[],
+    $unionForAlln : string,
     $intersection : Instance<ObjectSetDefinition>[],
     $diff: [Instance<ObjectSetDefinition>, Instance<ObjectSetDefinition>],
     $instanceOf: string | Function,
     $memberOf: string | Function,
     $text: string,
     $out: string,
+    $or: ConstraintDefinition[],
+    $and: ConstraintDefinition[],
   };
   export type ObjectSetDefinition = Partial<ObjectSetDefinitionR> & {
     [s: string]: Value | ConstraintDefinition
@@ -431,49 +609,55 @@ export namespace DataSourceInternal {
 
   type OperatorOnSet<T> = (context: ParseContext, set: ObjectSet, value: T) => void;
   const operatorsOnSet: { [K in keyof Element]: OperatorOnSet<Element[K]>; } = {
+    $or: (context, set, value) => {
+      let constraints: Constraint[] = [];
+      context.parseConditionsArray(set, constraints, context.head, value);
+      if (constraints.length)
+        set.and(c_or(constraints));
+    },
+    $and: (context, set, value) => {
+      let constraints: Constraint[] = [];
+      context.parseConditionsArray(set, constraints, context.head, value);
+      if (constraints.length)
+        set.and(c_and(constraints));
+    },
     $elementOf: (context, set, value) => {
       let sub = context.parseSet(value, `${set._name}.$elementOf`);
-      if (set.setAspectIfCompatible(sub)) // compatible
+      if (set.addTypeIfMergeable(sub)) // compatible
         set.and(set.merge(sub));
       else
         throw new Error(`cannot elementOf between incompatible sets`);
     },
     $instanceOf: (context, set, value) => {
-      set.setAspect(ConstraintType.InstanceOf, context.aspect(value));
-      set.type = ConstraintType.InstanceOf;
+      set.addType({ type: ConstraintType.InstanceOf, value: context.aspect(value) });
     },
     $memberOf: (context, set, value) => {
-      set.setAspect(ConstraintType.MemberOf, context.aspect(value));
+      set.addType({ type: ConstraintType.MemberOf, value: context.aspect(value) });
     },
     $union: (context, set, value) => {
       let subs = value.map((v, i) => context.parseSet(v, `${set._name}.$union[${i}]`));
-      let type: ConstraintOnTypeTypes | undefined = set.type;
-      let aspect = set.aspect;
-      let areCompatibles = subs.every(s => {
-        let r = isCompatible(type, aspect, s.type, s.aspect);
-        if (r && s.aspect) {
-          type = s.type;
-          aspect = s.aspect;
-        }
-        return r;
-      });
-      if (areCompatibles) {
-        let arr: Constraint[] = [];
-        for (let sub of subs) {
-          let c = set.merge(sub)
-          if (c)
-            arr.push(c);
-        }
-        set.and(c_or(arr));
-      }
-      else {
-        set.setAspect(ConstraintType.UnionOf, subs);
-      }
+      set.addType({ type: ConstraintType.UnionOf, value: new Set(subs) });
+    },
+    $unionForAlln: (context, set, value) => {
+      let m = typeof value === "string" ? value.match(/^=(\w+)\(\s*n\s*\)$/) : null;
+      if (!m)
+        throw new Error(`$unionForAlln must be a reference to a recursive set definition`);
+      let letter = m[1];
+      let u_n_name = `${letter}(n)=`;
+      let s = new ParseStack({ ...context.head.original, [u_n_name]: {} }, context.head.parent);
+      let c = context.derive(s);
+      let u_n = c.createSet(`${letter}(n)`);
+      s.resolved.set(u_n_name, u_n);
+      let u_0 = c.resolve(`${letter}(0)`, c.head);
+      u_n.typeConstraints.push({ type: ConstraintType.Recursion, value: u_n });
+      u_n.typeConstraints.push(...u_0.typeConstraints);
+      let u_np1 = c.resolve(`${letter}(n + 1)`, c.head);
+      set.addType({ type: ConstraintType.UnionOfAlln, value: [u_0, u_n, u_np1] });
     },
     $intersection: (context, set, value) => {
       value.forEach((v, i) => {
         let sub = context.parseSet(v, `${set._name}.$intersection[${i}]`);
-        if (set.setAspectIfCompatible(sub)) // must be compatible
+        if (set.addTypeIfMergeable(sub)) // must be compatible
           set.and(set.merge(sub));
         else
           throw new Error(`cannot intersect between incompatible sets`);
@@ -484,15 +668,15 @@ export namespace DataSourceInternal {
         throw new Error(`diff value must be an array of 2 object set`);
       let add = context.parseSet(value[0], `${set._name}.$diff+`);
       let del = context.parseSet(value[1], `${set._name}.$diff-`);
-      set.and(c_subin(set.sub(add), add.aspectAttribute("_id")));
-      set.and(c_subnin(set.sub(del), del.aspectAttribute("_id")));
+      set.and(c_subin(set.sub(add), "_id"));
+      set.and(c_subnin(set.sub(del), "_id"));
     },
     $in: (context, set, value) => {
       if (Array.isArray(value))
-        set.and(c_value(ConstraintType.In, set.aspectAttribute("_id"), value));
+        set.and(c_value(ConstraintType.In, set._name, "_id", value));
       else {
         let sub = context.parseSet(value, `${set._name}.$in`);
-        if (set.setAspectIfCompatible(sub)) // must be compatible
+        if (set.addTypeIfMergeable(sub)) // must be compatible
           set.and(set.merge(sub));
         else
           throw new Error(`cannot intersect between incompatible sets`);
@@ -500,10 +684,10 @@ export namespace DataSourceInternal {
     },
     $nin: (context, set, value) => {
       if (Array.isArray(value))
-        set.and(c_value(ConstraintType.NotIn, set.aspectAttribute("_id"), value));
+        set.and(c_value(ConstraintType.NotIn, set._name, "_id", value));
       else {
         let sub = context.parseSet(value, `${set._name}.$nin`);
-        set.and(c_subnin(set.sub(sub), sub.aspectAttribute("_id")));
+        set.and(c_subnin(set.sub(sub), "_id"));
       }
     },
     $out: (context, set, value) => {
@@ -513,7 +697,7 @@ export namespace DataSourceInternal {
       if (typeof value !== "string")
         throw new Error(`$text value must be a string`);
       if (value) // No constraint on empty string
-        set.and(c_value(ConstraintType.Text, set.aspectAttribute("_id"), value));
+        set.and(c_value(ConstraintType.Text, set._name, "_id", value));
     },
   }
 
@@ -526,15 +710,11 @@ export namespace DataSourceInternal {
     $lte: ConstraintType.LessThanOrEqual,
   };
   function alwaysTrue() { return true; }
-  function validateInValue(this: { type: ConstraintOnValueTypes }, attribute: Aspect.InstalledAttribute, value) {
+  function validateInValue(this: { type: ConstraintOnValueTypes }, attribute: string, value) {
     if (!Array.isArray(value))
-      throw new Error(`${attribute.name} ${ConstraintType[this.type]} value must be an array`);
+      throw new Error(`${attribute} ${ConstraintType[this.type]} value must be an array`);
   }
-  function validateHasValue(this: { type: ConstraintOnValueTypes }, attribute: Aspect.InstalledAttribute, value) {
-    if (attribute.type.type !== "array" && attribute.type.type !== "set")
-      throw new Error(`${attribute.name}  must be an array or a set to allow ${ConstraintType[this.type]} operator`);
-  }
-  const operatorsOnValue: { [s: string]: { type: ConstraintOnValueTypes, validate(attribute: Aspect.InstalledAttribute, value): void } } = {
+  const operatorsOnValue: { [s: string]: { type: ConstraintOnValueTypes, validate(attribute: string, value): void } } = {
     $eq  : { type: ConstraintType.Equal             , validate: alwaysTrue },
     $ne  : { type: ConstraintType.NotEqual          , validate: alwaysTrue },
     $gt  : { type: ConstraintType.GreaterThan       , validate: alwaysTrue },
@@ -543,7 +723,7 @@ export namespace DataSourceInternal {
     $lte : { type: ConstraintType.LessThanOrEqual   , validate: alwaysTrue },
     $in  : { type: ConstraintType.In                , validate: validateInValue },
     $nin : { type: ConstraintType.NotIn             , validate: validateInValue },
-    $has : { type: ConstraintType.Has               , validate: validateHasValue },
+    $has : { type: ConstraintType.Has               , validate: alwaysTrue },
     $text: { type: ConstraintType.Text              , validate: alwaysTrue },
   };
 
@@ -561,12 +741,12 @@ export namespace DataSourceInternal {
       this.original = original;
     }
   }
-  type VarPath = { set: ObjectSet, variable: string, attribute: Aspect.InstalledAttribute };
+  type VarPath = { set: ObjectSet, variable: string, attribute: string };
   class ParseContext {
-    constructor(public head: ParseStack, public end: ParseStack | undefined, private _aspect: (name: string) => Aspect.Installed | undefined) {}
+    constructor(public head: ParseStack, private _aspect: (name: string) => Aspect.Installed | undefined) {}
 
-    derive(head: ParseStack, end: ParseStack | undefined) {
-      return new ParseContext(head, end, this._aspect);
+    derive(head: ParseStack) {
+      return new ParseContext(head, this._aspect);
     }
     aspect(name: string | Function) : Aspect.Installed {
       let n: string = typeof name === "string" ? name : (name as any).aspect ? (name as any).aspect.name : (name as any).definition.name;
@@ -584,7 +764,7 @@ export namespace DataSourceInternal {
       this.head = this.head.parent;
     }
     
-    resolve(reference: string, deep = Number.MAX_SAFE_INTEGER) : ObjectSet {
+    resolve(reference: string, end: ParseStack | undefined = undefined) : ObjectSet {
       let key = `${reference}=`;
       let v: ObjectSet | undefined, s: ParseStack | undefined = this.head;
       for (;!v && s; s = s.parent) {
@@ -592,12 +772,13 @@ export namespace DataSourceInternal {
         if (o) {
           v = s.resolved.get(key);
           if (!v) {
-            let c = s == this.head ? this : this.derive(s, undefined);
+            let c = this.derive(s);
             v = c.parseSet(o, reference);
             s.resolved.set(key, v);
           }
         }
-        deep--;
+        if (s === end)
+          break;
       }
       if (!v)
         throw new Error(`no object set with the name ${key} found`);
@@ -628,16 +809,16 @@ export namespace DataSourceInternal {
       return set;
     }
 
-    resolveElement(reference: string, set: ObjectSet) : VarPath{
+    resolveElement(reference: string, set: ObjectSet, end: ParseStack | undefined) : VarPath {
       let parts = reference.split('.');
       let k = parts[0];
-      let elementSet = set.variable(k);
-      if (!elementSet) {
-        let sub = this.resolve(k, 1);
-        elementSet = sub.clone(k);
-        set.setVariable(k, elementSet);
+      let variable = set.variable(k);
+      if (!variable) {
+        let sub = this.resolve(k, end);
+        variable = sub.clone(k);
+        set.setVariable(k, variable);
       }
-      return this.resolveAttribute(elementSet, parts, k, 1);
+      return this.resolveAttribute(variable, parts, k, 1);
     }
 
     resolveAttribute(set: ObjectSet, parts: string[], k: string = set._name, start: number = 0, last = parts.length - 1, decl?: (k: string, s: ObjectSet, c?: Constraint) => void) : VarPath {
@@ -654,30 +835,30 @@ export namespace DataSourceInternal {
         if (!s) {
           s = this.createSet(k);
           let attr = set.aspectAttribute(parts[i]);
-          let type = attr.type;
+          let type = attr && attr.type;
           if (type.type === "class") {
-            s.setAspect(ConstraintType.InstanceOf, this.aspect(type.name));
-            decl(k, s, c_var(ConstraintType.Equal, set._name, attr, k, s.aspectAttribute("_id")));
+            s.addType({ type: ConstraintType.InstanceOf, value: this.aspect(type.name) });
+            decl(k, s, c_var(ConstraintType.Equal, set._name, attr.name, k, "_id"));
           }
           else if ((type.type === "set" || type.type === "array") && type.itemType.type === "class") {
-            s.setAspect(ConstraintType.InstanceOf, this.aspect(type.itemType.name));
-            decl(k, s, c_var(ConstraintType.Equal, set._name, attr, k, s.aspectAttribute("_id")));
+            s.addType({ type: ConstraintType.InstanceOf, value: this.aspect(type.itemType.name) });
+            decl(k, s, c_var(ConstraintType.Equal, set._name, attr.name, k, "_id"));
           }
-          else 
+          else
             throw new Error(`invalid constraint attribute type ${attr.type.type} on ${parts[i]}`);
         }
         set = s;
       }
-      return { set: set, variable: k, attribute: set.aspectAttribute(i < parts.length ? parts[i] : "_id") };
+      return { set: set, variable: k, attribute: set.aspectAttribute(i < parts.length ? parts[i] : "_id").name };
     }
 
     parseSet(v: Instance<ObjectSetDefinition>, name: string, set?: ObjectSet) : ObjectSet {
-      this.push(v);
       if (typeof v === "string") {
         if (!v.startsWith("="))
           throw new Error(`an object set definition was expected`);
         return this.resolveSet(v.substring(1));
       }
+      this.push(v);
 
       let nout = v["$out"];
       if (nout) {
@@ -702,29 +883,38 @@ export namespace DataSourceInternal {
         }
       }
 
-      for(let key in v) {
-        if (!key.startsWith('$')) {
-          if (key.startsWith('=')) {
-            // only elements are allowed here ( ie. =element_name(.attribute)* )
-            let a = this.resolveElement(key.substring(1), set);
-            this.parseConditions(set, a, v[key]);
-          }
-          else if (!key.endsWith('=')) {
-            // key is an attribute path
-            let a = this.resolveAttribute(set, key.split('.'));
-            this.parseConditions(set, a, v[key]);
-          }
-        }
-      }
+      this.parseConditions(set, set.constraints, this.head, v);
 
       this.pop();
       return set;
     }
 
-    parseConditions(set: ObjectSet, attr: VarPath, conditions: Value | ConstraintDefinition) {
+    parseConditionsArray(set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, c: ConstraintDefinition[]) {
+      for (let conditions of c)
+        this.parseConditions(set, constraints, this.head, conditions);
+    }
+
+    parseConditions(set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, conditions: ConstraintDefinition) {
+      for(let key in conditions) {
+        if (!key.startsWith('$')) {
+          if (key.startsWith('=')) {
+            // only elements are allowed here ( ie. =element_name(.attribute)* )
+            let a = this.resolveElement(key.substring(1), set, end);
+            this.parseRightConditions(set, constraints, end, a, conditions[key]);
+          }
+          else if (!key.endsWith('=')) {
+            // key is an attribute path
+            let a = this.resolveAttribute(set, key.split('.'));
+            this.parseRightConditions(set, constraints, end, a, conditions[key]);
+          }
+        }
+      }
+    }
+
+    parseRightConditions(set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, left: VarPath, conditions: Value | ConstraintDefinition) {
       if (typeof conditions === "object") {
         if (conditions instanceof VersionedObject) {
-          set.variable(attr.variable)!.and(c_value(ConstraintType.Equal, attr.attribute, conditions));
+          constraints.push(c_value(ConstraintType.Equal, left.variable, left.attribute, conditions));
         }
         else {
           this.push(conditions);
@@ -733,25 +923,25 @@ export namespace DataSourceInternal {
               throw new Error(`an operator was expected`);
             let v = conditions[key];
             if (typeof v === "string" && v.startsWith('=')) {
-              let right = this.resolveElement(v.substring(1), set);
+              let right = this.resolveElement(v.substring(1), set, end);
               let o = operatorsBetweenSet[key];
-              if (o === undefined) 
+              if (o === undefined)
                 throw new Error(`operator between two set '${key}' not found`);
-              set.and(c_var(o, attr.variable, attr.attribute, right.variable, right.attribute))
+              constraints.push(c_var(o, left.variable, left.attribute, right.variable, right.attribute))
             }
             else {
               let o = operatorsOnValue[key];
               if (!o) 
                 throw new Error(`operator on value '${key}' not found`);
-              o.validate(attr.attribute, v);
-              set.variable(attr.variable)!.and(c_value(o.type, attr.attribute, v));
+              o.validate(left.attribute, v);
+              constraints.push(c_value(o.type, left.variable, left.attribute, v));
             }
           }
           this.pop();
         }
       }
       else {
-        set.variable(attr.variable)!.and(c_value(ConstraintType.Equal, attr.attribute, conditions));
+        constraints.push(c_value(ConstraintType.Equal, left.variable, left.attribute, conditions));
       }
     }
   }
@@ -767,7 +957,7 @@ export namespace DataSourceInternal {
     return set;
   }
   export function parseRequest(request: Request, findAspect: (name: string) => Aspect.Installed | undefined) : ObjectSet[] {
-    let context = new ParseContext(new ParseStack(request), undefined, findAspect);
+    let context = new ParseContext(new ParseStack(request), findAspect);
     let sets: ObjectSet[] = [];
     if (isResult(request))
       sets.push(parseResult(context, request));
@@ -780,7 +970,7 @@ export namespace DataSourceInternal {
   }
 
   export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[], findAspect: (name: string) => Aspect.Installed | undefined) : VersionedObject[] {
-    let context = new ParseContext(new ParseStack(where), undefined, findAspect);
+    let context = new ParseContext(new ParseStack(where), findAspect);
     let set = context.parseSet(where, "where");
     let sctx = new FilterContext(objects, versionedObjectMapper);
     return [...sctx.solveFull(set)];

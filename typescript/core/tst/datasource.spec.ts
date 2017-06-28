@@ -4,6 +4,7 @@ import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import {tests as tests_memory} from './datasource.memory.spec';
 import ConstraintType = DataSourceInternal.ConstraintType;
+import ObjectSet = DataSourceInternal.ObjectSet;
 
 const cache = new AspectCache();
 let aspects = {
@@ -17,7 +18,7 @@ function findAspect(name: string): Aspect.Installed {
 
 function serialize(s, map = new Map()) {
   let r = s;
-  if (typeof s === "object") {
+  if (s && typeof s === "object") {
     r = map.get(s);
     if (!r) {
       if (s instanceof VersionedObject)
@@ -30,6 +31,8 @@ function serialize(s, map = new Map()) {
         map.set(s, r = []);
         s.forEach(e => r.push(serialize(e, map)));
       }
+      else if (s.aspect && s.name && s.attributes)
+        map.set(s, r = { aspect: s.aspect, name: s.name });
       else {
         let k, v;
         map.set(s, r = {});
@@ -59,6 +62,22 @@ function parseRequest(req) {
   return sets.map(s => serialize(s));
 }
 
+function resources_sets() {
+  return [
+    Object.assign(new ObjectSet("resources"), {
+      typeConstraints: [
+        { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } },
+      ],
+      constraints: [
+        { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test" },
+      ],
+      name: "resources",
+      sort: [ '+_name'],
+      scope: ['_name'],
+    })
+  ];
+}
+
 function simple_resources() {
   let sets = parseRequest({
     name: "resources",
@@ -66,21 +85,7 @@ function simple_resources() {
     sort: [ '+_name'],
     scope: ['_name'],
   });
-  assert.deepEqual<any>(sets, [
-    {
-      _name: "resources",
-      type: ConstraintType.InstanceOf,
-      aspect: "Resource",
-      constraints: [
-        { type: ConstraintType.Equal, attribute: "_name", value: "Test" },
-      ],
-      subs: undefined,
-      variables: undefined,
-      name: "resources",
-      sort: [ '+_name'],
-      scope: ['_name'],
-    }
-  ]);
+  assert.deepEqual<any>(sets, resources_sets());
 }
 
 function multi_resources() {
@@ -92,21 +97,7 @@ function multi_resources() {
       scope: ['_name']
     }]
   });
-  assert.deepEqual<any>(sets, [
-    {
-      _name: "resources",
-      type: ConstraintType.InstanceOf,
-      aspect: "Resource",
-      constraints: [
-        { type: ConstraintType.Equal, attribute: "_name", value: "Test" },
-      ],
-      subs: undefined,
-      variables: undefined,
-      name: "resources",
-      sort: [ '+_name'],
-      scope: ['_name'],
-    }
-  ]);
+  assert.deepEqual<any>(sets, resources_sets());
 }
 function set_resources() {
   let sets = parseRequest({
@@ -118,78 +109,162 @@ function set_resources() {
       scope: ['_name']
     }]
   });
-  assert.deepEqual<any>(sets, [
-    {
-      _name: "resources",
-      type: ConstraintType.InstanceOf,
-      aspect: "Resource",
+  assert.deepEqual<any>(sets, resources_sets());
+}
+function or_and() {
+  let sets = parseRequest({
+    "resources=": { $or: [{ _name: { $eq: "Test1" } }, { _name: { $eq: "Test2" } }] },
+    results: [{
+      name: "resources",
+      where: "=resources",
+      sort: [ '+_name'],
+      scope: ['_name']
+    }]
+  });
+  assert.deepEqual(sets, [
+    Object.assign(new ObjectSet("resources"), {
+      typeConstraints: [],
       constraints: [
-        { type: ConstraintType.Equal, attribute: "_name", value: "Test" },
+        { type: ConstraintType.Or, prefix: "", value: [
+          { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test1" },
+          { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test2" },
+        ]}
       ],
-      subs: undefined,
-      variables: undefined,
       name: "resources",
       sort: [ '+_name'],
       scope: ['_name'],
-    }
+    })
+  ]);
+}
+function no_instanceof() {
+  let sets = parseRequest({
+    "resources=": { _name: { $eq: "Test" } },
+    results: [{
+      name: "resources",
+      where: "=resources",
+      sort: [ '+_name'],
+      scope: ['_name']
+    }]
+  });
+  assert.deepEqual(sets, [
+    Object.assign(new ObjectSet("resources"), {
+      typeConstraints: [],
+      constraints: [
+        { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test" },
+      ],
+      name: "resources",
+      sort: [ '+_name'],
+      scope: ['_name'],
+    })
+  ]);
+}
+
+function recursion() {
+  let sets = parseRequest({
+    "X=": { $instanceOf: "Resource", _id: 0 },
+    "Y=": { $instanceOf: "Resource" },
+    "resources=": {
+      $unionForAlln: "=U(n)",
+      "U(0)=": "=X",
+      "U(n + 1)=": {
+        $out: "=y",
+        "x=": { $elementOf: "=U(n)" },
+        "y=": { $elementOf: "=Y" },
+        "=y.parent": { $eq: "=x" },
+      }
+    },
+    results: [{
+      name: "resources",
+      where: "=resources",
+      sort: [ '+_name'],
+      scope: ['_name']
+    }]
+  });
+  let u_0 = Object.assign(new ObjectSet("X"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "X", leftAttribute: "_id", value: 0 },
+    ],
+  });
+  let u_n = Object.assign(new ObjectSet("U(n)"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+    ],
+  });
+  u_n.typeConstraints.unshift({ type: ConstraintType.Recursion, value: u_n });
+  let u_np1: any = Object.assign(new ObjectSet("y"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "y", leftAttribute: "parent", rightVariable: "x", rightAttribute: "_id" },
+    ],
+    variables: [],
+  });
+  let x = Object.assign(new ObjectSet("x"), {
+    typeConstraints: [
+      { type: ConstraintType.Recursion, value: u_n },
+      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+    ],
+  });
+  u_np1.variables.push(["y", u_np1]);
+  u_np1.variables.push(["x", x]);
+  assert.deepEqual(sets, [
+    Object.assign(new ObjectSet("resources"), {
+      typeConstraints: [
+        { type: ConstraintType.UnionOfAlln, value: [u_0, u_n, u_np1] }
+      ],
+      constraints: [],
+      name: "resources",
+      sort: [ '+_name'],
+      scope: ['_name'],
+    })
   ]);
 }
 
 function set_persons1_p() {
-  let p: any = {
-    _name: "p",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
+  let p: any = Object.assign(new ObjectSet("p"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
     ],
-    subs: undefined,
     variables: [],
     name: "peoples1",
     scope: ['_firstname', '_lastname'],
-    sort: undefined,
-  }
-  let c: any = {
-    _name: "c",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
-    constraints: [],
-    subs: undefined,
-    variables: undefined,
-    name: undefined,
-    scope: undefined,
-    sort: undefined,
-  }
+  });
+  let c: any = Object.assign(new ObjectSet("c"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
   p.variables.push(["p", p]);
   p.variables.push(["c", c]);
   return p;
 }
 
 function set_persons2_C_owner() {
-  let persons2_C_owner: any = {
-    _name: "persons2",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
+  let persons2_C_owner: any = Object.assign(new ObjectSet("persons2"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.And, prefix: "C._owner.", value: [
         { type: ConstraintType.Equal, leftVariable: "C", leftAttribute: "_owner", rightVariable: "C._owner", rightAttribute: "_id" },
       ] },
     ],
-    subs: undefined,
     variables: [],
     name: "peoples2",
     scope: ['_firstname', '_lastname', '_birthDate'],
-    sort: undefined,
-  }
-  let persons2_C: any = {
-    _name: "C",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
-    subs: undefined,
-    constraints: [],
-    variables: undefined,
-    name: undefined, scope: undefined, sort: undefined,
-  };
+  });
+  let persons2_C: any = Object.assign(new ObjectSet("C"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
   persons2_C_owner.variables.push(["C._owner.C", persons2_C]);
   persons2_C_owner.variables.push(["C._owner.C._owner", persons2_C_owner]);
   return persons2_C_owner;
@@ -226,56 +301,36 @@ function persons_and_their_cars() {
     where: { $union: ["=cars", "=persons"] },
     scope: ['_firstname', '_lastname', '_owner', '_cars'],
   });
-  let persons: any = {
-    _name: "persons",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
-    constraints: [],
-    subs: undefined,
-    variables: undefined,
-    name: undefined,
-    scope: undefined,
-    sort: undefined,
-  }
-  let p: any = {
-    _name: "p",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
-    constraints: [],
-    subs: undefined,
-    variables: undefined,
-    name: undefined,
-    scope: undefined,
-    sort: undefined,
-  }
-  let c: any = {
-    _name: "c",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
+  let persons: any = Object.assign(new ObjectSet("persons"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+  });
+  let p: any = Object.assign(new ObjectSet("p"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+  });
+  let c: any = Object.assign(new ObjectSet("c"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
     ],
-    subs: undefined,
     variables: [],
-    name: undefined,
-    scope: undefined,
-    sort: undefined,
-  }
+  });
   c.variables.push(["c", c]);
   c.variables.push(["p", p]);
 
   assert.deepEqual<any>(sets, [
-    {
-      _name: "union",
-      type: ConstraintType.UnionOf,
-      aspect: [c, persons],
-      constraints: [],
-      subs: undefined,
-      variables: undefined,
+    Object.assign(new ObjectSet("union"), {
+      typeConstraints: [
+        { type: ConstraintType.UnionOf, value: [c, persons] },
+      ],
       name: "union",
       scope: ['_firstname', '_lastname', '_owner', '_cars'],
-      sort: undefined,
-    }
+    })
   ]);
 }
 
@@ -315,39 +370,31 @@ function persons_with_cars_and_their_cars() {
       { name: "persons", where: "=persons", scope: ['_firstname', '_lastname', '_cars'] },
     ]
   });
-  let C_owner: any = {
-    _name: "persons",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
+  let C_owner: any = Object.assign(new ObjectSet("persons"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.And, prefix: "C._owner.", value: [
         { type: ConstraintType.Equal, leftVariable: "C", leftAttribute: "_owner", rightVariable: "C._owner", rightAttribute: "_id" },
       ] },
     ],
-    subs: undefined,
     variables: [],
     name: "persons",
     scope: ['_firstname', '_lastname', '_cars'],
-    sort: undefined,
-  }
-  let C: any = {
-    _name: "C",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
-    subs: undefined,
-    constraints: [],
-    variables: undefined,
-    name: undefined,
-    scope: undefined,
-    sort: undefined,
-  };
+  });
+  let C: any = Object.assign(new ObjectSet("C"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
   C_owner.variables.push(["C._owner.C", C]);
   C_owner.variables.push(["C._owner.C._owner", C_owner]);
 
-  let p: any = {
-    _name: "p",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
+  let p: any = Object.assign(new ObjectSet("p"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.And, prefix: "persons.", value: [
         { type: ConstraintType.And, prefix: "C._owner.", value: [
@@ -355,28 +402,22 @@ function persons_with_cars_and_their_cars() {
         ] },
       ] },
     ],
-    subs: undefined,
     variables: [],
-    name: undefined,
-    scope: undefined,
-    sort: undefined,
-  }
+  });
   p.variables.push(["persons.C._owner.C", C]);
   p.variables.push(["persons.C._owner.C._owner", p]);
 
-  let c: any = {
-    _name: "c",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
+  let c: any = Object.assign(new ObjectSet("c"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
     ],
-    subs: undefined,
     variables: [],
     name: "cars",
     scope: ['_owner'],
-    sort: undefined,
-  }
+  });
   c.variables.push(["c", c]);
   c.variables.push(["p", p]);
 
@@ -384,44 +425,36 @@ function persons_with_cars_and_their_cars() {
 }
 
 function set_cars2_c() {
-  let cars2_persons1_p: any = {
-    _name: "p",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
+  let cars2_persons1_p: any = Object.assign(new ObjectSet("p"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.And, prefix: "p.", value: [
         { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
       ]},
     ],
-    subs: undefined,
-    variables: [],
-    name: undefined, scope: undefined, sort: undefined,
-  }
-  let cars2_persons1_c: any = {
-    _name: "c",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
-    constraints: [],
-    subs: undefined,
-    variables: undefined,
-    name: undefined, scope: undefined, sort: undefined,
-  }
+    variables: []
+  });
+  let cars2_persons1_c: any = Object.assign(new ObjectSet("c"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
   cars2_persons1_p.variables.push(["p.p", cars2_persons1_p]);
   cars2_persons1_p.variables.push(["p.c", cars2_persons1_c]);
 
-  let cars2_c: any = {
-    _name: "c",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
+  let cars2_c: any = Object.assign(new ObjectSet("c"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
     ],
-    subs: undefined,
     variables: [],
     name: "cars2",
     scope: ['_name', '_owner', '_model'],
-    sort: undefined,
-  }
+  });
   cars2_c.variables.push(["c", cars2_c]);
   cars2_c.variables.push(["p", cars2_persons1_p]);
   return cars2_c;
@@ -485,28 +518,22 @@ function persons_mixed() {
   let persons2_C_owner = set_persons2_C_owner();
 
   // cars1
-  let cars1_p: any = {
-    _name: "p",
-    type: ConstraintType.InstanceOf,
-    aspect: "People",
-    constraints: [],
-    subs: undefined,
-    variables: undefined,
-    name: undefined, scope: undefined, sort: undefined,
-  }
-  let cars1_c: any = {
-    _name: "c",
-    type: ConstraintType.InstanceOf,
-    aspect: "Car",
+  let cars1_p: any = Object.assign(new ObjectSet("p"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+  });
+  let cars1_c: any = Object.assign(new ObjectSet("c"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
     constraints: [
       { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
     ],
-    subs: undefined,
     variables: [],
     name: "cars1",
     scope: ['_name', '_owner'],
-    sort: undefined,
-  }
+  });
   cars1_c.variables.push(["c", cars1_c]);
   cars1_c.variables.push(["p", cars1_p]);
 
@@ -585,6 +612,9 @@ export const tests = { name: 'DataSource', tests: [
     simple_resources,
     multi_resources,
     set_resources,
+    or_and,
+    no_instanceof,
+    recursion,
     persons_with_cars,
     persons_with_cars_intersection,
     persons_and_their_cars,
