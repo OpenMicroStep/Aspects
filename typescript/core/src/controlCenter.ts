@@ -11,11 +11,11 @@ export interface AComponent {
 }
 
 export class ControlCenter {
-  _notificationCenter = new NotificationCenter();
-  _objects = new Map<Identifier, VersionedObject>();
-  _components = new Set<AComponent>();
-  _aspects = new Map<string, Aspect.Constructor>();
-  _cache: AspectCache;
+  /** @internal */ _notificationCenter = new NotificationCenter();
+  /** @internal */ _objects = new Map<Identifier, VersionedObject>();
+  /** @internal */ _components = new Set<AComponent>();
+  /** @internal */ _aspects = new Map<string, Aspect.Constructor>();
+  /** @internal */ _cache: AspectCache;
 
   static readonly globalCache = new AspectCache();
 
