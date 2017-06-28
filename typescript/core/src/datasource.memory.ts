@@ -122,17 +122,18 @@ export class InMemoryDataSource extends DataSource
     return this.ds.beginTransaction();
   }
 
-  implSave({tr, objects} : { tr: InMemoryDataSource.DataStoreTransaction ,objects: Set<VersionedObject> }) : Promise<Invocation<void>> {
-    let cc = this.controlCenter();
-    let diags: Diagnostic[] = [];
-    let component = {};
-    cc.registerComponent(component);
-    for (let lObject of objects) {
-      let lVersion = lObject.manager().versionVersion();
+  implSave({tr, objects} : { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Invocation<void>> {
+    let saved = new Set<VersionedObject>();
+    const save = (lObject: VersionedObject): InMemoryDataSource.DataStoreObject | undefined => {
       let dbId = this.ds.toDSId(lObject.id());
+      if (tr.versions.has(lObject))
+        return tr.get(dbId);
+
+      let lVersion = lObject.manager().versionVersion();
       if (lVersion === VersionedObjectManager.DeletedVersion) {
         if (!tr.delete(dbId))
           diags.push({ type: "error", msg: `cannot delete ${lObject.id()}: object not found` });
+        return undefined;
       }
       else if (lVersion !== VersionedObjectManager.NoVersion) { // Update
         let dObject = tr.get(dbId);
@@ -141,6 +142,7 @@ export class InMemoryDataSource extends DataSource
         if (dObject) {
           dObject = tr.willUpdate(dObject);
           dObject.version++;
+          tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.id), _version: dObject.version });
           let lManager = lObject.manager();
           let n = diags.length;
           for (let [k, lv] of lManager._localAttributes) {
@@ -149,7 +151,7 @@ export class InMemoryDataSource extends DataSource
             if (!areEquals(exv,dbv))
               diags.push({ type: "error", msg: `cannot update ${lObject.id()}: attribute ${k} mismatch` });
             else
-              dObject.attributes.set(k, tr.toDSValue(lv));
+              dObject.attributes.set(k, tr.toDSValue(lv, create));
           }
           if (diags.length > n) {
             let remoteAttributes = new Map<keyof VersionedObject, any>();
@@ -158,19 +160,33 @@ export class InMemoryDataSource extends DataSource
               remoteAttributes.set(k, tr.fromDSValue(cc, component, dObject.attributes.get(k)));
             lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
           }
-          else {
-            tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.id), _version: dObject.version });
-          }
         }
+        return dObject;
       }
       else { // new
         let lManager = lObject.manager();
         let dObject = new InMemoryDataSource.DataStoreObject(lManager.aspect().name, this.ds.nextId(), 0);
-        for (let [k, lv] of lManager._localAttributes)
-          dObject.attributes.set(k, tr.toDSValue(lv));
         tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.id), _version: dObject.version });
         tr.add(dObject);
+        for (let [k, lv] of lManager._localAttributes)
+          dObject.attributes.set(k, tr.toDSValue(lv, create));
+        return dObject;
       }
+    }
+
+    const create = (vo) : InMemoryDataSource.DataStoreObject | undefined => {
+      if (objects.has(vo))
+        return save(vo)!;
+      diags.push({ type: "error", msg: `cannot save, the object ${vo.id()} is not is the save list` });
+      return undefined;
+    }
+
+    let cc = this.controlCenter();
+    let diags: Diagnostic[] = [];
+    let component = {};
+    cc.registerComponent(component);
+    for (let lObject of objects) {
+      save(lObject);
     }
     cc.unregisterComponent(component);
     return Promise.resolve(new Invocation(diags, false, undefined));
@@ -221,38 +237,40 @@ export namespace InMemoryDataSource {
     add(obj: DataStoreObject): void;    
     get(id: Identifier) : DataStoreObject | undefined;
     fixValue(value): any;
-    toDSValue(value): any;
+    toDSValue(value, create?: (o: VersionedObject) => DataStoreObject | undefined): any;
     fromDSValue(cc: ControlCenter, cmp: AComponent, value): any;
   }
 
-  function fixValue(ds: DataStoreCRUD, value): any { 
+  function fixDSValue(value, fix: (value: DataStoreObject) => any): any {
     if (value instanceof Set)
-      return new Set([...value].map(v => fixValue(ds, v)));
+      return new Set([...value].map(v => fixDSValue(v, fix)));
     if (value instanceof Array)
-      return value.map(v => fixValue(ds, v));
+      return value.map(v => fixDSValue(v, fix));
     if (value instanceof DataStoreObject)
-      return ds.get(value.id);
+      return fix(value);
     return value;
   }
 
-  function toDSValue(ds: DataStore, tr: DataStoreCRUD, value): any {
+  function fixVOValue(value, fix: (value: VersionedObject) => any): any {
     if (value instanceof Set)
-      return new Set([...value].map(v => toDSValue(ds, tr, v)));
+      return new Set([...value].map(v => fixVOValue(v, fix)));
     if (value instanceof Array)
-      return value.map(v => toDSValue(ds, tr, v));
-    if (value instanceof VersionedObject) {
-      let dsId = ds.toDSId(value.id());
-      return tr.get(dsId) || new DataStoreObject(value.manager().name(), dsId, -1);
-    }
+      return value.map(v => fixVOValue(v, fix));
+    if (value instanceof VersionedObject)
+      return fix(value);
     return value;
+  }
+
+  function toDSValue(ds: DataStore, tr: DataStoreCRUD, value, create?: (value: VersionedObject) => DataStoreObject | undefined): any {
+    const fix = (value: VersionedObject) => {
+      let dsId = ds.toDSId(value.id());
+      return tr.get(dsId) || (create && create(value)) || new DataStoreObject(value.manager().name(), ds.toDSId(value.id()), -1);
+    }
+    return fixVOValue(value, fix);
   }
 
   function fromDSValue(ds: DataStore, tr: DataStoreCRUD, cc: ControlCenter, cmp: AComponent, value): any {
-    if (value instanceof Set)
-      return new Set([...value].map(v => fromDSValue(ds, tr, cc, cmp, v)));
-    if (value instanceof Array)
-      return value.map(v => fromDSValue(ds, tr, cc, cmp, v));
-    if (value instanceof DataStoreObject) {
+    const fix = (value: DataStoreObject) => {
       let lId = ds.fromDSId(value.id);
       let vo = cc.registeredObject(lId);
       if (!vo) {
@@ -262,7 +280,7 @@ export namespace InMemoryDataSource {
       }
       return vo;
     }
-    return value;
+    return fixDSValue(value, fix);
   }
 
   export class DataStore implements DataStoreCRUD {
@@ -306,7 +324,7 @@ export namespace InMemoryDataSource {
       return this._objects.get(id);
     }
     fixValue(value): any { return value; }
-    toDSValue(value): any { return toDSValue(this, this, value); }
+    toDSValue(value, create?: (value: VersionedObject) => DataStoreObject | undefined): any { return toDSValue(this, this, value, create); }
     fromDSValue(cc: ControlCenter, cmp: AComponent, value): any { return fromDSValue(this, this, cc, cmp, value); }
   }
 
@@ -353,17 +371,18 @@ export namespace InMemoryDataSource {
       return this.del_objects.has(id) ? undefined : (this.edt_objects.get(id) || this.ds.get(id));
     }
     fixValue(value): any {
-      return fixValue(this, value);
+      return fixDSValue(value, value => this.ds.get(value.id));
     }
-    toDSValue(value): any { return toDSValue(this.ds, this, value); }
+    toDSValue(value, create?: (value: VersionedObject) => DataStoreObject | undefined): any { return toDSValue(this.ds, this, value, create); }
     fromDSValue(cc: ControlCenter, cmp: AComponent, value): any { return fromDSValue(this.ds, this, cc, cmp, value); }
 
     commit() {
+      let fix = value => this.ds.get(value.id) || value;
       for (let deleted of this.del_objects)
         this.ds.delete(deleted);
       for (let edited of this.edt_objects.values()) {
         for (let [k, v] of edited.attributes)
-          edited.attributes.set(k, fixValue(this.ds, v));
+          edited.attributes.set(k, fixDSValue(v, fix));
         let o = this.ds.get(edited.id);
         if (o) {
           o.version = edited.version;
