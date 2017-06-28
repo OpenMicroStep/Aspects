@@ -2,7 +2,7 @@ import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index
 
 class MSSQLMaker extends SqlMaker {
   quote(value: string) {
-    return `[${value}]`;
+    return `[${value.replace(/\]/g, ']]')}]`;
   }
 
   insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {

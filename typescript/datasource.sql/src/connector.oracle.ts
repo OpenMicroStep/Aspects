@@ -2,7 +2,7 @@ import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index
 
 class OracleSqlMaker extends SqlMaker {
   quote(value: string) {
-    return `"${value.replace(/`/g, '""')}"`;
+    return `"${value.replace(/"/g, '""')}"`;
   }
   
   insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
@@ -11,7 +11,7 @@ class OracleSqlMaker extends SqlMaker {
       sql += ` RETURNING ${output_columns.map((c, i) => `${this.quote(c)} INTO :r${i}`).join(',')}`;
     return {
       sql: sql,
-      bind: ([] as SqlBinding[]).concat(...sql_values.map(s => s.bind))
+      bind: this.join_bindings(sql_values)
     };
   }
 }
