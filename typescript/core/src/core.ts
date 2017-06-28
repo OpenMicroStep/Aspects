@@ -5,8 +5,8 @@ export * from './versionedObject';
 export * from './aspect';
 export * from './controlCenter';
 export * from './invocation';
-export {DataSource} from '../../../generated/aspects.interfaces';
 export * from './datasource';
+export * from './datasource.internal';
 export * from './datasource.memory';
 export * from './transport';
 
