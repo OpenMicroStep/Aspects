@@ -126,10 +126,14 @@ export class ClassElement extends Element {
       decl += `\n  function installAspect(on: ControlCenter, name: '${aspect.name}'): { new(): ${this.name}.Aspects.${aspect.name} };`;
     if (this.aspects.length) 
       decl += `\n`;
+
+    decl += `\n  function __${this.name}_c(name: string): {};`;
     for (let category of categories)
-      decl += `\n  function __c(name: '${category.name}'): ${this.name}.Categories.${category.name};`;
+      decl += `\n  function __${this.name}_c(name: '${category.name}'): ${this.name}.Categories.${category.name};`;
+
+    decl += `\n  function __${this.name}_i(name: string): {}`;
     for (let category of categories)
-      decl += `\n  function __i<T extends ${this.name}>(name: '${category.name}'): ${this.name}.ImplCategories.${category.name}<T>;`;
+      decl += `\n  function __${this.name}_i<T extends ${this.name}>(name: '${category.name}'): ${this.name}.ImplCategories.${category.name}<T>;`;
     if (categories.length)
       decl += `\n`;
     decl += `\n  export interface Categories<C extends ${this.name} = ${this.name}> extends ${parent}.Categories<C> {`;
@@ -236,10 +240,10 @@ export class CategoryElement extends Element {
     return `__${clazz.name}_ImplCategories_${this.name}`;
   }
   __const(clazz: ClassElement) {
-    return `export const ${this.__constName(clazz)} = ${clazz.superclass}.__c('${this.name}');`;
+    return `export const ${this.__constName(clazz)} = ${clazz.superclass}.__${clazz.superclass}_c && ${clazz.superclass}.__${clazz.superclass}_c('${this.name}');`;
   }
   __constImpl(clazz: ClassElement) {
-    return `export const ${this.__constNameImpl(clazz)} = ${clazz.superclass}.__i<${clazz.name}>('${this.name}');`;
+    return `export const ${this.__constNameImpl(clazz)} = ${clazz.superclass}.__${clazz.superclass}_i && ${clazz.superclass}.__${clazz.superclass}_i<${clazz.name}>('${this.name}');`;
   }
   __decl(clazz: ClassElement, workaround: boolean) {
     return `

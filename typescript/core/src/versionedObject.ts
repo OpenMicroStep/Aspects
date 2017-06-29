@@ -359,9 +359,6 @@ export class VersionedObject {
       static installAspect(cc: ControlCenter, name: string): { new(): VersionedObject } {
         return cc.cache().createAspect(cc, name, this);
       }
-
-      static __c(n: string): any {}
-      static __i(n: string): any {}
     }
   }
 
@@ -461,6 +458,10 @@ export interface VersionedObjectConstructor<C extends VersionedObject = Versione
   category(name: string, implementation: {});
 }
 
+export declare namespace VersionedObject {
+  function __VersionedObject_c(n: string): {};
+  function __VersionedObject_i(n: string): {};
+}
 export namespace VersionedObject {
   export interface Categories<C extends VersionedObject = VersionedObject> {
     (name: 'validation', implementation: VersionedObject.ImplCategories.validation<C>): void;

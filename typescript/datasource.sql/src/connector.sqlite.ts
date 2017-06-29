@@ -10,7 +10,7 @@ export const SqliteDBConnectorFactory = DBConnector.createSimple<{
 }, {
   exec(sql: string, cb: (err) => void): void
   all(sql: string, bind: any[], cb: (err, rows) => void): void
-  run(sql: string, bind: any[], cb: (this: { changes?: number, lastId?: number }, err) => void): void
+  run(sql: string, bind: any[], cb: (this: { changes?: number, lastID?: number }, err) => void): void
   close(cb: (err) => void): void
 }>({
   maker: new SqlMaker(),
@@ -51,7 +51,7 @@ export const SqliteDBConnectorFactory = DBConnector.createSimple<{
     if (output_columns.length > 1)
       return Promise.reject(new Error(`Sqlite doesn't support multiple output columns`));
     return new Promise<any>((resolve, reject) => {
-      db.run(sql_insert.sql, sql_insert.bind, function(this: {lastID}, err) {
+      db.run(sql_insert.sql, sql_insert.bind, function(this, err) {
         err ? reject(err) : resolve(output_columns.length > 0 ? [this.lastID] : []);
       });
     });

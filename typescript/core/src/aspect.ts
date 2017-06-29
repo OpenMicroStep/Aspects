@@ -7,7 +7,7 @@ import {Async, Flux} from '@openmicrostep/async';
 import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
 
 export interface FarTransport {
-  remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T>;
+  remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any>;
 }
 
 export interface PublicTransport {
@@ -22,12 +22,12 @@ export interface Aspect {
 };
 export namespace Aspect {
   export const farTransportStub = {
-    remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
+    remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
       return Promise.reject(`transport not installed`);
     }
   }
   export const localTransport = {
-    remoteCall<T>(to: VersionedObject, method: string, args: any[]): Promise<T> {
+    remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
       let impl = to[method];
       if (typeof impl === "function")
         return fastSafeCall(to[method], to, args[0]);

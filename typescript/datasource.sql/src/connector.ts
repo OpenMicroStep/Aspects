@@ -25,7 +25,7 @@ export namespace DBConnector {
     create(lib: LIB, options: OPTIONS): Promise<DB>,
     destroy(lib: LIB, db: DB): Promise<void>,
     select(lib: LIB, db: DB, sql_select: SqlBinding) : Promise<object[]>,
-    insert(lib: LIB, db: DB, sql_insert: SqlBinding, output_columns: string[]) : Promise<object>,
+    insert(lib: LIB, db: DB, sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>,
     update(lib: LIB, db: DB, sql_update: SqlBinding) : Promise<number>,
     delete(lib: LIB, db: DB, sql_update: SqlBinding) : Promise<number>,
     run(lib: LIB, db: DB, sql: SqlBinding) : Promise<any>,

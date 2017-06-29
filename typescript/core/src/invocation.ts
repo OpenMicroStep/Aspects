@@ -54,7 +54,7 @@ export class Invocation<R> {
       })
     });
   }
-  static farPromise<O extends VersionedObject, R, I extends Invocation<R>>(receiver: O, method: string, argument) : Promise<I> {
+  static farPromise<O extends VersionedObject, R>(receiver: O, method: string, argument) : Promise<Invocation<R>> {
     return new Promise((resolve) => { Invocation.farCallback(receiver, method, argument, resolve); });
   }
   static farAsync<O extends VersionedObject, R>(flux: Flux<{ envelop: Invocation<R> }>, receiver: O, method: string, argument) {
