@@ -1,7 +1,10 @@
 sudo: required
-dist: trusty
 
 language: node_js
+
+node_js:
+  - "6"
+  - "8"
 
 services:
   - docker
@@ -9,12 +12,11 @@ services:
 before_install:  
   - sudo /etc/init.d/mysql stop
   - sudo /etc/init.d/postgresql stop
-  - sudo wget -O /usr/local/bin/gitlab-runner https://gitlab-ci-multi-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-ci-multi-runner-linux-amd64
-  - sudo chmod +x /usr/local/bin/gitlab-runner
+  - docker-compose up -d
+  - until docker exec aspects_mssql_1 /opt/mssql-tools/bin/sqlcmd -U sa -P 7wnjijM9JihtKok4RC6 -Q "EXEC sp_databases"; do >&2 echo "Postgres is unavailable - sleeping"; sleep 1; done
 
-matrix:
-  include:
-  - node_js: "6"
-    script: /usr/local/bin/gitlab-runner exec docker --env TRAVIS=true --env TRAVIS_JOB_ID=${TRAVIS_JOB_ID} --env TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST} --env TRAVIS_BRANCH=${TRAVIS_BRANCH} build-6
-  - node_js: "8"
-    script: /usr/local/bin/gitlab-runner exec docker --env TRAVIS=true --env TRAVIS_JOB_ID=${TRAVIS_JOB_ID} --env TRAVIS_PULL_REQUEST=${TRAVIS_PULL_REQUEST} --env TRAVIS_BRANCH=${TRAVIS_BRANCH} build-8
+script:
+  - npm install -q -g @openmicrostep/msbuildsystem.cli
+  - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
+  - git clone https://github.com/OpenMicroStep/MSBuildSystem.git
+  - msbuildsystem build -w dist/travis/ --target build --env travis --no-progress

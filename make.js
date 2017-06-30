@@ -2,10 +2,6 @@ const version = require('child_process').execSync('git describe --always', { cwd
 
 function tests_buildsystem(path) {
   return [
-    `${path}/node/node_modules/@openmicrostep/msbuildsystem.shared.tests/index.js`,
-    `${path}/node/node_modules/@openmicrostep/msbuildsystem.core.tests/index.js`,
-    `${path}/node/node_modules/@openmicrostep/msbuildsystem.js.tests/index.js`,
-    `${path}/node/node_modules/@openmicrostep/msbuildsystem.js.typescript.tests/index.js`,
     `${path}/node/node_modules/@openmicrostep/msbuildsystem.aspects.tests/index.js`,
   ]
 }
@@ -266,6 +262,7 @@ module.exports =  {
       tty: true
     },
     'cwd=': { is: 'group', elements: [{ is: 'file', name: "./" }] },
+    "install-deps=": { is: "task", components: ["=cmd"], cmd: "npm install -g -q coveralls nyc @openmicrostep/tests" },
     "build-bs=": { is: "task", components: ["=cmd"], cmd: Value([
       "msbuildsystem", "build", "-p", "MSBuildSystem/@msbuildsystem", "-p", "buildsystem", "-w", "dist/bs-aspects/"
     ]) },
@@ -282,22 +279,13 @@ module.exports =  {
       env: { is: "component", "OCI_LIB_DIR": "/opt/oracle/instantclient", "OCI_INC_DIR": "/opt/oracle/instantclient/sdk/include" }, 
       cmd: Value(["mstests", "-c", ...tests_aspects("dist/aspects")]),
     },
-    "coverage-aspects=": { is: "task", components: ["=cmd"], cmd: Value([
-      "istanbul", "cover", "mstests",
-      "--report", "json",
-      "-x", "*.tests/**", "-x", "**/generated/**",
-      "--root", "dist/aspects/js/node_modules/@openmicrostep/",
-      "--",
-      "-c", "-t", "20000", "-i", "-g", "perf", ...tests_aspects("dist/aspects")
-    ]) },
-    "coveralls-aspects=": { is: "task", components: ["=cmd"], cmd: Value([
-      "sh", "-c",
-      "cat ./coverage/coverage-final.json | remap-istanbul --type lcovonly | coveralls"
-    ]) },
-    "coverage-local-aspects=": { is: "task", components: ["=cmd"], cmd: Value([
-      "sh", "-c",
-      "cat ./coverage/coverage-final.json | remap-istanbul --output coverage --type html"
-    ]) },
+
+    "coverage-local=": { is: "task", components: ["=cmd"], env: { is: "component", NYC_CWD: "dist/aspects/js/node_modules/@openmicrostep" }, cmd:
+      `nyc --reporter=html --report-dir dist/coverage -x "*.tests/**" -x "**/generated/**" mstests -c -t 20000 ${tests_aspects("dist/aspects").join(' ')}`
+    },
+    "coveralls=": { is: "task", components: ["=cmd"], env: { is: "component", NYC_CWD: "dist/aspects/js/node_modules/@openmicrostep" }, cmd:
+      `nyc --reporter=text-lcov --report-dir dist/coverage -x "*.tests/**" -x "**/generated/**" mstests -c -t 20000 ${tests_aspects("dist/aspects").join(' ')} | coveralls`
+    },
 
     "deploy-msbuildsystem.aspects=": { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.aspects"]) },
     "deploy-aspects="              : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects"]) },
@@ -307,6 +295,10 @@ module.exports =  {
     "deploy=": { is: "target", components: ["=shell"], targets: ["build"],
       preTasks: Value(["=deploy-msbuildsystem.aspects", "=deploy-aspects", "=deploy-aspects.express", "=deploy-aspects.sql", "=deploy-aspects.xhr"]) },
 
-    "build=":     { is: "target", components: ["=shell"], preTasks: Value(["=build-bs", /*"=tests-bs",*/ "=build-aspects", "=tests-aspects" ]) },
+    "build=":     { is: "target", components: ["=shell"], preTasksByEnvironment: {
+      "=envs ? ci + !coveralls": Value(["=install-deps", "=build-bs", "=tests-bs", "=build-aspects", "=tests-aspects"                   ]),
+      "=envs ? ci +  coveralls": Value(["=install-deps", "=build-bs", "=tests-bs", "=build-aspects", "=tests-aspects", "=coveralls"     ]),
+      "=envs ? local"          : Value([                 "=build-bs", "=tests-bs", "=build-aspects", "=tests-aspects", "=coverage-local"]),
+    } },
   }
 };
