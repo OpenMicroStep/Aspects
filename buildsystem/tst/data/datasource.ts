@@ -632,18 +632,20 @@ export declare namespace DataSource {
   function installAspect(on: ControlCenter, name: 'server'): { new(): DataSource.Aspects.server };
   function installAspect(on: ControlCenter, name: 'impl'): { new(): DataSource.Aspects.impl };
 
-  function __c(name: 'local'): DataSource.Categories.local;
-  function __c(name: 'client'): DataSource.Categories.client;
-  function __c(name: 'server'): DataSource.Categories.server;
-  function __c(name: 'safe'): DataSource.Categories.safe;
-  function __c(name: 'raw'): DataSource.Categories.raw;
-  function __c(name: 'implementation'): DataSource.Categories.implementation;
-  function __i<T extends DataSource>(name: 'local'): DataSource.ImplCategories.local<T>;
-  function __i<T extends DataSource>(name: 'client'): DataSource.ImplCategories.client<T>;
-  function __i<T extends DataSource>(name: 'server'): DataSource.ImplCategories.server<T>;
-  function __i<T extends DataSource>(name: 'safe'): DataSource.ImplCategories.safe<T>;
-  function __i<T extends DataSource>(name: 'raw'): DataSource.ImplCategories.raw<T>;
-  function __i<T extends DataSource>(name: 'implementation'): DataSource.ImplCategories.implementation<T>;
+  function __DataSource_c(name: string): {};
+  function __DataSource_c(name: 'local'): DataSource.Categories.local;
+  function __DataSource_c(name: 'client'): DataSource.Categories.client;
+  function __DataSource_c(name: 'server'): DataSource.Categories.server;
+  function __DataSource_c(name: 'safe'): DataSource.Categories.safe;
+  function __DataSource_c(name: 'raw'): DataSource.Categories.raw;
+  function __DataSource_c(name: 'implementation'): DataSource.Categories.implementation;
+  function __DataSource_i(name: string): {};
+  function __DataSource_i<T extends DataSource>(name: 'local'): DataSource.ImplCategories.local<T>;
+  function __DataSource_i<T extends DataSource>(name: 'client'): DataSource.ImplCategories.client<T>;
+  function __DataSource_i<T extends DataSource>(name: 'server'): DataSource.ImplCategories.server<T>;
+  function __DataSource_i<T extends DataSource>(name: 'safe'): DataSource.ImplCategories.safe<T>;
+  function __DataSource_i<T extends DataSource>(name: 'raw'): DataSource.ImplCategories.raw<T>;
+  function __DataSource_i<T extends DataSource>(name: 'implementation'): DataSource.ImplCategories.implementation<T>;
 
   export interface Categories<C extends DataSource = DataSource> extends VersionedObject.Categories<C> {
     (name: 'local', implementation: DataSource.ImplCategories.local<C>);

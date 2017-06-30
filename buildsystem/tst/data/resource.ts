@@ -55,8 +55,10 @@ export class Resource extends VersionedObject {
 export declare namespace Resource {
   function installAspect(on: ControlCenter, name: 'test1'): { new(): Resource.Aspects.test1 };
 
-  function __c(name: 'local'): Resource.Categories.local;
-  function __i<T extends Resource>(name: 'local'): Resource.ImplCategories.local<T>;
+  function __Resource_c(name: string): {};
+  function __Resource_c(name: 'local'): Resource.Categories.local;
+  function __Resource_i(name: string): {};
+  function __Resource_i<T extends Resource>(name: 'local'): Resource.ImplCategories.local<T>;
 
   export interface Categories<C extends Resource = Resource> extends VersionedObject.Categories<C> {
     (name: 'local', implementation: Resource.ImplCategories.local<C>);
@@ -144,18 +146,20 @@ export class Car extends Resource {
   static readonly category: Car.Categories;
 }
 export namespace Car {
-  export const __Car_Categories_local = Resource.__c('local');
-  export const __Car_Categories_local2 = Resource.__c('local2');
-  export const __Car_ImplCategories_local = Resource.__i<Car>('local');
-  export const __Car_ImplCategories_local2 = Resource.__i<Car>('local2');
+  export const __Car_Categories_local = Resource.__Resource_c && Resource.__Resource_c('local');
+  export const __Car_Categories_local2 = Resource.__Resource_c && Resource.__Resource_c('local2');
+  export const __Car_ImplCategories_local = Resource.__Resource_i && Resource.__Resource_i<Car>('local');
+  export const __Car_ImplCategories_local2 = Resource.__Resource_i && Resource.__Resource_i<Car>('local2');
 }
 export declare namespace Car {
   function installAspect(on: ControlCenter, name: 'test1'): { new(): Car.Aspects.test1 };
 
-  function __c(name: 'local'): Car.Categories.local;
-  function __c(name: 'local2'): Car.Categories.local2;
-  function __i<T extends Car>(name: 'local'): Car.ImplCategories.local<T>;
-  function __i<T extends Car>(name: 'local2'): Car.ImplCategories.local2<T>;
+  function __Car_c(name: string): {};
+  function __Car_c(name: 'local'): Car.Categories.local;
+  function __Car_c(name: 'local2'): Car.Categories.local2;
+  function __Car_i(name: string): {};
+  function __Car_i<T extends Car>(name: 'local'): Car.ImplCategories.local<T>;
+  function __Car_i<T extends Car>(name: 'local2'): Car.ImplCategories.local2<T>;
 
   export interface Categories<C extends Car = Car> extends Resource.Categories<C> {
     (name: 'local', implementation: Car.ImplCategories.local<C>);

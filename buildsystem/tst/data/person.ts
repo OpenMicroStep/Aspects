@@ -166,10 +166,12 @@ export class Person extends VersionedObject {
   static readonly category: Person.Categories;
 }
 export declare namespace Person {
-  function __c(name: 'core'): Person.Categories.core;
-  function __c(name: 'calculation'): Person.Categories.calculation;
-  function __i<T extends Person>(name: 'core'): Person.ImplCategories.core<T>;
-  function __i<T extends Person>(name: 'calculation'): Person.ImplCategories.calculation<T>;
+  function __Person_c(name: string): {};
+  function __Person_c(name: 'core'): Person.Categories.core;
+  function __Person_c(name: 'calculation'): Person.Categories.calculation;
+  function __Person_i(name: string): {};
+  function __Person_i<T extends Person>(name: 'core'): Person.ImplCategories.core<T>;
+  function __Person_i<T extends Person>(name: 'calculation'): Person.ImplCategories.calculation<T>;
 
   export interface Categories<C extends Person = Person> extends VersionedObject.Categories<C> {
     (name: 'core', implementation: Person.ImplCategories.core<C>);
@@ -231,6 +233,8 @@ export class Cat extends VersionedObject {
   static readonly category: Cat.Categories;
 }
 export declare namespace Cat {
+  function __Cat_c(name: string): {};
+  function __Cat_i(name: string): {};
   export interface Categories<C extends Cat = Cat> extends VersionedObject.Categories<C> {
   }
   export namespace Categories {

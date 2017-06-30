@@ -131,7 +131,7 @@ export class ClassElement extends Element {
     for (let category of categories)
       decl += `\n  function __${this.name}_c(name: '${category.name}'): ${this.name}.Categories.${category.name};`;
 
-    decl += `\n  function __${this.name}_i(name: string): {}`;
+    decl += `\n  function __${this.name}_i(name: string): {};`;
     for (let category of categories)
       decl += `\n  function __${this.name}_i<T extends ${this.name}>(name: '${category.name}'): ${this.name}.ImplCategories.${category.name}<T>;`;
     if (categories.length)
