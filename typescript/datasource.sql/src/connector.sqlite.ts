@@ -1,5 +1,18 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
+class SqliteMaker extends SqlMaker {
+  union(sql_select: SqlBinding[]) : SqlBinding {
+    if (sql_select.length === 1) return sql_select[0];
+    let sql = `SELECT * FROM (${this.join_sqls(sql_select, ' UNION ')})`;
+    return { sql: sql, bind: this.join_bindings(sql_select) };
+  }
+
+  intersection(sql_select: SqlBinding[]) : SqlBinding {
+    if (sql_select.length === 1) return sql_select[0];
+    let sql = `SELECT * FROM (${this.join_sqls(sql_select, ' INTERSECT ')})`;
+    return { sql: sql, bind: this.join_bindings(sql_select) };
+  }
+}
 export const SqliteDBConnectorFactory = DBConnector.createSimple<{
   OPEN_READWRITE: number,
   OPEN_CREATE: number,
@@ -9,11 +22,12 @@ export const SqliteDBConnectorFactory = DBConnector.createSimple<{
   mode?: any 
 }, {
   exec(sql: string, cb: (err) => void): void
-  all(sql: string, bind: any[], cb: (err, rows) => void): void
-  run(sql: string, bind: any[], cb: (this: { changes?: number, lastID?: number }, err) => void): void
+  all(sql: string, bind: ReadonlyArray<any>, cb: (err, rows) => void): void
+  run(sql: string, bind: ReadonlyArray<any>, cb: (this: { changes?: number, lastID?: number }, err) => void): void
   close(cb: (err) => void): void
-}>({
-  maker: new SqlMaker(),
+}
+>({
+  maker: new SqliteMaker(),
   create(sqlite3, { filename, mode }) {
     if (mode === undefined)
       mode = sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE;

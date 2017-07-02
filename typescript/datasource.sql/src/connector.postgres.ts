@@ -6,12 +6,12 @@ class PostgresSqlMaker extends SqlMaker {
   }
 
   insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
-    let sql = `INSERT INTO ${this.quote(table)} (${sql_values.map(c => c.sql).join(',')}) VALUES (${sql_values.map(c => '?').join(',')})`;
+    let sql = `INSERT INTO ${this.quote(table)} (${this.join_sqls(sql_values, ',')}) VALUES (${sql_values.map(c => '?').join(',')})`;
     if (output_columns.length > 0)
       sql += ` RETURNING ${output_columns.map(c => this.quote(c)).join(',')}`;
     return {
       sql: sql,
-      bind: ([] as SqlBinding[]).concat(...sql_values.map(s => s.bind))
+      bind: this.join_bindings(sql_values)
     };
   }
 }
@@ -21,9 +21,10 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
   application_name?: string
 }, {
   query(sql: string, cb: (err, result) => void),
-  query(sql: string, bind: any[], cb: (err, result) => void),
+  query(sql: string, bind: ReadonlyArray<any>, cb: (err, result) => void),
   end()
-}>({
+}
+>({
   maker: new PostgresSqlMaker(),
   create(pg, options) {
     return new Promise((resolve, reject) => {

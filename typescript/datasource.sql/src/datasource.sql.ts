@@ -31,18 +31,6 @@ export class SqlDataSource extends DataSource
     return on.cache().createAspect(on, name, this);
   }
 
-  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
-    let ctx = {
-      cstor: SqlMappedQuery,
-      controlCenter: this.controlCenter(),
-      maker: this.maker,
-      mappers: this.mappers,
-      queries: new Map(),
-      aliases: 0
-    };
-    let query = SqlQuery.build(ctx, set);
-    return query.execute(ctx, set.scope || [], db, component);
-  }
   async save(tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
     let manager = object.manager();
     let state = manager.state();
@@ -156,14 +144,37 @@ export class SqlDataSource extends DataSource
       .catch(v => { this.controlCenter().unregisterComponent(component); return Promise.reject(v); })
   }
 
+  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
+    let ctx = {
+      cstor: SqlMappedQuery,
+      controlCenter: this.controlCenter(),
+      maker: this.maker,
+      mappers: this.mappers,
+      queries: new Map(),
+      aliases: 0
+    };
+    let query = SqlQuery.build(ctx, set);
+    return query.execute(ctx, set.scope || [], db, component);
+  }
   implQuery({ tr, sets }: { tr?: SqlDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
-    let ret = {};
-    return this.scoped(component => 
-      Promise.all(sets
+    return this.scoped(async (component) => {
+      let ret = {};
+      let ds = tr ? tr.tr : this.connector;
+      let ctx = {
+        cstor: SqlMappedQuery,
+        component: component,
+        controlCenter: this.controlCenter(),
+        maker: this.maker,
+        mappers: this.mappers,
+        queries: new Map(),
+        aliases: 0
+      };
+      await Promise.all(sets
         .filter(s => s.name)
-        .map(s => this.execute(tr ? tr.tr : this.connector, s, component)
-        .then(obs => ret[s.name!] = obs))
-      ).then(() => ret));
+        .map(s => SqlQuery.execute(ctx, s)
+          .then((objects) => ret[s.name!] = objects)));
+      return ret;
+    });
   }
 
   async implLoad({tr, objects, scope} : {

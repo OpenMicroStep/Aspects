@@ -1,38 +1,61 @@
 import {DataSourceInternal} from '@openmicrostep/aspects';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
-export type SqlBinding = { sql: string, bind: any[] };
-
-function push_bindings(bind: any[], bindings: SqlBinding[]) {
-  for (let b of bindings)
-    bind.push(...b.bind);
-}
-function join_sqls(bind: SqlBinding[], separator: string) : string {
-  return bind.map(b => b.sql).join(separator);
-}
-
+export type SqlBinding = { readonly sql: string, readonly bind: ReadonlyArray<any> };
+type SqlBindingW = { sql: string, bind: any[] };
 export class SqlMaker {
-  select(sql_columns: string[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where: SqlBinding, limit?: [number, number]) : SqlBinding {
+  protected push_bindings(bind: any[], bindings: SqlBinding[]) {
+    for (let b of bindings)
+      bind.push(...b.bind);
+  }
+  protected join_sqls(bind: SqlBinding[], separator: string) : string {
+    return bind.map(b => b.sql).join(separator);
+  }
+  protected join_bindings(bind: SqlBinding[]) : any[] {
+    return ([] as any[]).concat(...bind.map(b => b.bind));
+  }
+
+  protected sql_sort(sql_sort?: string[]) : string {
+    return (sql_sort && sql_sort.length) ? `\nORDER BY ${sql_sort.join(',')}` : '';
+  }
+
+  sort(sql_select: SqlBinding, sql_sort: string[]) {
+    if (sql_sort.length === 0)
+      return sql_select;
+    return { sql: `${sql_select.sql}\nORDER BY ${sql_sort.join(',')}`, bind: sql_select.bind };
+  }
+  
+  union(sql_select: SqlBinding[]) : SqlBinding {
+    if (sql_select.length === 1) return sql_select[0];
+    let sql = `(${this.join_sqls(sql_select, ' UNION ')})`;
+    return { sql: sql, bind: this.join_bindings(sql_select) };
+  }
+
+  intersection(sql_select: SqlBinding[]) : SqlBinding {
+    if (sql_select.length === 1) return sql_select[0];
+    let sql = `(${this.join_sqls(sql_select, ' INTERSECT ')})`;
+    return { sql: sql, bind: this.join_bindings(sql_select) };
+  }
+
+  select(sql_columns: string[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where: SqlBinding) : SqlBinding {
     let bind: SqlBinding[] = [];
-    let sql = `SELECT ${sql_columns.join(',')}\nFROM ${join_sqls(sql_from, ',')}`;
-    push_bindings(bind, sql_from);
+    let sql = `SELECT ${sql_columns.join(',')}\nFROM ${this.join_sqls(sql_from, ',')}`;
+    this.push_bindings(bind, sql_from);
     if (sql_joins.length) {
-      sql += `\n${join_sqls(sql_joins, '\n')}`;
-      push_bindings(bind, sql_joins);
+      sql += `\n${this.join_sqls(sql_joins, '\n')}`;
+      this.push_bindings(bind, sql_joins);
     }
     if (sql_where && sql_where.sql) {
       sql += `\nWHERE ${sql_where.sql}`;
       bind.push(...sql_where.bind);
     }
-    if (limit && limit.length)
-      sql += `\nLIMIT ${limit[0]}, ${limit[1]}`;
     return { sql: sql, bind: bind };
   }
 
   update(table: string, sql_set: SqlBinding[], sql_where: SqlBinding) : SqlBinding {
     return {
       sql: `UPDATE ${this.quote(table)} SET ${sql_set.map(s => s.sql).join(',')} ${this._where(sql_where)}`,
-      bind: [...([] as SqlBinding[]).concat(...sql_set.map(s => s.bind)), ...sql_where.bind]
+      bind: [...([] as any[]).concat(...sql_set.map(s => s.bind)), ...sql_where.bind]
     }
   }
   
@@ -56,7 +79,7 @@ export class SqlMaker {
       throw new Error(`default maker doesn't support multiple output columns`);
     return {
       sql: `INSERT INTO ${this.quote(table)} (${sql_values.map(c => c.sql).join(',')}) VALUES (${sql_values.map(c => '?').join(',')})`,
-      bind: ([] as SqlBinding[]).concat(...sql_values.map(s => s.bind))
+      bind: this.join_bindings(sql_values)
     };
   }
 
@@ -70,8 +93,7 @@ export class SqlMaker {
 
   from_sub(sql_select: SqlBinding, alias: string) : SqlBinding {
     let r = this.sub(sql_select);
-    r.sql += ` ${this.quote(alias)}`;
-    return r;
+    return { sql: `${r.sql} ${this.quote(alias)}`, bind: r.bind };
   }
 
   left_join(table: string, alias: string, on: SqlBinding) {
@@ -91,9 +113,15 @@ export class SqlMaker {
 
   column(table: string, name: string, alias?: string) {
     let r = this.quote(table) + "." + this.quote(name);
-    if (alias)
-      r += ` ${this.quote(alias)}`;
-    return r;
+    return alias ? this.column_alias(r, alias) : r;
+  }
+
+  column_alias(sql_column: string, alias: string) {
+    return `${sql_column} ${this.quote(alias)}`;
+  }
+
+  sort_column(table: string, name: string, asc: boolean): string {
+    return `${this.quote(table)}.${this.quote(name)} ${asc ? 'ASC' : 'DESC'}`;
   }
 
   set(sql_column: string, value: any) : SqlBinding {
@@ -148,7 +176,7 @@ export class SqlMaker {
   }
 
   op_bind(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenColumnsTypes, value): SqlBinding {
-    let b = this.op(sql_column.sql, operator, value);
+    let b = this.op(sql_column.sql, operator, value) as SqlBindingW;
     b.bind.unshift(...sql_column.bind);
     return b;
   }
@@ -166,7 +194,7 @@ export class SqlMaker {
   }
 
   compare_bind(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenSetTypes, sql_columnRight: SqlBinding): SqlBinding {
-    let b: SqlBinding;
+    let b: SqlBindingW;
     switch (operator) {
       case ConstraintType.In:
         b = { sql: `${sql_columnLeft} IN ${sql_columnRight}` , bind: [] };
@@ -174,7 +202,7 @@ export class SqlMaker {
       case ConstraintType.NotIn:
         b = { sql: `${sql_columnLeft} NOT IN ${sql_columnRight}` , bind: [] };
         break;
-      default: b = this.compare(sql_columnLeft.sql, operator, sql_columnRight.sql);
+      default: b = this.compare(sql_columnLeft.sql, operator, sql_columnRight.sql) as SqlBindingW;
     }
     b.bind.unshift(...sql_columnRight.bind);
     b.bind.unshift(...sql_columnLeft.bind);

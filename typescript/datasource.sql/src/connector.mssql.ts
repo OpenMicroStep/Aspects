@@ -12,7 +12,7 @@ class MSSQLMaker extends SqlMaker {
     sql += ` VALUES (${sql_values.map(c => '?').join(',')})`;
     return {
       sql: sql,
-      bind: ([] as SqlBinding[]).concat(...sql_values.map(s => s.bind))
+      bind: this.join_bindings(sql_values)
     };
   }
 }
