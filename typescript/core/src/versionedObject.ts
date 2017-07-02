@@ -257,7 +257,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         if (other_manager.hasAttributeValue(data.relation.attribute)) {
           let v = other[data.relation.attribute];
           switch (otype.type) {
-            case 'set':   v = (new Set<VersionedObject>(v))[add ? 'add' : 'delete'](this._object); break;
+            case 'set':   v = new Set<VersionedObject>(v); v[add ? 'add' : 'delete'](this._object); break;
             case 'class': v = add ? this._object : undefined; break;
             default: throw new Error(`unsupported relation destination type ${otype.type}`);
           }

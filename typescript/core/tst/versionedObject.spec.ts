@@ -92,7 +92,7 @@ function shared() {
   assert.instanceOf(c1, Car);
 }
 
-function relation() {
+function relation_1_n() {
   let cc = new ControlCenter();
   let C = Car.installAspect(cc, 'test1');
   let P = People.installAspect(cc, 'test1');
@@ -109,6 +109,26 @@ function relation() {
   assert.equal(c0._owner, p0);
   assert.equal(c1._owner, p0);
 
+  c0._owner = undefined;
+  assert.sameMembers([...p0._cars], [c1]);
+  assert.equal(c0._owner, undefined);
+  assert.equal(c1._owner, p0);
+
+  let d = new Set(p0._cars); d.delete(c1);
+  assert.sameMembers([...p0._cars], []);
+  assert.equal(c0._owner, undefined);
+  assert.equal(c1._owner, undefined);
+}
+
+function relation_n_n() {
+  let cc = new ControlCenter();
+  let C = Car.installAspect(cc, 'test1');
+  let P = People.installAspect(cc, 'test1');
+
+  let c0 = new C();
+  let c1 = new C();
+  let p0 = new P();
+
   assert.sameMembers([...p0._drivenCars], []);
   assert.sameMembers([...c0._drivers], []);
   assert.sameMembers([...c1._drivers], []);
@@ -116,10 +136,18 @@ function relation() {
   assert.sameMembers([...p0._drivenCars], [c0, c1]);
   assert.sameMembers([...c0._drivers], [p0]);
   assert.sameMembers([...c1._drivers], [p0]);
+
+  let d = new Set(p0._drivenCars); d.delete(c0); d.delete(c1);
+  p0._drivenCars = d;
+  assert.sameMembers([...p0._drivenCars], []);
+  assert.sameMembers([...c0._drivers], []);
+  assert.sameMembers([...c1._drivers], []);
 }
+
 export const tests = { name: 'VersionedObject', tests: [
   basics,
   shared,
-  relation,
+  relation_1_n,
+  relation_n_n,
   tests_perfs
 ]};
