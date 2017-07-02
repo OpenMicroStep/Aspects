@@ -342,7 +342,8 @@ export class AspectCache {
     }
     if (!ret.impls.has(from)) {
       ret.impls.add(from);
-      ret.attributes.forEach(data => this.installAttributeData(from, data));
+      if (from !== VersionedObject)
+        ret.attributes.forEach(data => this.installAttributeData(from, data));
     }
     return ret;
   }
