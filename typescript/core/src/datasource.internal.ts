@@ -304,38 +304,69 @@ export namespace DataSourceInternal {
     };
   }
 
-  function hasVariableAttribute(aspect: Aspect.Installed, set: ObjectSet, attributes: Set<string>, variable: string, attribute: string) {
-    if (set.variable(variable) === set) {
-      attributes.add(attribute);
-      return aspect.attributes.has(attribute);
+  function hasRSet(var_set: ObjectSet, r_set: ObjectSet) {
+    let has = false;
+    for (let c of var_set.typeConstraints) {
+      if (c.type === ConstraintType.UnionOf) {
+        for (let s of c.value) {
+          has = hasRSet(s, r_set);
+          if (has) break;
+        }
+      }
+      else if (c.type === ConstraintType.UnionOfAlln) {
+        has = hasRSet(c.value[0], r_set) || hasRSet(c.value[2], r_set);
+      }
+      else if (c.type === ConstraintType.Recursion) {
+        has = c.value === r_set;
+      }
+      if (has) break;
+    }
+    return has;
+  }
+
+  function hasVariableAttribute(aspect: Aspect.Installed, set: ObjectSet, r_set: ObjectSet | undefined, attributes: Map<string, Aspect.InstalledAttribute>, variable: string, attribute: string) {
+    let var_set = set.variable(variable);
+    if (var_set === set || (var_set && r_set && hasRSet(var_set, r_set))) {
+      let a = aspect.attributes.get(attribute);
+      if (a) {
+        attributes.set(a.name, a);
+        return true;
+      }
     }
     return false;
   }
-  function hasAttribute(aspect: Aspect.Installed, set: ObjectSet, attributes: Set<string>, constraint: Constraint): boolean {
+  function hasAttribute(aspect: Aspect.Installed, set: ObjectSet, r_set: ObjectSet | undefined, attributes: Map<string, Aspect.InstalledAttribute>, constraint: Constraint): boolean {
     if (constraint instanceof ConstraintTree) {
-      return constraint.value.some(c => hasAttribute(aspect, set, attributes, c));
+      let has = false;
+      for (let c of constraint.value)
+        has = hasAttribute(aspect, set, r_set, attributes, c) || has;
+      return has;
     }
     else if (constraint instanceof ConstraintValue) {
-      return hasVariableAttribute(aspect, set, attributes, constraint.leftVariable, constraint.leftAttribute);
+      return hasVariableAttribute(aspect, set, r_set, attributes, constraint.leftVariable, constraint.leftAttribute);
     }
     else if (constraint instanceof ConstraintVariable) {
-      return hasVariableAttribute(aspect, set, attributes, constraint.leftVariable , constraint.leftAttribute )
-          || hasVariableAttribute(aspect, set, attributes, constraint.rightVariable, constraint.rightAttribute);
+      let lhas = hasVariableAttribute(aspect, set, r_set, attributes, constraint.leftVariable , constraint.leftAttribute );
+      let rhas = hasVariableAttribute(aspect, set, r_set, attributes, constraint.rightVariable, constraint.rightAttribute);
+      return lhas || rhas;
     }
     else if (constraint instanceof ConstraintSub) {
-      attributes.add(constraint.attribute);
-      return aspect.attributes.has(constraint.attribute);
+      let a = aspect.attributes.get(constraint.attribute);
+      if (a) {
+        attributes.set(a.name, a);
+        return true;
+      }
     }
     return false;
   }
-  function hasAllAttributes(aspect: Aspect.Installed, set: ObjectSet, attributes: Set<string>) {
+  function hasAllAttributes(aspect: Aspect.Installed, set: ObjectSet, r_set: ObjectSet | undefined, attributes: Map<string, Aspect.InstalledAttribute>) {
     for (let c of set.constraints) {
-      if (!hasAttribute(aspect, set, attributes, c))
+      if (!hasAttribute(aspect, set, r_set, attributes, c))
         return false;
     }
     return true;
   }
-  function _compatibleAspects(cc: ControlCenter, set: ObjectSet, aspects: Set<Aspect.Installed>, attributes: Set<string>, union: boolean) {
+  function _compatibleAspects(cc: ControlCenter, set: ObjectSet, r_set: ObjectSet | undefined, aspects: Set<Aspect.Installed>, attributes: Map<string, Aspect.InstalledAttribute>, union: boolean) {
     for (let c of set.typeConstraints) {
       if (c.type === ConstraintType.InstanceOf || c.type === ConstraintType.MemberOf) {
         if (!union)
@@ -344,21 +375,22 @@ export namespace DataSourceInternal {
       }
       else if (c.type === ConstraintType.UnionOf) {
         for (let s of c.value)
-          _compatibleAspects(cc, s, aspects, attributes, true);
+          _compatibleAspects(cc, s, undefined, aspects, attributes, true);
       }
       else if (c.type === ConstraintType.UnionOfAlln) {
-        _compatibleAspects(cc, c.value[0], aspects, attributes, false);
+        _compatibleAspects(cc, c.value[0], undefined, aspects, attributes, true);
+        _compatibleAspects(cc, c.value[2], c.value[1], aspects, attributes, true);
       }
     }
     if (aspects.size === 0) {
       for (let cstor of cc._aspects.values()) {
-        if (hasAllAttributes(cstor.aspect, set, attributes))
+        if (hasAllAttributes(cstor.aspect, set, r_set, attributes))
           aspects.add(cstor.aspect);
       }
     }
     else {
       for (let aspect of aspects) {
-        if (!hasAllAttributes(aspect, set, attributes))
+        if (!hasAllAttributes(aspect, set, r_set, attributes))
           aspects.delete(aspect);
       }
     }
@@ -373,8 +405,6 @@ export namespace DataSourceInternal {
     constraints: Constraint[] = [];
     variables?: Map<string, ObjectSet> = undefined;
     subs?: Map<string, ObjectSet> = undefined;
-    _compatibleAspects?: Set<Aspect.Installed> = undefined;
-    _attributes?: Set<string> = undefined;
 
     clone(name: string) {
       let ret = new ObjectSet(name);
@@ -492,18 +522,13 @@ export namespace DataSourceInternal {
       return c_and(this.constraints);
     }
 
-    compatibleAspects(cc: ControlCenter) : Set<Aspect.Installed> {
-      let aspects = this._compatibleAspects;
-      if (!this._compatibleAspects)
-        _compatibleAspects(cc, this, this._compatibleAspects = new Set(), this._attributes = new Set(this.scope), false);
-      return this._compatibleAspects;
-    }
-
-    attributes(cc: ControlCenter) : Set<string> {
-      let aspects = this._attributes;
-      if (!this._attributes)
-        _compatibleAspects(cc, this, this._compatibleAspects = new Set(), this._attributes = new Set(this.scope), false);
-      return this._attributes;
+    attributesAndCompatibleAspects(cc: ControlCenter) {
+      let ret = {
+        compatibleAspects: new Set<Aspect.Installed>(),
+        attributes: new Map<string, Aspect.InstalledAttribute>(),
+      }
+      _compatibleAspects(cc, this, undefined, ret.compatibleAspects, ret.attributes, false);
+      return ret;
     }
 
     constructor(name: string) {
