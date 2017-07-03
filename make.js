@@ -259,7 +259,8 @@ module.exports =  {
       is: "component",
       type: "cmd",
       cwd: "={cwd}.absolutePath",
-      tty: true
+      tty: true,
+      shell: true,
     },
     'cwd=': { is: 'group', elements: [{ is: 'file', name: "./" }] },
     "install-deps=": { is: "task", components: ["=cmd"], cmd: "npm install -g -q coveralls nyc @openmicrostep/tests" },
