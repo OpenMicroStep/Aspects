@@ -80,11 +80,12 @@ export class SqlMappedObject extends Element {
   toDbKey: (value) => any = pass;
   attributes: SqlMappedAttribute[] = [];
   
-  get(attribute: string) : SqlMappedAttribute {
-    let sqlattr = this.attributes.find(a => a.name === attribute);
-    if (!sqlattr)
-      throw new Error(`attribute ${attribute} is not defined in ${this}`);
-    return sqlattr;
+  attribute_id() : SqlMappedAttribute {
+    return this.get("_id")!;
+  }
+
+  get(attribute: string) : SqlMappedAttribute | undefined {
+    return this.attributes.find(a => a.name === attribute);
   }
 
   toString() {
