@@ -150,6 +150,7 @@ function query_peoples(f: Flux<Context>) {
 function save_c0_c1_c2_c3_p0_p1_p2_p3_p4(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
   db.farPromise('rawSave', [c0, c1, c2, c3, p0, p1, p2, p3, p4]).then(envelop => { 
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.result(), [c0, c1, c2, c3, p0, p1, p2, p3, p4]);
     f.continue(); 
   });
