@@ -1,9 +1,9 @@
 import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {SqlBinding, SqlMaker, SqlQuery, SqlQuerySharedContext} from '@openmicrostep/aspects.sql';
-import {ObiDefinition, getOne, ObiDataSource} from './index.priv';
-
+import {SqlBinding, SqlMaker, SqlQuery, SqlQuerySharedContext, DBConnectorCRUD} from '@openmicrostep/aspects.sql';
+import {ObiDefinition, SysObiDefinition, getOne, ObiDataSource} from './index.priv';
+import ConstraintValue = DataSourceInternal.ConstraintValue;
 
 function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O) : O[] | undefined {
   return arr ? arr.map(map) : undefined;
@@ -16,18 +16,18 @@ export function mapValue(def: ObiDefinition, ctx: ObiSharedContext, value, isId:
   return value;
 }
 
-export type ObiSharedContext = ObiDataSource.Config & {
-  cstor: { new(): ObiQuery },
-  controlCenter: ControlCenter,
-  maker: SqlMaker,
-  systemObiByName: Map<string, ObiDefinition>,
-  systemObiById: Map<number, ObiDefinition>,
+export interface ObiSharedContext extends SqlQuerySharedContext<ObiSharedContext, ObiQuery> {
+  db: DBConnectorCRUD,
+  config: ObiDataSource.Config,
+  systemObiByName: Map<string, SysObiDefinition>,
+  systemObiById: Map<number, SysObiDefinition>,
   car_entityid: number,
   car_type: ObiDefinition,
   car_table: ObiDefinition,
-  queries: Map<ObjectSet, ObiQuery>,
-  aliases: number,
 }
+
+const __is = "f4e21b09-793d-447a-b92c-5a2e76d939f2";
+
 export namespace ObiQuery {
   export interface CarInfo {
     car: ObiDefinition;
@@ -36,240 +36,447 @@ export namespace ObiQuery {
     relation: boolean;
   }
 }
-
-function mk_car_info(ctx: ObiSharedContext, car: ObiDefinition, relation: boolean): ObiQuery.CarInfo {
-  let type = car && getOne(car, ctx.car_type) as ObiDefinition;
-  if (!type)
-    throw new Error(`caracteristic ${car.system_name!} has no type`);
-  let table = getOne(type, ctx.car_table, type.system_name!) as string;
-  return {
-    car: car,
-    type: type,
-    table: "TJ_VAL_" + table,
-    relation: relation,
-  };
-}
-
 export class ObiQuery extends SqlQuery<ObiSharedContext> {
-  is?: ObiDefinition = undefined;
-  _cstor?: Aspect.Constructor = undefined;
+  mappers = new Set<SysObiDefinition>();
+  tables = new Map<string, string>();
+  sub_id_columns: string[] = [];
+  sub_is_columns: string[] = [];
+  cars = new Map<string, { d: Map<string, ObiQuery.CarInfo>, r: Map<string, ObiQuery.CarInfo>, cars: Map<number, Aspect.InstalledAttribute> }>();
 
-  setMapper(ctx: ObiSharedContext, name: string | undefined) {
-    let is = name && ctx.systemObiByName.get(ctx.aspectClassname_to_ObiEntity(name));
-    if (!is || this.is === is)
-      return;
+  setInitialType(name: string, instanceOf: boolean): void {
+    let is = this.ctx.systemObiByName.get(this.ctx.config.aspectClassname_to_ObiEntity(name));
+    if (!is)
+      throw new Error(`system object named '${name}' not found`);
+    this.mappers.add(is);
 
-    this.is = is;
-    this._cstor = ctx.controlCenter.aspect(name!);
-    let alias = this.nextAlias(ctx);
-    let table = "TJ_VAL_ID";
-    this.path = { table: alias, key: "VAL_INST" };
-    this.tables.set(JSON.stringify([is.system_name!]), alias);
-    this.from.push(ctx.maker.from(table, alias));
-    this.fromConditions.push(ctx.maker.op(ctx.maker.column(alias, "VAL_CAR"), ConstraintType.Equal, ctx.car_entityid));
-    this.fromConditions.push(ctx.maker.op(ctx.maker.column(alias, "VAL"    ), ConstraintType.Equal, is._id));
+    this.addDefaultInitialFrom();
+    this.fromConditions.push(this.ctx.maker.op(this.ctx.maker.column(this.initialFromTable!, "VAL"), ConstraintType.Equal, is._id));
   }
 
-  aspect(ctx: ObiSharedContext) {
-    return this._cstor!.aspect;
-  }
-  aspectAttribute(ctx: ObiSharedContext, attribute: string) {
-    let a = this.aspect(ctx).attributes.get(attribute);
-    if (!a)
-      throw new Error(`aspect attribute ${attribute} not found in ${this._cstor!.name}`);
-    return a;
-  }
-
-  cstor(ctx: ObiSharedContext) {
-    return this._cstor!;
+  setInitialUnion(queries: ObiQuery[]) {
+    let maker = this.ctx.maker;
+    let table = this.nextAlias();
+    let keys = queries[0].initialFromKeys;
+    let from = maker.from_sub(maker.union(queries.map(q => q.sql_select_id())), table);
+    this.addDefaultInitialFrom();
+    this.addInitialFrom(from, table, keys, keys.map(k => ({ sql: this.ctx.maker.column(table, k), bind: [] })));
   }
 
-  obiCar(ctx: ObiSharedContext, attribute: string) {
-    return ctx.systemObiByName.get(ctx.aspectAttribute_to_ObiCar(this.is!.system_name!, attribute));
+  setInitialRecursion(q_n: ObiQuery) {
+    let maker = this.ctx.maker;
+    let c = q_n.initialFromKeys.map(k => ({ sql: this.ctx.maker.column(q_n.initialFromTable!, k), bind: [] }));
+    this.addDefaultInitialFrom();
+    this.addInitialFrom(q_n.from[0], q_n.initialFromTable!, q_n.initialFromKeys, c);
   }
 
-  car_info(ctx: ObiSharedContext, attribute: string): ObiQuery.CarInfo {
-    let car = this.obiCar(ctx, attribute);
-    if (car) return mk_car_info(ctx, car, false);
+  async setInitialUnionOfAlln(q_0: ObiQuery, q_n: ObiQuery, q_np1: ObiQuery): Promise<void> {
+    let maker = this.ctx.maker;
+    let keys = q_0.initialFromKeys;
+    let alias = this.nextAlias();
+    this.addDefaultInitialFrom();
+    if (maker.select_with_recursive) {
+      let u_n = q_n.initialFromTable!;
+      let sql_from = maker.select_with_recursive([maker.quote("_id")], q_0.sql_select_id(), u_n, q_np1.sql_select_id());
+      this.addInitialFrom(maker.from_sub(sql_from, alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
+    }
     else {
-      let a = this.aspectAttribute(ctx, attribute);
+      let i = 0;
+      let size = 0;
+      let ids = await q_0.execute_ids();
+      let nids = ids;
+      while (size < ids.size) {
+        size = ids.size;
+        ++i;
+        let s = q_n.set.clone(`${q_n.set._name}[${i}]`);
+        let sids = [...nids.values()].map(i => i._id);
+        s.typeConstraints.splice(0, 1); // Remove the recursion type
+        s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", sids));
+        let q = await SqlQuery.build(this.ctx, s) as ObiQuery;
+        let from: SqlBinding = maker.from_sub(q.sql_select_id(), q_n.initialFromTable!);
+        (q_n.from[0] as any).sql = from.sql;
+        (q_n.from[0] as any).bind = from.bind;
+        nids = await q_np1.execute_ids();
+        for (let [k, id] of nids)
+          ids.set(k, id);
+      }
+
+      let fids = [...ids.values()].map(i => i._id);
+      let s = q_n.set.clone(`${q_n.set._name}[*]`);
+      s.typeConstraints.splice(0, 1); // Remove the recursion type
+      s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", fids));
+      let q_all = await SqlQuery.build(this.ctx, s) as ObiQuery;
+      this.addInitialFrom(maker.from_sub(q_all.sql_select_id(), alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
+    }
+  }
+
+  sql_select_id(): SqlBinding {
+    return this.ctx.maker.select(
+      [this.ctx.maker.column(this.initialFromTable!, "VAL_INST", "_id")],
+      this.sql_from(), 
+      this.sql_join(),
+      this.sql_where()
+    );
+  }
+
+  addDefaultInitialFrom() {
+    if (this.initialFromTable)
+      return;
+    let alias = this.nextAlias();
+    let table = "TJ_VAL_ID";
+    let key = "VAL_INST";
+    let sql_from = this.ctx.maker.from(table, alias);
+    let keys = ["_id"];
+    let sql_key_columns = [{ sql: this.ctx.maker.column(alias, key), bind: [] }];
+    this.tables.set("_id", alias);
+    this.addInitialFrom(sql_from, alias, keys, sql_key_columns);
+  }
+
+  addInitialFrom(sql_from: SqlBinding, table: string, keys: string[], sql_key_columns: SqlBinding[]) {
+    if (!this.initialFromTable)
+      this.fromConditions.push(this.ctx.maker.op(this.ctx.maker.column(table, "VAL_CAR"), ConstraintType.Equal, this.ctx.car_entityid));
+    super.addInitialFrom(sql_from, table, keys, sql_key_columns);
+    if (!this.columns.has('_is')) {
+      this.columns.set('_is', this.ctx.maker.column(this.initialFromTable!, "VAL"));
+      this.columns_ordered.push('_is');
+    }
+  }
+
+  aspect(is_system_name: string) {
+    let aname = this.ctx.config.obiEntity_to_aspectClassname(is_system_name);
+    let aspect = this.ctx.controlCenter.aspect(aname)!.aspect;
+    return aspect;
+  }
+
+  aspectAttribute(attribute: string) {
+    if (this.mappers.size > 0) {
+      for (let is of this.mappers) {
+        let a = this.aspect(is.system_name).attributes.get(attribute);
+        if (a)
+          return a;
+      }
+    }
+    else {
+      for (let cstor of this.ctx.controlCenter.installedAspectConstructors()) {
+        let a = cstor.aspect.attributes.get(attribute);
+        if (a)
+          return a;
+      }
+    }
+    throw new Error(`aspect attribute ${attribute} not found in ${[...this.mappers].map(m => m.system_name).join(', ')}`);
+  }
+
+  obiCar(attribute: string) {
+    return this.ctx.systemObiByName.get(this.ctx.config.aspectAttribute_to_ObiCar(attribute));
+  }
+
+  mk_car_info(car: ObiDefinition, relation: boolean): ObiQuery.CarInfo {
+    let type = car && getOne(car, this.ctx.car_type) as ObiDefinition;
+    if (!type)
+      throw new Error(`caracteristic ${car.system_name!} has no type`);
+    let table = getOne(type, this.ctx.car_table, type.system_name!) as string;
+    return {
+      car: car,
+      type: type,
+      table: "TJ_VAL_" + table,
+      relation: relation,
+    };
+  }
+
+  car_info(attribute: string): ObiQuery.CarInfo {
+    let car = this.obiCar(attribute);
+    if (car) return this.mk_car_info(car, false);
+    else {
+      let a = this.aspectAttribute(attribute);
       if (a.relation) {
-        let other_is_name = ctx.aspectClassname_to_ObiEntity(a.relation.class);
-        let other_is = ctx.systemObiByName.get(other_is_name);
+        let other_is_name = this.ctx.config.aspectClassname_to_ObiEntity(a.relation.class);
+        let other_is = this.ctx.systemObiByName.get(other_is_name);
         if (!other_is)
           throw new Error(`obi ${other_is_name} not found`);
-        let other_car = ctx.systemObiByName.get(ctx.aspectAttribute_to_ObiCar(other_is.system_name!, a.relation.attribute));
+        let other_car = this.ctx.systemObiByName.get(this.ctx.config.aspectAttribute_to_ObiCar(a.relation.attribute));
         if (!other_car)
           throw new Error(`caracteristic ${a.relation.attribute} not found`);
-        return mk_car_info(ctx, other_car, true);
+        return this.mk_car_info(other_car, true);
       }
     }
     throw new Error(`caracteristic ${attribute} not found`);
   }
 
-  sqlColumn(ctx: ObiSharedContext, attribute: string, alias?: string) {
-    let is = this.is!;
+  sql_column(attribute: string, required?: true): string
+  sql_column(attribute: string, required: false): string | undefined
+  sql_column(attribute: string, required: boolean = true): string | undefined {
+    let maker = this.ctx.maker;
     if (attribute !== "_id") {
-      let key = JSON.stringify([is.system_name!, attribute]);
-      let table = this.tables.get(key);
-      let car_info = this.car_info(ctx, attribute);
+      let table = this.tables.get(attribute);
+      let car_info = this.car_info(attribute);
       if (!table) {
-        table = this.nextAlias(ctx);
-        this.tables.set(key, table);
-        this.joins.push(ctx.maker.left_join(car_info.table, table, ctx.maker.and([
-          ctx.maker.op(ctx.maker.column(table, "VAL_CAR" ), ConstraintType.Equal, car_info.car._id),
-          ctx.maker.compare(ctx.maker.column(table, car_info.relation ? "VAL" : "VAL_INST"), ConstraintType.Equal, ctx.maker.column(this.path!.table, this.path!.key))
+        table = this.nextAlias();
+        this.tables.set(attribute, table);
+        this.joins.push(maker.left_join(car_info.table, table, maker.and([
+          maker.compare(maker.column(table, car_info.relation ? "VAL" : "VAL_INST"), ConstraintType.Equal, maker.column(this.initialFromTable!, "VAL_INST")),
+          maker.op(maker.column(table, "VAL_CAR" ), ConstraintType.Equal, car_info.car._id),
         ])));
       }
-      return ctx.maker.column(table, car_info.relation ? "VAL_INST" : "VAL", alias);
+      return maker.column(table, car_info.relation ? "VAL_INST" : "VAL");
     }
     else {
-      return ctx.maker.column(this.path!.table, this.path!.key, alias);
+      return maker.column(this.initialFromTable!, "VAL_INST");
     }
   }
 
-  buildConstraintValue(ctx: ObiSharedContext, attribute: Aspect.InstalledAttribute, operator: DataSourceInternal.ConstraintOnValueTypes, value: any) : SqlBinding {
-    if (operator === ConstraintType.Text && attribute.name === "_id") {
+  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any): SqlBinding {
+    if (operator === ConstraintType.Text && var_attribute === "_id") {
       // obi make full text search on the whole object attributes easy and fast
-      let alias = this.nextAlias(ctx);
-      this.joins.push(ctx.maker.left_join("TJ_VAL_STR", alias, ctx.maker.compare(ctx.maker.column(alias, "VAL_INST"), ConstraintType.Equal, ctx.maker.column(this.path!.table, this.path!.key))));
-      return ctx.maker.op(ctx.maker.column(alias, "VAL"), ConstraintType.Text, value);
+      let alias = this.nextAlias();
+      let maker = this.ctx.maker;
+      this.joins.push(maker.left_join("TJ_VAL_STR", alias, maker.compare(maker.column(alias, "VAL_INST"), ConstraintType.Equal, maker.column(this.initialFromTable!, this.initialFromKeys[1]))));
+      return maker.op(maker.column(alias, "VAL"), ConstraintType.Text, value);
     }
-    return super.buildConstraintValue(ctx, attribute, operator, value);
+    else {
+      if (operator === ConstraintType.Has)
+        operator = ConstraintType.Equal;
+      return super.buildConstraintValue(var_set, var_attribute, operator, value);
+    }
   }
 
-  mapValue(ctx: ObiSharedContext, attribute: string, value) {
+  mapValue(attribute: string, value) {
     if (value instanceof VersionedObject) {
       value = value.id();
     }
     if (attribute === "_id")
       return value;
-
-    let aspect_attr = this.aspectAttribute(ctx, attribute);
-    let car_info = this.car_info(ctx, attribute);
-    return ctx.aspectValue_to_obiValue(aspect_attr, car_info, value);
+    return this.ctx.config.aspectValue_to_obiValue(value, attribute);
   }
   
-  async execute(ctx: ObiSharedContext, scope: string[], db: { select(sql_select: SqlBinding) : Promise<object[]> }, component: AComponent): Promise<VersionedObject[]> {
-    const handle = (row, car_id2attribute: Map<number, string>, relation: boolean) => {
-      let {_id, car_id, value, is} = row;
-      let vo = cc.registeredObject(_id) || new cstor();
-      let manager = vo.manager();
-      let aspect = manager.aspect();
-      let remoteAttributes = remotes.get(vo);
-      if (!remoteAttributes) {
-        remotes.set(vo, remoteAttributes = new Map());
-        for (let a of aspectAttributes) {
-          let d: undefined | Set<any> | any[] = undefined;
-          if (a.type.type === "set")
-            d = new Set();
-          else if (a.type.type === "array")
-            d = [];
-          remoteAttributes.set(a.name, d);
-        }
-        remoteAttributes.set("_version", 0);
-      }
-      let car = ctx.systemObiById.get(car_id)!;
-      let attr = car_id2attribute.get(car._id!)!;
-      let aspectAttr = aspect.attributes.get(attr)!;
-      value = ctx.obiValue_to_aspectValue(aspectAttr, mk_car_info(ctx, car, relation), value);
-      cc.registerObjects(component, [vo]);
-      manager.setId(_id);
-      if (aspectAttr.type.type === "set" || aspectAttr.type.type === "array") {
-        let c = remoteAttributes.get(attr);
-        value = this.loadValue(ctx, component, aspectAttr.type.itemType, value, is);
-        if (aspectAttr.type.type === "set")
-          c.add(value);
-        else // array
-          c.push(value);
-      }
-      else {
-        value = this.loadValue(ctx, component, aspectAttr.type, value, is);
-        remoteAttributes.set(attr, value);
-      }
+  async execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>> {
+    let ret = new Map<Identifier, { __is: string, _id: any, _version: number }>();
+    let mono_query = this.sql_select();
+    let mono_rows = await this.ctx.db.select(mono_query);
+    for (let row of mono_rows) {
+      let { __is, _id, _version } = row as any;
+      let is = this.ctx.config.obiEntity_to_aspectClassname(__is)
+      ret.set(_id, { __is: is, _id: _id, _version: _version });
     }
-
-    let cstor = this.cstor(ctx);
-    let attributes = ["_version", ...scope];
-    let aspectAttributes = attributes.map(a => cstor.aspect.attributes.get(a)!);
-    let query_instances = ctx.maker.select([ctx.maker.column(this.path!.table, this.path!.key, "_id")], this.sql_from(ctx), this.sql_join(ctx), this.sql_where(ctx));
-    let rows_intances = await db.select(query_instances);
-    if (rows_intances.length === 0)
-      return [];
-    let ids = new Set<number>();
-    let tables = new Map<string, number[]>();
-    let car_id2attribute = new Map<number, string>();
-    let rel_tables = new Map<string, number[]>();
-    let rel_car_id2attribute = new Map<number, string>();
-    let remotes = new Map<VersionedObject, Map<string, any>>();
-    let cc = ctx.controlCenter;
-
-    for (let row of rows_intances)
-      ids.add(row["_id"]);
-    for (let attribute of attributes) {
-      let car = ctx.systemObiByName.get(ctx.aspectAttribute_to_ObiCar(this.is!.system_name!, attribute));
-      if (car) {
-        add_car(ctx, tables, car_id2attribute, car, attribute, false);
-      }
-      else {
-        let a = cstor.aspect.attributes.get(attribute);
-        if (a && a.relation) {
-          let other_is_name = ctx.aspectClassname_to_ObiEntity(a.relation.class);
-          let other_is = ctx.systemObiByName.get(other_is_name);
-          if (!other_is)
-            throw new Error(`obi ${other_is_name} not found`);
-          let other_car = ctx.systemObiByName.get(ctx.aspectAttribute_to_ObiCar(other_is.system_name!, a.relation.attribute));
-          if (!other_car)
-            throw new Error(`caracteristic ${a.relation.attribute} not found`);
-          add_car(ctx, rel_tables, rel_car_id2attribute, other_car, attribute, true);
-        }
-        else
-          throw new Error(`caracteristic ${attribute} not found`);
-      }
-    }
-    // Load attributes that are directly on the object
-    for (let [table, car_ids] of tables) {
-      let query = mk_query(ctx, table, "VAL_INST", "VAL", ids, car_ids);
-      let rows = await db.select(query);
-      for (let row of rows)
-        handle(row, car_id2attribute, false);
-    }
-    // Load attributes that are a relation
-    for (let [table, car_ids] of rel_tables) {
-      let query = mk_query(ctx, table, "VAL", "VAL_INST", ids, car_ids);
-      let rows = await db.select(query);
-      for (let row of rows)
-        handle(row, rel_car_id2attribute, true);
-    }
-    return this.mergeRemotes(remotes);
+    return ret;
   }
 
-  loadValue(ctx: ObiSharedContext, component: AComponent, type: Aspect.Type, value, is: number | undefined) {
+  buildConstraints() {
+    this.addDefaultInitialFrom();
+    this.addAttribute("_id");
+    if (this.set.scope)
+      this.buildScopeTree(this.set.scope);
+    super.buildConstraints();
+  }
+
+  buildScopeTree(scope: Iterable<string>) {
+    let dt = [{ table: this.initialFromTable!, or: [] }];
+    let rt = [{ table: this.initialFromTable!, or: [] }];
+    if (this.mappers.size > 0) {
+      for (let is of this.mappers) {
+        let aspect = this.aspect(is.system_name);
+        this.buildScopeTreeItem(aspect, scope, 1, dt, rt);
+      }
+    }
+    else {
+      for (let cstor of this.ctx.controlCenter.installedAspectConstructors()) {
+        this.buildScopeTreeItem(cstor.aspect, scope, 1, dt, rt);
+      }
+    }
+    this.buildScopeJoins(dt, rt, false);
+    this.buildScopeJoins(dt, rt, true);
+  }
+
+  buildScopeJoins(dt: ({ table: string, or: number[] } | undefined)[], rt: ({ table: string, or: number[] } | undefined)[], relation: boolean) {
+    let maker = this.ctx.maker;
+    let t = relation ? rt : dt;
+    for (let lvl = 1; lvl < t.length; lvl++) {
+      let sub_table = t[lvl];
+      if (sub_table) {
+        let pdt = dt[lvl - 1];
+        let prt = rt[lvl - 1];
+        let or : SqlBinding[] = [];
+        if (pdt)
+          or.push(maker.compare(maker.column(sub_table.table, relation ? "VAL" : "VAL_INST"), 
+            ConstraintType.Equal, maker.column(pdt.table, "VAL_INST")));
+        if (prt && lvl > 1)
+          or.push(maker.compare(maker.column(sub_table.table, relation ? "VAL" : "VAL_INST"), 
+            ConstraintType.Equal, maker.column(prt.table, "VAL_INST")));
+        this.joins.push(maker.left_join("TJ_VAL_ID", sub_table.table, maker.and([
+          maker.or(or), // sub id relation
+          this.ctx.maker.op(this.ctx.maker.column(sub_table.table, "VAL_CAR"), ConstraintType.In, sub_table.or), // sub car relation
+        ])));
+        let table_is = this.nextAlias();
+        this.joins.push(maker.left_join("TJ_VAL_ID", table_is, maker.and([
+          maker.compare(
+            maker.column(table_is, "VAL_INST"), 
+            ConstraintType.Equal, 
+            maker.column(sub_table.table, relation ? "VAL_INST" : "VAL")
+          ),
+          maker.op(maker.column(table_is, "VAL_CAR"), ConstraintType.Equal, this.ctx.car_entityid),
+        ])));
+        this.sub_is_columns.push(maker.column(table_is, "VAL", `_sis${this.sub_is_columns.length}`));
+        this.sub_id_columns.push(maker.column(sub_table.table, relation ? "VAL_INST" : "VAL", `_sid${this.sub_id_columns.length}`));
+      }
+    }
+  }
+
+  buildScopeTreeItem(aspect: Aspect.Installed, scope: Iterable<string>, lvl: number, dt: ({ table: string, or: number[] } | undefined)[], rt: ({ table: string, or: number[] } | undefined)[]) {
+    let unused = new Set(scope);
+    unused.add("_version");
+    let subs = new Set<string>();
+    let sub_cars = new Set<ObiQuery.CarInfo>();
+    for (let k of unused) {
+      let a = aspect.attributes.get(k);
+      if (a) {
+        let car_info = this.car_info(k);
+        let sub_name = "";
+        if (a.type.type === "class")
+          sub_name = a.type.name;
+        else if((a.type.type === "array" || a.type.type === "set") && a.type.itemType.type === "class")
+          sub_name = a.type.itemType.name;
+        unused.delete(k);
+        if (sub_name) {
+          subs.add(sub_name)
+          sub_cars.add(car_info);
+        }
+        let drcars = this.cars.get(car_info.table);
+        if (!drcars)
+          this.cars.set(car_info.table, drcars = { d: new Map(), r: new Map(), cars: new Map() });
+        let cars = car_info.relation ? drcars.r : drcars.d;
+        let car = cars.get(k);
+        if (!car) {
+          cars.set(k, car_info);
+          drcars.cars.set(car_info.car._id!, a);
+        }
+      }
+    }
+    for (let car_info of sub_cars) {
+      let tables = car_info.relation ? rt : dt;
+      let sub_table = tables[lvl];
+      if (!sub_table)
+        tables[lvl] = sub_table = { table: this.nextAlias(), or: [] };
+      sub_table.or.push(car_info.car._id!)
+    }
+    if (unused.size > 0 && subs.size > 0) {
+      for (let sub of subs) {
+        let aspect = this.ctx.controlCenter.aspect(sub)!.aspect;
+        this.buildScopeTreeItem(aspect, unused, lvl + 1, dt, rt);
+      }
+    }
+  }
+
+  sql_columns() {
+    let ret = super.sql_columns();
+    ret.push(...this.sub_id_columns);
+    ret.push(...this.sub_is_columns);
+    return ret;
+  }
+
+  async execute(): Promise<VersionedObject[]> {
+    let cc = this.ctx.controlCenter;
+    let query_instances = this.sql_select();
+    let rows_intances = await this.ctx.db.select(query_instances);
+    if (rows_intances.length === 0)
+      return [];
+    let ret: VersionedObject[] = [];
+    let added = new Set<VersionedObject>();
+    let ids = new Set<number>();
+    let remotes = new Map<VersionedObject, Map<string, any>>();
+    let id_columns = [["_is", "_id"]];
+    for (let i = 0; i < this.sub_id_columns.length; i++)
+      id_columns.push([`_sis${i}`, `_sid${i}`]);
+    for (let row of rows_intances) {
+      for (let c_idx = 0; c_idx < id_columns.length; c_idx++) {
+        let c = id_columns[c_idx];
+        let is = row[c[0]];
+        let id = row[c[1]];
+        if (id && is) {
+          let vo = cc.registeredObject(id);
+          if (!vo) {
+            let isname = this.ctx.systemObiById.get(is)!.system_name;
+            let aname = this.ctx.config.obiEntity_to_aspectClassname(isname);
+            vo = new (cc.aspect(aname)!)();
+          }
+          let manager = vo.manager();
+          cc.registerObjects(this.ctx.component, [vo]);
+          manager.setId(id);
+          ids.add(id);
+          let remoteAttributes = remotes.get(vo);
+          if (!remoteAttributes) {
+            remotes.set(vo, remoteAttributes = new Map<string, any>());
+            if (this.set.scope) {
+              let attributes = manager.aspect().attributes;
+              for (let aname of this.set.scope) {
+                let a = attributes.get(aname);
+                if (a) {
+                  let d: undefined | Set<any> | any[] = undefined;
+                    if (a.type.type === "set")
+                      d = new Set();
+                    else if (a.type.type === "array")
+                      d = [];
+                    remoteAttributes.set(a.name, d);
+                }
+              }
+            }
+          }
+          if (c_idx === 0 && !added.has(vo)) {
+            ret.push(vo);
+            added.add(vo);
+          }
+        }
+      }
+    }
+
+    let arr_ids = [...ids];
+    for (let [table, drcars] of this.cars) {
+      let sql_selects: SqlBinding[] = [];
+      let car_ids = [...drcars.d.values()].map(i => i.car._id!);
+      if (car_ids.length)
+        sql_selects.push(mk_query(this.ctx, table, "VAL_INST", "VAL", arr_ids, car_ids));
+      car_ids = [...drcars.r.values()].map(i => i.car._id!);
+      if (car_ids.length)
+        sql_selects.push(mk_query(this.ctx, table, "VAL", "VAL_INST", arr_ids, car_ids));
+      let row_values = await this.ctx.db.select(this.ctx.maker.union(sql_selects));
+      for (let row of row_values) {
+        let {is, _id, car_id, value} = row as {is?: number, _id: number, car_id: number, value: string};
+        let vo = cc.registeredObject(_id)!;
+        let remoteAttributes = remotes.get(vo)!;
+        let a = drcars.cars.get(car_id)!;
+        value = this.ctx.config.obiValue_to_aspectValue(value, a.name);
+        if (a.type.type === "set" || a.type.type === "array") {
+          let c = remoteAttributes.get(a.name);
+          value = this.loadValue(this.ctx.component, a.type.itemType, value, is);
+          if (a.type.type === "set")
+            c.add(value);
+          else // array
+            c.push(value);
+        }
+        else {
+          value = this.loadValue(this.ctx.component, a.type, value, is);
+          remoteAttributes.set(a.name, value);
+        }
+      }
+    }
+    this.mergeRemotes(remotes);
+    return ret;
+  }
+
+  loadValue(component: AComponent, type: Aspect.Type, value, is: number | undefined) {
     if (typeof is === "number") {
       let subid = value;
-      value = ctx.controlCenter.registeredObject(subid);
+      value = this.ctx.controlCenter.registeredObject(subid);
       if (!value) {
-        let obi_is = ctx.systemObiById.get(is)!;
-        let classname = ctx.obiEntity_to_aspectClassname(obi_is.system_name!);
-        value = new (ctx.controlCenter.aspect(classname)!)();
+        let obi_is = this.ctx.systemObiById.get(is)!;
+        let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
+        value = new (this.ctx.controlCenter.aspect(classname)!)();
         value.manager().setId(subid);
-        ctx.controlCenter.registerObjects(component, [value]);
+        this.ctx.controlCenter.registerObjects(component, [value]);
       }
     }
     return value;
   }
 }
 
-function add_car(ctx: ObiSharedContext, tables: Map<string, number[]>, car_id2attribute: Map<number, string>, car: ObiDefinition, attribute: string, relation: boolean) {
-  let car_info = mk_car_info(ctx, car, relation);
-  let t = tables.get(car_info.table);
-  if (!t)
-    tables.set(car_info.table, t = []);
-  t.push(car_info.car._id!);
-  car_id2attribute.set(car_info.car._id!, attribute);
-}
-
-function mk_query(ctx: ObiSharedContext, table: string, id_column: string, val_column: string, ids: Iterable<number>, car_ids: number[]) {
+function mk_query(ctx: ObiSharedContext, table: string, id_column: string, val_column: string, ids: number[], car_ids: number[]) {
   let columns = [
     ctx.maker.column(table, id_column , "_id"   ),
     ctx.maker.column(table, "VAL_CAR" , "car_id"),
@@ -277,7 +484,7 @@ function mk_query(ctx: ObiSharedContext, table: string, id_column: string, val_c
   ];
   let from = [ctx.maker.from(table)];
   let and = [
-    ctx.maker.op(ctx.maker.column(table, id_column), ConstraintType.In, [...ids]),
+    ctx.maker.op(ctx.maker.column(table, id_column), ConstraintType.In, ids),
     ctx.maker.op(ctx.maker.column(table, "VAL_CAR"), ConstraintType.In, car_ids),
   ];
   if (table === "TJ_VAL_ID") {
@@ -289,3 +496,4 @@ function mk_query(ctx: ObiSharedContext, table: string, id_column: string, val_c
   let query = ctx.maker.select(columns, from, [], ctx.maker.and(and));
   return query;
 }
+

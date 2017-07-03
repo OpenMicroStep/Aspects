@@ -115,6 +115,7 @@ function relation_1_n() {
   assert.equal(c1._owner, p0);
 
   let d = new Set(p0._cars); d.delete(c1);
+  p0._cars = d;
   assert.sameMembers([...p0._cars], []);
   assert.equal(c0._owner, undefined);
   assert.equal(c1._owner, undefined);

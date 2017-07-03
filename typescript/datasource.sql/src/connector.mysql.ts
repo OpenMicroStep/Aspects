@@ -1,7 +1,11 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
+class MySqlMaker extends SqlMaker {
+}
+MySqlMaker.prototype.select_with_recursive = undefined;
+
 export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: string, port: number, user: string, password: string, database: string }, any>({
-  maker: new SqlMaker(),
+  maker: new MySqlMaker(),
   create(mysql2, options) {
     return new Promise((resolve, reject) => {
       let db = mysql2.createConnection(options);

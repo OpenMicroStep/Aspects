@@ -527,6 +527,16 @@ pattern:
   characteristic: t_birthDate
   cardinality: one
   _end:
+pattern:
+  Gab
+  characteristic: t_father
+  cardinality: one
+  _end:
+pattern:
+  Gab
+  characteristic: t_mother
+  cardinality: one
+  _end:
 _end:
 
 Car
@@ -576,6 +586,18 @@ system name: t_owner
 type: ID
 domain entity: T_People
 _end:
+
+Car
+system name: t_father
+type: ID
+domain entity: T_People
+_end:
+
+Car
+system name: t_mother
+type: ID
+domain entity: T_People
+_end:
 `;
 
 async function createObiControlCenter(flux) {
@@ -603,14 +625,14 @@ async function createObiControlCenter(flux) {
   let db = new DB(ouiDb, {
     aspectClassname_to_ObiEntity: (classname: string) => `T_${classname}`,
     obiEntity_to_aspectClassname: (classname: string) => classname.substring(2),
-    aspectAttribute_to_ObiCar: (classname: string, attribute: string) => `t${attribute}`,
-    aspectValue_to_obiValue: (attribute, car_info, value) => {
-      if (car_info.type.system_name === "DAT")
+    aspectAttribute_to_ObiCar: (attribute: string) => `t${attribute}`,
+    aspectValue_to_obiValue: (value, attribute: string) => {
+      if (attribute === "_birthDate")
         return value.getTime();
       return value;
     },
-    obiValue_to_aspectValue: (attribute, car_info, value) => {
-      if (car_info.type.system_name === "DAT")
+    obiValue_to_aspectValue: (value, attribute: string) => {
+      if (attribute === "_birthDate")
         return new Date(value);
       return value;
     },

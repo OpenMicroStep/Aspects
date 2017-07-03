@@ -2,9 +2,9 @@ import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier,
 import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {SqlMappedObject} from './mapper';
+import {SqlMappedObject, SqlMappedAttribute} from './mapper';
 export * from './mapper';
-import {SqlQuery, SqlMappedQuery, mapValue} from './query';
+import {SqlQuery, SqlMappedQuery, SqlMappedSharedContext, mapValue} from './query';
 import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, DBConnectorCRUD, Pool} from './index';
 
 export type SqlDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
@@ -31,19 +31,7 @@ export class SqlDataSource extends DataSource
     return on.cache().createAspect(on, name, this);
   }
 
-  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
-    let ctx = {
-      cstor: SqlMappedQuery,
-      controlCenter: this.controlCenter(),
-      maker: this.maker,
-      mappers: this.mappers,
-      queries: new Map(),
-      aliases: 0
-    };
-    let query = SqlQuery.build(ctx, set);
-    return query.execute(ctx, set.scope || [], db, component);
-  }
-  async save(tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
+  async save(tr: SqlDataSourceTransaction, reporter: Reporter, objects: Set<VersionedObject>, object: VersionedObject) : Promise<void> {
     let manager = object.manager();
     let state = manager.state();
     let aspect = manager.aspect();
@@ -52,7 +40,7 @@ export class SqlDataSource extends DataSource
     let mapper = this.mappers[aspect.name];
     if (!mapper)
       return Promise.reject(`mapper not found for: ${aspect.name}`);
-    let idAttr = mapper.get("_id");
+    let idAttr = mapper.get("_id")!;
     let isNew = state === VersionedObjectManager.State.NEW;
     let valuesByTable = new Map<SqlInsert, Map<string, any>>();
     let valuesByPath = new Map<string, { table: string, sets: SqlBinding[], checks: SqlBinding[], where: SqlBinding }>(); // [table, key]value*[table, key]
@@ -61,7 +49,7 @@ export class SqlDataSource extends DataSource
         valuesByTable.set(c, new Map<string, { nv: any, ov: any }>());
     }
     let map = (k: string, nv: any, ov: any | undefined) => {
-      let attribute = mapper.get(k);
+      let attribute = mapper.get(k)!;
       if (!attribute.insert) // virtual attribute
         return;
       let last = attribute.last();
@@ -103,7 +91,24 @@ export class SqlDataSource extends DataSource
           values.checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, ovdb));
       }
     };
-    manager.localAttributes().forEach((nv, k) => map(k, nv, isNew ? undefined : manager.versionAttributes().get(k)));
+    for (let [k, nv] of manager.localAttributes()) {
+      if (nv instanceof VersionedObject && nv.manager().state() === VersionedObjectManager.State.NEW) {
+        if (!objects.has(nv)) {
+          reporter.diagnostic({ type: "error", msg: `cannot save ${k}: referenced object is not saved and won't be` });
+          continue;
+        }
+        if (!tr.versions.has(nv))
+          await this.save(tr, reporter, objects, nv);
+        let v = tr.versions.get(nv)!;
+        let name = nv.manager().aspect().name;
+        let mapper = this.mappers[name];
+        if (!mapper)
+          throw new Error(`cannot find mapper for ${name}`);
+        let idattr = mapper.attribute_id();
+        nv = idattr.toDbKey(mapper.toDbKey(v._id));
+      }
+      map(k, nv, isNew ? undefined : manager.versionAttributes().get(k));
+    }
     map("_version", version + 1, version);
     version++;
     if (isNew) {
@@ -129,20 +134,20 @@ export class SqlDataSource extends DataSource
           }
         }
         let sql_insert = this.maker.insert(c.table, this.maker.values(Array.from(values.keys()), Array.from(values.values())), output_columns);
-        let result = await tr.insert(sql_insert, output_columns); // sequential insertion
+        let result = await tr.tr.insert(sql_insert, output_columns); // sequential insertion
         output_columns.forEach((c, i) => values.set(c, result[i]));
         if (c === idAttr.insert) {
           id = mapper.fromDbKey(idAttr.fromDbKey(values.get(idAttr.last().value)));
-          versions.set(object, { _id: id, _version: version });
+          tr.versions.set(object, { _id: id, _version: version });
         }
       }
     }
     else {
-      versions.set(object, { _id: id, _version: version });
+      tr.versions.set(object, { _id: id, _version: version });
     }
     for (let entry of valuesByPath.values()) {
       let sql_update = this.maker.update(entry.table, entry.sets, this.maker.and([entry.where, ...entry.checks]));
-      let changes = await tr.update(sql_update); // TODO: test for any advantage to parallelize this ?
+      let changes = await tr.tr.update(sql_update); // TODO: test for any advantage to parallelize this ?
       if (changes !== 1)
         throw new Error(`cannot update`);
     }
@@ -156,14 +161,42 @@ export class SqlDataSource extends DataSource
       .catch(v => { this.controlCenter().unregisterComponent(component); return Promise.reject(v); })
   }
 
+  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
+    let ctx: SqlMappedSharedContext = {
+      cstor: SqlMappedQuery,
+      db: db,
+      component: component,
+      controlCenter: this.controlCenter(),
+      maker: this.maker,
+      mappers: this.mappers,
+      queries: new Map(),
+      aliases: 0
+    };
+    return SqlQuery.execute(ctx, set);
+  }
+  _ctx(tr: SqlDataSourceTransaction | undefined, component: AComponent) : SqlMappedSharedContext {
+    return {
+      cstor: SqlMappedQuery,
+      db: tr ? tr.tr : this.connector,
+      component: component,
+      controlCenter: this.controlCenter(),
+      maker: this.maker,
+      mappers: this.mappers,
+      queries: new Map(),
+      aliases: 0
+    };
+  }
+
   implQuery({ tr, sets }: { tr?: SqlDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
-    let ret = {};
-    return this.scoped(component => 
-      Promise.all(sets
+    return this.scoped(async (component) => {
+      let ret = {};
+      let ctx = this._ctx(tr, component);
+      await Promise.all(sets
         .filter(s => s.name)
-        .map(s => this.execute(tr ? tr.tr : this.connector, s, component)
-        .then(obs => ret[s.name!] = obs))
-      ).then(() => ret));
+        .map(s => SqlQuery.execute(ctx, s)
+          .then((objects) => ret[s.name!] = objects)));
+      return ret;
+    });
   }
 
   async implLoad({tr, objects, scope} : {
@@ -179,16 +212,22 @@ export class SqlDataSource extends DataSource
         types.set(aspect, list = []);
       list.push(object);
     }
-    let sets = <ObjectSet[]>[];
-    types.forEach((list, aspect) => {
-      let set = new ObjectSet('load');
-      set.scope = scope;
-      set.setAspect(ConstraintType.InstanceOf, aspect);
-      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set.aspectAttribute("_id"), list));
-      sets.push(set);
-    });
-    let results = await this.scoped(component => Promise.all(sets.map(s => this.execute(tr ? tr.tr : this.connector, s, component))));
-    return ([] as VersionedObject[]).concat(...results);
+    let sets = new Set<ObjectSet>();
+    for (let [aspect, list] of types) {
+      let set = new ObjectSet(aspect.name);
+      set.addType({ type: ConstraintType.MemberOf, value: aspect });
+      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", list));
+      sets.add(set);
+    }
+    let set = new ObjectSet('load');
+    if (sets.size > 1) {
+      set.addType({ type: ConstraintType.UnionOf, value: sets });
+    }
+    else {
+      set = sets.values().next().value;
+    }
+    set.scope = scope;
+    return await this.scoped(component => SqlQuery.execute(this._ctx(tr, component), set).then(() => objects));
   }
 
   async implBeginTransaction(): Promise<SqlDataSourceTransaction> {
@@ -201,7 +240,7 @@ export class SqlDataSource extends DataSource
     for (let obj of objects) {
       try {
         if (!tr.versions.has(obj))
-          await this.save(tr.tr, reporter, objects, tr.versions, obj);
+          await this.save(tr, reporter, objects, obj);
       } catch (e) {
         reporter.error(e || `unknown error`);
       }
