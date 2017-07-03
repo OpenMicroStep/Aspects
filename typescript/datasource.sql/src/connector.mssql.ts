@@ -1,5 +1,6 @@
 import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
 
+
 class MSSQLMaker extends SqlMaker {
   quote(value: string) {
     return `[${value.replace(/\]/g, ']]')}]`;
@@ -16,6 +17,8 @@ class MSSQLMaker extends SqlMaker {
     };
   }
 }
+MSSQLMaker.prototype.select_with_recursive = undefined; // TODO: CTE must be top level (current usage embed it inside a subquery)
+
 function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
   let TYPES = tedious.TYPES;
   let request = new tedious.Request(sql.sql, cb);

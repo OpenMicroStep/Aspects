@@ -4,6 +4,15 @@ class PostgresSqlMaker extends SqlMaker {
   quote(value: string) {
     return `"${value.replace(/"/g, '""')}"`;
   }
+  
+  value_null_typed(type: SqlMaker.NullType) : string {
+    switch (type) {
+      case "string": return "NULL::text";
+      case "integer": return "NULL::integer";
+      case "boolean": return "NULL::boolean";
+    }
+    return "NULL";
+  }
 
   insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
     let sql = `INSERT INTO ${this.quote(table)} (${this.join_sqls(sql_values, ',')}) VALUES (${sql_values.map(c => '?').join(',')})`;

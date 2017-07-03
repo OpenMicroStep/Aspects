@@ -37,9 +37,15 @@ export class SqlMaker {
     return { sql: sql, bind: this.join_bindings(sql_select) };
   }
 
-  select(sql_columns: string[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where: SqlBinding) : SqlBinding {
+  select(sql_columns: (string | SqlBinding)[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where: SqlBinding) : SqlBinding {
     let bind: SqlBinding[] = [];
-    let sql = `SELECT ${sql_columns.join(',')}\nFROM ${this.join_sqls(sql_from, ',')}`;
+    let columns = sql_columns.map(c => {
+      if (typeof c === "string")
+        return c;
+      bind.push(...c.bind);
+      return c.sql;
+    }).join(',');
+    let sql = `SELECT DISTINCT ${columns}\nFROM ${this.join_sqls(sql_from, ',')}`;
     this.push_bindings(bind, sql_from);
     if (sql_joins.length) {
       sql += `\n${this.join_sqls(sql_joins, '\n')}`;
@@ -51,6 +57,8 @@ export class SqlMaker {
     }
     return { sql: sql, bind: bind };
   }
+
+  select_with_recursive?: (sql_columns: string[], u_0: SqlBinding, u_n: string, u_np1: SqlBinding) => SqlBinding;
 
   update(table: string, sql_set: SqlBinding[], sql_where: SqlBinding) : SqlBinding {
     return {
@@ -111,6 +119,22 @@ export class SqlMaker {
     };
   }
 
+  value_null_typed(type: SqlMaker.NullType) : string {
+    return "NULL";
+  }
+
+  value_fast(value: null | number) : string {
+    return typeof value === "number" ? value.toString() : "NULL";
+  }
+
+  value(value: any) : SqlBinding {
+    return { sql: '?', bind: [value] };
+  }
+
+  value_concat(values: SqlBinding[]) : SqlBinding {
+    return { sql: this.join_sqls(values, " || "), bind: this.join_bindings(values) };
+  }
+
   column(table: string, name: string, alias?: string) {
     let r = this.quote(table) + "." + this.quote(name);
     return alias ? this.column_alias(r, alias) : r;
@@ -118,6 +142,10 @@ export class SqlMaker {
 
   column_alias(sql_column: string, alias: string) {
     return `${sql_column} ${this.quote(alias)}`;
+  }
+
+  column_alias_bind(sql_column: SqlBinding, alias: string) : SqlBinding {
+    return { sql: `${sql_column.sql} ${this.quote(alias)}`, bind: sql_column.bind };
   }
 
   sort_column(table: string, name: string, asc: boolean): string {
@@ -139,9 +167,11 @@ export class SqlMaker {
     let bind: SqlBinding[] = [];
     let first = true;
     for (let condition of conditions) {
-      first ? first = false : sql += sql_op;
-      sql += condition.sql;
-      bind.push(...condition.bind);
+      if (condition.sql) {
+        first ? first = false : sql += sql_op;
+        sql += condition.sql;
+        bind.push(...condition.bind);
+      }
     }
     sql += ")";
     return { sql: sql, bind: bind };
@@ -208,4 +238,14 @@ export class SqlMaker {
     b.bind.unshift(...sql_columnLeft.bind);
     return b;
   }
+}
+export namespace SqlMaker {
+  export type NullType = 'integer' | 'decimal' | 'date' | 'string' | 'boolean' | undefined;
+}
+
+SqlMaker.prototype.select_with_recursive = function select_with_recursive(sql_columns: string[], u_0: SqlBinding, u_n: string, u_np1: SqlBinding) : SqlBinding {
+  return {
+    sql: `WITH RECURSIVE ${this.quote(u_n)}(${sql_columns.join(',')}) AS (\n${u_0.sql}\nUNION\n${u_np1.sql}\n) SELECT DISTINCT * FROM ${this.quote(u_n)}`,
+    bind: [...u_0.bind, ...u_np1.bind],
+  };
 }
