@@ -6,6 +6,12 @@ export interface ObiDefinition {
   system_name: string | undefined;
   attributes: Map<ObiDefinition, Set<string | number | ObiDefinition>>;
 }
+export interface SysObiDefinition {
+  is: ObiDefinition;
+  _id: number;
+  system_name: string;
+  attributes: Map<ObiDefinition, Set<string | number | ObiDefinition>>;
+}
 
 export interface ObiParseContext {
   obis: ObiDefinition[];

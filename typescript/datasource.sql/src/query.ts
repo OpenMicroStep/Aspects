@@ -90,6 +90,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   abstract execute(): Promise<VersionedObject[]>;
   abstract execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>>;
   abstract mapValue(attribute: string, value): any;
+  abstract setInitialUnionOfAlln(q_0: SqlQuery<SharedContext>, q_n: SqlQuery<SharedContext>, q_np1: SqlQuery<SharedContext>): Promise<void>;
 
   setInitialUnion(queries: SqlQuery<SharedContext>[]) {
     let maker = this.ctx.maker;
@@ -111,55 +112,6 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       this.ctx.queries.set(u_n, q_n);
       return q_n;
   }
-  async setInitialUnionOfAlln(q_0: SqlQuery<SharedContext>, q_n: SqlQuery<SharedContext>, q_np1: SqlQuery<SharedContext>): Promise<void> {
-    let maker = this.ctx.maker;
-    let info = this.attributesAndCompatibleAspects();
-    let keys = q_0.initialFromKeys;
-    let alias = this.nextAlias();
-    if (maker.select_with_recursive) {
-      let u_n = q_n.initialFromTable!;
-      q_np1.addLazyAttributes(info.attributes.values());
-      q_0.addLazyAttributes(info.attributes.values());
-      
-      let sql_columns: string[] = [maker.quote("__is")];
-      for (let a of q_0.columns_ordered)
-        sql_columns.push(maker.quote(a));
-      let sql_from = maker.select_with_recursive(sql_columns, q_0.sql_select(), u_n, q_np1.sql_select());
-
-      this.addInitialFrom(maker.from_sub(sql_from, alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
-    }
-    else {
-      let i = 0;
-      let size = 0;
-      let ids = await q_0.execute_ids();
-      let nids = ids;
-      while (size < ids.size) {
-        size = ids.size;
-        ++i;
-        let s = q_n.set.clone(`${q_n.set._name}[${i}]`);
-        let sids = [...nids.values()].map(i => i._id);
-        s.typeConstraints.splice(0, 1); // Remove the recursion type
-        s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", sids));
-        let q = await SqlQuery.build(this.ctx, s);
-        q.addLazyAttributes(info.attributes.values());
-        let from: SqlBinding = maker.from_sub(q.sql_select(), q_n.initialFromTable!);
-        (q_n.from[0] as any).sql = from.sql;
-        (q_n.from[0] as any).bind = from.bind;
-        nids = await q_np1.execute_ids();
-        for (let [k, id] of nids)
-          ids.set(k, id);
-      }
-
-      let fids = [...ids.values()].map(i => i._id);
-      let s = q_n.set.clone(`${q_n.set._name}[*]`);
-      s.typeConstraints.splice(0, 1); // Remove the recursion type
-      s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", fids));
-      let q_all = await SqlQuery.build(this.ctx, s);
-      q_all.addLazyAttributes(info.attributes.values());
-      this.addInitialFrom(maker.from_sub(q_all.sql_select(), alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
-    }
-  }
-
   setInitialRecursion(q_n: SqlQuery<SharedContext>) {
     let maker = this.ctx.maker;
     let c = q_n.initialFromKeys.map(k => ({ sql: this.ctx.maker.column(q_n.initialFromTable!, k), bind: [] }));
@@ -323,17 +275,26 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       this.variables.add(await SqlQuery.build(this.ctx, variable));
     }
     await this.buildTypeConstraints();
-    this.addAttribute("_id");
-    this.addAttribute("_version");
     this.buildConstraints();
   }
 
   sql_select(): SqlBinding {
     return this.ctx.maker.select(
       this.sql_columns(),
-      this.sql_from(), [],
+      this.sql_from(), 
+      this.sql_join(),
       this.sql_where()
     );
+  }
+
+  sql_join() {
+    let sql_join: SqlBinding[] = [];
+    sql_join.push(...this.joins);
+    for (let variable of this.variables) {
+      if (variable !== this)
+        sql_join.push(...variable.sql_join());
+    }
+    return sql_join;
   }
 
   sql_from() {
@@ -385,7 +346,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   setInitialType(name: string, instanceOf: boolean): void {
     let mapper = this.ctx.mappers[name];
     if (!mapper)
-      throw new Error(`mapper for ${name} not found`);
+      throw new Error(`mapper for '${name}' not found`);
     this.mappers.add(mapper);
     let attr = mapper.attribute_id();
     let alias = this.nextAlias();
@@ -416,13 +377,58 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return q_n;
   }
 
-  setInitialUnionOfAlln(q_0: SqlMappedQuery, q_n: SqlMappedQuery, q_np1: SqlMappedQuery): Promise<void> {
+  async setInitialUnionOfAlln(q_0: SqlMappedQuery, q_n: SqlMappedQuery, q_np1: SqlMappedQuery): Promise<void> {
     for (let m of q_0.mappers)
       this.mappers.add(m);
     for (let m of q_np1.mappers)
       this.mappers.add(m);
     this.hasSub = true;
-    return super.setInitialUnionOfAlln(q_0, q_n, q_np1);
+    let maker = this.ctx.maker;
+    let info = this.attributesAndCompatibleAspects();
+    let keys = q_0.initialFromKeys;
+    let alias = this.nextAlias();
+    if (maker.select_with_recursive) {
+      let u_n = q_n.initialFromTable!;
+      q_np1.addLazyAttributes(info.attributes.values());
+      q_0.addLazyAttributes(info.attributes.values());
+      
+      let sql_columns: string[] = [maker.quote("__is")];
+      for (let a of q_0.columns_ordered)
+        sql_columns.push(maker.quote(a));
+      let sql_from = maker.select_with_recursive(sql_columns, q_0.sql_select(), u_n, q_np1.sql_select());
+
+      this.addInitialFrom(maker.from_sub(sql_from, alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
+    }
+    else {
+      let i = 0;
+      let size = 0;
+      let ids = await q_0.execute_ids();
+      let nids = ids;
+      while (size < ids.size) {
+        size = ids.size;
+        ++i;
+        let s = q_n.set.clone(`${q_n.set._name}[${i}]`);
+        let sids = [...nids.values()].map(i => i._id);
+        s.typeConstraints.splice(0, 1); // Remove the recursion type
+        s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", sids));
+        let q = await SqlQuery.build(this.ctx, s);
+        q.addLazyAttributes(info.attributes.values());
+        let from: SqlBinding = maker.from_sub(q.sql_select(), q_n.initialFromTable!);
+        (q_n.from[0] as any).sql = from.sql;
+        (q_n.from[0] as any).bind = from.bind;
+        nids = await q_np1.execute_ids();
+        for (let [k, id] of nids)
+          ids.set(k, id);
+      }
+
+      let fids = [...ids.values()].map(i => i._id);
+      let s = q_n.set.clone(`${q_n.set._name}[*]`);
+      s.typeConstraints.splice(0, 1); // Remove the recursion type
+      s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", fids));
+      let q_all = await SqlQuery.build(this.ctx, s);
+      q_all.addLazyAttributes(info.attributes.values());
+      this.addInitialFrom(maker.from_sub(q_all.sql_select(), alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
+    }
   }
   
   setInitialRecursion(q_n: SqlMappedQuery) {
@@ -482,6 +488,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let cc = this.ctx.controlCenter;
     let aspects = [...this.mappers].map(m => cc.aspect(m.name)!);
     this.scope = buildScopeTree(cc, aspects, this.set.scope || []);
+    this.addAttribute("_id");
+    this.addAttribute("_version");
     for (let a of this.monoAttributes(aspects.map(a => a.aspect)))
       this.addAttribute(a);
     super.buildConstraints();
@@ -768,19 +776,4 @@ function buildScopeTree(cc: ControlCenter, cstors: Aspect.Constructor[], scope: 
     buildScopeTreeItem(cc, item, cstor.aspect, scope);
   }
   return ret;
-}
-
-function load(aspect: Aspect.Installed, lvl: number, unused: Set<string>) {
-  let i = { mono: new Set<string>(), multi: new Set<string>(), subs: new Set<string>() };
-  for (let k of unused) {
-    let a = aspect.attributes.get(k);
-    if (a) {
-      if (a.type.type === "class")
-        i.subs.add(a.type.name);
-      else if((a.type.type === "array" || a.type.type === "set") && a.type.itemType.type === "class")
-        i.subs.add(a.type.itemType.name);
-      unused.delete(k);
-    }
-  }
-  return i;
 }

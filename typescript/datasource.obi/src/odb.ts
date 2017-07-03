@@ -1,5 +1,5 @@
 import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
-import {ObiParseContext, ObiDefinition, parseObis, getOne, add_to, del_from} from './index.priv';
+import {ObiParseContext, ObiDefinition, SysObiDefinition, parseObis, getOne, add_to, del_from} from './index.priv';
 import {DataSourceInternal, VersionedObjectConstructor, VersionedObject, Aspect, AspectCache} from '@openmicrostep/aspects';
 import {SqlMaker, DBConnectorTransaction, SqlBinding, DBConnector} from '@openmicrostep/aspects.sql';
 import ConstraintType = DataSourceInternal.ConstraintType;
@@ -38,8 +38,8 @@ export class OuiDB {
   maker: SqlMaker;
 
   cache = new AspectCache();
-  systemObiByName = new Map<string, ObiDefinition>();
-  systemObiById = new Map<number, ObiDefinition>();
+  systemObiByName = new Map<string, SysObiDefinition>();
+  systemObiById = new Map<number, SysObiDefinition>();
   _valTables: string[] = ["TJ_VAL_ID", "TJ_VAL_INT", "TJ_VAL_STR"];
   _next_oid_pos = 0;
   _next_oid_end = 0;
@@ -273,8 +273,8 @@ export class OuiDB {
           this.systemObiById.delete(tmp_obi._id);
       }
       if (tmp_obi.system_name && (!cur_obi || cur_obi.system_name !== tmp_obi.system_name)) {
-          this.systemObiByName.set(tmp_obi.system_name, ret_obi);
-          this.systemObiById.set(tmp_obi._id, ret_obi);
+          this.systemObiByName.set(tmp_obi.system_name, ret_obi as SysObiDefinition);
+          this.systemObiById.set(tmp_obi._id, ret_obi as SysObiDefinition);
       }
       ret_obi.system_name = tmp_obi.system_name;
 
@@ -311,8 +311,8 @@ export class OuiDB {
     for (let row of rows as { VAL_INST: number, VAL: string }[]) {
       let obi: ObiDefinition = mk_obi(row.VAL_INST, row.VAL); 
       ids.push(obi._id!);
-      this.systemObiById.set(obi._id!, obi);
-      this.systemObiByName.set(obi.system_name!, obi);
+      this.systemObiById.set(obi._id!, obi as SysObiDefinition);
+      this.systemObiByName.set(obi.system_name!, obi as SysObiDefinition);
     }
     await this._loadObis(this.connector, ids, this.systemObiById);
   }
@@ -330,8 +330,8 @@ export class OuiDB {
   private _registerSystemObi(obi: ObiDefinition) {
     let cur_obi = this.systemObiById.get(obi._id!);
     if (!cur_obi) {
-      this.systemObiById.set(obi._id!, obi);
-      this.systemObiByName.set(obi.system_name!, obi);
+      this.systemObiById.set(obi._id!, obi as SysObiDefinition);
+      this.systemObiByName.set(obi.system_name!, obi as SysObiDefinition);
     }
     else if (cur_obi !== obi)
       throw new Error(`conflict while loading obi ${obi._id}`);

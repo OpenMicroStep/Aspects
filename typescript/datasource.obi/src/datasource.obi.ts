@@ -9,11 +9,13 @@ export namespace ObiDataSource {
   export interface Config {
     aspectClassname_to_ObiEntity: (classname: string) => string;
     obiEntity_to_aspectClassname: (is: string) => string;
-    aspectAttribute_to_ObiCar: (classname: string, attribute: string) => string;
-    aspectValue_to_obiValue: (attribute: Aspect.InstalledAttribute, car: ObiQuery.CarInfo, value: any) => any;
-    obiValue_to_aspectValue: (attribute: Aspect.InstalledAttribute, car: ObiQuery.CarInfo, value: any) => any;
+    aspectAttribute_to_ObiCar: (attribute: string) => string;
+    aspectValue_to_obiValue: (value: any, attribute: string) => any;
+    obiValue_to_aspectValue: (value: any, attribute: string) => any;
   }
 }
+
+function pass(a) { return a; }
 
 export type ObiDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
 export class ObiDataSource extends DataSource 
@@ -24,11 +26,11 @@ export class ObiDataSource extends DataSource
   ) {
     super(manager);
     this.config = Object.assign({
-      aspectClassname_to_ObiEntity: (c) => c,
-      obiEntity_to_aspectClassname: (c) => c,
-      aspectAttribute_to_ObiCar: (c, a) => a,
-      aspectValue_to_obiValue: (a, car, v) => v,
-      obiValue_to_aspectValue: (a, car, v) => v,
+      aspectClassname_to_ObiEntity: pass,
+      obiEntity_to_aspectClassname: pass,
+      aspectAttribute_to_ObiCar: pass,
+      aspectValue_to_obiValue: pass,
+      obiValue_to_aspectValue: pass,
     }, config);
   }
 
@@ -47,9 +49,11 @@ export class ObiDataSource extends DataSource
 
   config: ObiDataSource.Config;
 
-  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
-    let ctx = {
-      ...this.config,
+  _ctx(db: DBConnectorCRUD, component: AComponent) : ObiSharedContext {
+    return {
+      db: db,
+      component: component,
+      config: this.config,
       cstor: ObiQuery,
       controlCenter: this.controlCenter(),
       maker: this.db.maker,
@@ -61,8 +65,11 @@ export class ObiDataSource extends DataSource
       queries: new Map(),
       aliases: 0
     };
-    let query = ObiQuery.build(ctx, set);
-    return query.execute(ctx, set.scope || [], db, component);
+  }
+
+  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
+    let ctx = this._ctx(db, component);
+    return ObiQuery.execute(ctx, set);
   }
 
   async save(tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
@@ -93,7 +100,7 @@ export class ObiDataSource extends DataSource
           value = value.id();
         }
       }
-      value = this.config.aspectValue_to_obiValue(attribute, car_info, value);
+      value = this.config.aspectValue_to_obiValue(value, attribute.name);
       await this.db.raw_insert(tr, table, oid, cid, value);
     }
     const remove = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
@@ -107,7 +114,7 @@ export class ObiDataSource extends DataSource
           value = value.id();
         }
       }
-      value = this.config.aspectValue_to_obiValue(attribute, car_info, value);
+      value = this.config.aspectValue_to_obiValue(value, attribute.name);
       await this.db.raw_delete(tr, table, oid, cid, value);
     }
 
@@ -138,7 +145,7 @@ export class ObiDataSource extends DataSource
       let car_table = this.db.systemObiByName.get(this.db.config.CarTableLib)!;
       let car_type = this.db.systemObiByName.get(this.db.config.CarTypeLib)!;
       let map = async (k: string, nv: any, ov: any | undefined) => {
-        let obi_car_name = this.config.aspectAttribute_to_ObiCar(aspect.name, k);
+        let obi_car_name = this.config.aspectAttribute_to_ObiCar(k);
         let a = aspect.attributes.get(k)!;
         let car = this.db.systemObiByName.get(obi_car_name);
         if (!car) {
@@ -214,24 +221,10 @@ export class ObiDataSource extends DataSource
     objects: VersionedObject[];
     scope?: string[];
   }): Promise<VersionedObject[]> {
-    let types = new Map<Aspect.Installed, VersionedObject[]>();
-    for (let object of objects) {
-      let aspect = object.manager().aspect();
-      let list = types.get(aspect);
-      if (!list)
-        types.set(aspect, list = []);
-      list.push(object);
-    }
-    let sets = <ObjectSet[]>[];
-    types.forEach((list, aspect) => {
-      let set = new ObjectSet('load');
-      set.scope = scope;
-      set.setAspect(ConstraintType.InstanceOf, aspect);
-      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set.aspectAttribute("_id"), list));
-      sets.push(set);
-    });
-    let results = await this.scoped(component => Promise.all(sets.map(s => this.execute(tr ? tr.tr : this.db.connector, s, component))));
-    return ([] as VersionedObject[]).concat(...results);
+    let set = new ObjectSet('load');
+    set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
+    set.scope = scope;
+    return await this.scoped(component => ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, component), set).then(() => objects));
   }
 
   async implBeginTransaction(): Promise<ObiDataSourceTransaction> {
