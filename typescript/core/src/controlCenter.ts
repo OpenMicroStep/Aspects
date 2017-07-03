@@ -116,6 +116,9 @@ export class ControlCenter {
   aspect(name: string) {
     return this._aspects.get(name);
   }
+  installedAspectConstructors() {
+    return this._aspects.values();
+  }
 
   create<T extends VersionedObject>(cstor: VersionedObjectConstructor<VersionedObject>, categories: string[]) : T {
     let aspectCstor = this.aspect(cstor.definition.name);
