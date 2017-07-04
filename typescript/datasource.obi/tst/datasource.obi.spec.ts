@@ -42,7 +42,7 @@ function serialize(s, map = new Map()) {
   return r;
 }
 
-function testDecode(def: string, expect: ObiDefinition[]) {
+function parse(reporter: Reporter, def: string) {
   let ctx = {
     obis: [],
     roByName: new Map<string, ObiDefinition>(),
@@ -54,15 +54,70 @@ function testDecode(def: string, expect: ObiDefinition[]) {
     TypIDLib: "ID",
     TypSIDLib: "SID",
   };
-  let reporter = new Reporter();
   let parser = new Parser(reporter, def);
   let obis = parseObis(ctx, parser);
+  return obis;
+}
+
+function testDecode(def: string, expect: ObiDefinition[]) {
+  let reporter = new Reporter();
+  let obis = parse(reporter, def);
   let actual = obis.map(d => serialize(d));
   let expected = expect.map(d => serialize(d));
   assert.deepEqual(actual, expected); // better diff
   //assert.deepEqual(obis, expect);
 }
 
+function decode_error_end1() {
+  let def = `
+ENT
+_id: 1
+_end:
+_end:`;
+  let reporter = new Reporter();
+  parse(reporter, def);
+  assert.deepEqual(reporter.diagnostics, [
+    { "type": "error", "row": 5, "col": 5, "msg": "a new entity name was expected" },
+  ]);
+}
+
+function decode_error_end2() {
+  let def = `
+ENT
+_id: 1`;
+  let reporter = new Reporter();
+  parse(reporter, def);
+  assert.deepEqual(reporter.diagnostics, [
+    { "type": "error", "row": 3, "col": 6, "msg": "_end: was expected" },
+  ]);
+}
+function decode_error_end3() {
+  let def = `
+ENT
+_id: 1
+`;
+  let reporter = new Reporter();
+  parse(reporter, def);
+  assert.deepEqual(reporter.diagnostics, [
+    { "type": "error", "row": 4, "col": 0, "msg": "_end: was expected" },
+  ]);
+}
+function decode_error_collision0() {
+  let def = `
+ENT
+_id: 1
+_end:
+
+ENT
+_id: 1
+_end:
+`;
+  let reporter = new Reporter();
+  parse(reporter, def);
+  assert.deepEqual(reporter.diagnostics, [
+    { "type": "error", "row": 7, "col": 7, "msg": "cannot extends objects in the same definition: { _id: 1 }" },
+  ]);
+}
 function decode_ENT() {
   let def = `
 ENT // test
@@ -656,8 +711,14 @@ function destroy(flux) {
 export const name = "obi";
 export const tests = 
 [
-  decode_ENT,
-  decode_ENT_Car_Gab_Typ,
+  { name: "decode", tests: [
+    decode_ENT,
+    decode_ENT_Car_Gab_Typ,
+    decode_error_end1,
+    decode_error_end2,
+    decode_error_end3,
+    decode_error_collision0,
+  ]},
   load_std,
   { name: "sqlite (npm sqlite3)", tests: createTests(createObiControlCenter, destroy) },
 ];

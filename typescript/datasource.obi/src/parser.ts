@@ -83,6 +83,9 @@ function obiById(ctx: ObiParseContext, is: string, id: number | undefined) : Obi
     ctx.obis.push(obi);
     if (id) ctx.byId.set(id, obi);
   }
+  else if (!obi.is) {
+    obi.is = obiByName(ctx, is);
+  }
   return obi;
 }
 
@@ -122,8 +125,13 @@ function parseObi(ctx: ObiParseContext, parser: Parser) : ObiDefinition | undefi
         return obi;
       else {
         let isId = l.name === "_id";
-        if (!obi)
+        if (!obi) {
+          if (isId && ctx.byId.get(+l.value))
+            parser.error(`cannot extends objects in the same definition: { _id: ${+l.value} }`);
           obi = obiById(ctx, is, isId ? +l.value : undefined);
+          if (obi.is!.system_name !== is)
+            parser.error(`two object are defined with the same id but with different kinds: { _id: ${+l.value} }`);
+        }
         if (!isId) {
           let isSysName = l.name === ctx.CarSystemNameLib;
           let car_obi = obiByName(ctx, l.name);
@@ -149,5 +157,7 @@ function parseObi(ctx: ObiParseContext, parser: Parser) : ObiDefinition | undefi
       }
     }
   } while (parser.skip(Parser.isLineChar) > 0);
+  if (obi)
+    parser.error(`_end: was expected`);
   return undefined;
 }
