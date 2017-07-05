@@ -41,7 +41,12 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
   tables = new Map<string, string>();
   sub_id_columns: string[] = [];
   sub_is_columns: string[] = [];
-  cars = new Map<string, { d: Map<string, ObiQuery.CarInfo>, r: Map<string, ObiQuery.CarInfo>, cars: Map<number, Aspect.InstalledAttribute> }>();
+  cars = new Map<string, { 
+    da: Map<string, ObiQuery.CarInfo>,
+    ra: Map<string, ObiQuery.CarInfo>,
+    do: Map<number, Aspect.InstalledAttribute>,
+    ro: Map<number, Aspect.InstalledAttribute>,
+  }>();
 
   setInitialType(name: string, instanceOf: boolean): void {
     let is = this.ctx.systemObiByName.get(this.ctx.config.aspectClassname_to_ObiEntity(name));
@@ -326,31 +331,31 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     lvl: number, stack: Set<string>,
     dt: ({ table: string, or: number[] } | undefined)[], rt: ({ table: string, or: number[] } | undefined)[]
   ) {
+    stack.add(aspect.name);
     let sub_cars = new Set<ObiQuery.CarInfo>();
     for (let k of scope) {
       let a = aspect.attributes.get(k);
-      if (a && !stack.has(k)) {
+      if (a) {
         let car_info = this.car_info(k);
         let sub_name = "";
         if (a.type.type === "class")
           sub_name = a.type.name;
         else if((a.type.type === "array" || a.type.type === "set") && a.type.itemType.type === "class")
           sub_name = a.type.itemType.name;
-        if (sub_name) {
-          stack.add(k);
+        if (sub_name && !stack.has(sub_name)) {
           sub_cars.add(car_info);
           let aspect = this.ctx.controlCenter.aspect(sub_name)!.aspect;
           this.buildScopeTreeItem(aspect, scope, lvl + 1, stack, dt, rt);
-          stack.delete(k);
         }
         let drcars = this.cars.get(car_info.table);
         if (!drcars)
-          this.cars.set(car_info.table, drcars = { d: new Map(), r: new Map(), cars: new Map() });
-        let cars = car_info.relation ? drcars.r : drcars.d;
-        let car = cars.get(k);
+          this.cars.set(car_info.table, drcars = { da: new Map(), ra: new Map(), do: new Map(), ro: new Map() });
+        let cars_a = car_info.relation ? drcars.ra : drcars.da;
+        let cars_o = car_info.relation ? drcars.ro : drcars.do;
+        let car = cars_a.get(k);
         if (!car) {
-          cars.set(k, car_info);
-          drcars.cars.set(car_info.car._id!, a);
+          cars_a.set(k, car_info);
+          cars_o.set(car_info.car._id!, a);
         }
       }
     }
@@ -361,6 +366,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         tables[lvl] = sub_table = { table: this.nextAlias(), or: [] };
       sub_table.or.push(car_info.car._id!)
     }
+    stack.delete(aspect.name);
   }
 
   sql_columns() {
@@ -426,20 +432,13 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     }
 
     let arr_ids = [...ids];
-    for (let [table, drcars] of this.cars) {
-      let sql_selects: SqlBinding[] = [];
-      let car_ids = [...drcars.d.values()].map(i => i.car._id!);
-      if (car_ids.length)
-        sql_selects.push(mk_query(this.ctx, table, "VAL_INST", "VAL", arr_ids, car_ids));
-      car_ids = [...drcars.r.values()].map(i => i.car._id!);
-      if (car_ids.length)
-        sql_selects.push(mk_query(this.ctx, table, "VAL", "VAL_INST", arr_ids, car_ids));
-      let row_values = await this.ctx.db.select(this.ctx.maker.union(sql_selects));
+    const loadAttributes = async (sql_select: SqlBinding, cars_a: Map<number, Aspect.InstalledAttribute>) => {
+      let row_values = await this.ctx.db.select(sql_select);
       for (let row of row_values) {
         let {is, _id, car_id, value} = row as {is?: number, _id: number, car_id: number, value: string};
         let vo = cc.registeredObject(_id)!;
         let remoteAttributes = remotes.get(vo)!;
-        let a = drcars.cars.get(car_id)!;
+        let a = cars_a.get(car_id)!;
         value = this.ctx.config.obiValue_to_aspectValue(value, a.name);
         if (a.type.type === "set" || a.type.type === "array") {
           let c = remoteAttributes.get(a.name);
@@ -454,6 +453,14 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
           remoteAttributes.set(a.name, value);
         }
       }
+    }
+    for (let [table, drcars] of this.cars) {
+      let car_ids = [...drcars.da.values()].map(i => i.car._id!);
+      if (car_ids.length)
+        await loadAttributes(mk_query(this.ctx, table, "VAL_INST", "VAL", arr_ids, car_ids), drcars.do);
+      car_ids = [...drcars.ra.values()].map(i => i.car._id!);
+      if (car_ids.length)
+        await loadAttributes(mk_query(this.ctx, table, "VAL", "VAL_INST", arr_ids, car_ids), drcars.ro);
     }
     this.mergeRemotes(remotes);
     return ret;
