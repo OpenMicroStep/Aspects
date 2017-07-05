@@ -3,26 +3,6 @@ import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
 
-function load(
-  cc: ControlCenter, component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
-  unused: Set<string>, subs: Set<InMemoryDataSource.DataStoreObject>, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
-) {
-  let lManager = lObject.manager();
-  let remoteAttributes = new Map<keyof VersionedObject, any>();
-  cc.registerObjects(component, [lObject]);
-  for (let k of unused) {
-    let a = lManager.aspect().attributes.get(k);
-    if (a) {
-      let v = dObject.get(k);
-      if (v instanceof InMemoryDataSource.DataStoreObject)
-        subs.add(v);
-      remoteAttributes.set(k as keyof VersionedObject, ds.fromDSValue(cc, component, v));
-      unused.delete(k);
-    }
-  }
-  lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
-}
-
 export type MemoryDataSourceTransaction = { tr: InMemoryDataSource.DataStoreTransaction };
 export class InMemoryDataSource extends DataSource 
 {
@@ -43,22 +23,36 @@ export class InMemoryDataSource extends DataSource
   }
 
   private _loads(
-    cc: ControlCenter, component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
+    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
     scope: string[], lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
-    
-    let unused = new Set(scope as (keyof VersionedObject)[]);
-    let subs = new Set<InMemoryDataSource.DataStoreObject>();
-    load(cc, component, ds, unused, subs, lObject, dObject);
-    while (unused.size > 0 && subs.size > 0) {
-      let previousSubs = subs;
-      subs = new Set<InMemoryDataSource.DataStoreObject>();
-      for (let dObject of previousSubs) {
-        let lId = this.ds.fromDSId(dObject.id);
-        let lObject = cc.registeredObject(lId, dObject.is);
-        load(cc, component, ds, unused, subs, lObject, dObject);
+    this._load(component, ds, scope, new Set(), lObject, dObject);
+  }
+
+  private _load(
+    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
+    scope: Iterable<string>, stack: Set<string>, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
+  ) {
+    let cc = this.controlCenter();
+    let lManager = lObject.manager();
+    let remoteAttributes = new Map<keyof VersionedObject, any>();
+    cc.registerObjects(component, [lObject]);
+    for (let k of scope) {
+      let a = lManager.aspect().attributes.get(k);
+      if (a && !stack.has(k)) {
+        let v = dObject.get(k);
+        if (v instanceof InMemoryDataSource.DataStoreObject) {
+          let dObject = v;
+          let lId = this.ds.fromDSId(dObject.id);
+          let lObject = cc.registeredObject(lId, dObject.is);
+          stack.add(k);
+          this._load(component, ds, scope, stack, lObject, dObject);
+          stack.delete(k);
+        }
+        remoteAttributes.set(k as keyof VersionedObject, ds.fromDSValue(cc, component, v));
       }
     }
+    lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
   }
 
   implQuery({ tr, sets }: { tr?: InMemoryDataSource.DataStoreTransaction, sets: ObjectSet[] }): { [k: string]: VersionedObject[] } {
@@ -86,7 +80,7 @@ export class InMemoryDataSource extends DataSource
         let lId = this.ds.fromDSId(dObject.id);
         let lObject = cc.registeredObject(lId, dObject.is);
         if (set.scope)
-          this._loads(cc, component, ds, set.scope, lObject, dObject);
+          this._loads(component, ds, set.scope, lObject, dObject);
         return lObject;
       });
     });
@@ -109,7 +103,7 @@ export class InMemoryDataSource extends DataSource
         let dbId = this.ds.toDSId(lObject.id());
         let dObject = ds.get(dbId);
         if (dObject) {
-          this._loads(cc, component, ds, scope, lObject, dObject);
+          this._loads(component, ds, scope, lObject, dObject);
           ret.push(lObject);
         }
       }

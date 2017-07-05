@@ -418,7 +418,7 @@ async function load_mixed_attributes(f: Flux<Context>) {
   let u = inv.result();
   assert.sameMembers(u, [p0, c0]);
   deepEqual(c0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: p0 }, ["_id", "_name", "_owner", "_model"]);
-  deepEqual(p0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
+  deepEqual(p0, {_id: p0.id(), _name: "Lisa Simpson", _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_name", "_firstname", "_lastname"]);
 
   f.continue();
 }
@@ -433,7 +433,7 @@ async function load_sub_attributes(f: Flux<Context>) {
   let u = inv.result();
   assert.sameMembers(u, [c0]);
   deepEqual(c0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: p0 }, ["_id", "_name", "_owner", "_model"]);
-  deepEqual(c0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
+  deepEqual(c0._owner, {_id: p0.id(), _name: "Lisa Simpson", _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_name", "_firstname", "_lastname"]);
 
   f.continue();
 }

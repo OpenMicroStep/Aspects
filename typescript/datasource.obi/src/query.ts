@@ -270,15 +270,17 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
   buildScopeTree(scope: Iterable<string>) {
     let dt = [{ table: this.initialFromTable!, or: [] }];
     let rt = [{ table: this.initialFromTable!, or: [] }];
+    let clean_scope = new Set(scope);
+    clean_scope.add("_version");
     if (this.mappers.size > 0) {
       for (let is of this.mappers) {
         let aspect = this.aspect(is.system_name);
-        this.buildScopeTreeItem(aspect, scope, 1, dt, rt);
+        this.buildScopeTreeItem(aspect, clean_scope, 1, new Set(), dt, rt);
       }
     }
     else {
       for (let cstor of this.ctx.controlCenter.installedAspectConstructors()) {
-        this.buildScopeTreeItem(cstor.aspect, scope, 1, dt, rt);
+        this.buildScopeTreeItem(cstor.aspect, clean_scope, 1, new Set(), dt, rt);
       }
     }
     this.buildScopeJoins(dt, rt, false);
@@ -319,24 +321,27 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     }
   }
 
-  buildScopeTreeItem(aspect: Aspect.Installed, scope: Iterable<string>, lvl: number, dt: ({ table: string, or: number[] } | undefined)[], rt: ({ table: string, or: number[] } | undefined)[]) {
-    let unused = new Set(scope);
-    unused.add("_version");
-    let subs = new Set<string>();
+  buildScopeTreeItem(
+    aspect: Aspect.Installed, scope: Iterable<string>, 
+    lvl: number, stack: Set<string>,
+    dt: ({ table: string, or: number[] } | undefined)[], rt: ({ table: string, or: number[] } | undefined)[]
+  ) {
     let sub_cars = new Set<ObiQuery.CarInfo>();
-    for (let k of unused) {
+    for (let k of scope) {
       let a = aspect.attributes.get(k);
-      if (a) {
+      if (a && !stack.has(k)) {
         let car_info = this.car_info(k);
         let sub_name = "";
         if (a.type.type === "class")
           sub_name = a.type.name;
         else if((a.type.type === "array" || a.type.type === "set") && a.type.itemType.type === "class")
           sub_name = a.type.itemType.name;
-        unused.delete(k);
         if (sub_name) {
-          subs.add(sub_name)
+          stack.add(k);
           sub_cars.add(car_info);
+          let aspect = this.ctx.controlCenter.aspect(sub_name)!.aspect;
+          this.buildScopeTreeItem(aspect, scope, lvl + 1, stack, dt, rt);
+          stack.delete(k);
         }
         let drcars = this.cars.get(car_info.table);
         if (!drcars)
@@ -355,12 +360,6 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       if (!sub_table)
         tables[lvl] = sub_table = { table: this.nextAlias(), or: [] };
       sub_table.or.push(car_info.car._id!)
-    }
-    if (unused.size > 0 && subs.size > 0) {
-      for (let sub of subs) {
-        let aspect = this.ctx.controlCenter.aspect(sub)!.aspect;
-        this.buildScopeTreeItem(aspect, unused, lvl + 1, dt, rt);
-      }
     }
   }
 

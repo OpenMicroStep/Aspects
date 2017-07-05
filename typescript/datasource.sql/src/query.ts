@@ -738,42 +738,42 @@ class ScopeTreeItem {
   }
 };
 
-function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspect.Installed, scope: Iterable<string>) {
-  let unused = new Set(scope);
-  unused.add("_version");
-  for (let k of unused) {
+function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspect.Installed, scope: Iterable<string>, stack: Set<string>) {
+  for (let k of scope) {
     let a = aspect.attributes.get(k);
-    if (a) {
+    if (a && !stack.has(k)) {
+      let sub_name = "";
       if (a.type.type === "class")
-        item.subs.set(a.type.name, new ScopeTreeItem(cc.aspect(a.type.name)!));
+        sub_name = a.type.name;
       else if((a.type.type === "array" || a.type.type === "set") && a.type.itemType.type === "class")
-        item.subs.set(a.type.itemType.name, new ScopeTreeItem(cc.aspect(a.type.itemType.name)!));
+        sub_name = a.type.itemType.name;
+      if (sub_name && !item.subs.has(sub_name)) {
+        stack.add(k);
+        let sub_tree = new ScopeTreeItem(cc.aspect(sub_name)!);
+        item.subs.set(sub_name, sub_tree);
+        buildScopeTreeItem(cc, sub_tree, sub_tree.cstor.aspect, scope, stack);
+        if (!sub_tree.objects)
+          sub_tree.objects = new Set();
+        stack.delete(k);
+      }
       if(a.type.type === "array" || a.type.type === "set")
         item.mult.set(a.name, a);
       else
         item.mono.set(a.name, a);
-      unused.delete(k);
     }
   };
   if (item.mult.size > 0)
     item.objects = new Set();
-  if (unused.size > 0 && item.subs.size > 0) {
-    for (let [sub, sub_tree] of item.subs) {
-      buildScopeTreeItem(cc, sub_tree, cc.aspect(sub)!.aspect, unused);
-      if (!sub_tree.objects)
-        sub_tree.objects = new Set();
-    }
-  }
-  else
-    item.subs.clear();
 }
 
 function buildScopeTree(cc: ControlCenter, cstors: Aspect.Constructor[], scope: Iterable<string>) : ScopeTree {
+  let clear_scope = new Set(scope);
+  clear_scope.add("_version");
   let ret: ScopeTree = new Map();
   for (let cstor of cstors) {
     let item = new ScopeTreeItem(cstor);
     ret.set(cstor.aspect.name, item);
-    buildScopeTreeItem(cc, item, cstor.aspect, scope);
+    buildScopeTreeItem(cc, item, cstor.aspect, clear_scope, new Set());
   }
   return ret;
 }
