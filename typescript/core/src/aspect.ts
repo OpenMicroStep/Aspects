@@ -35,6 +35,26 @@ export namespace Aspect {
     }
   }
 
+  export function typeToAspectNames(type: Type) : string[] {
+    if (type.type === "class")
+      return [type.name];
+      
+    if(type.type === "array" || type.type === "set")
+      return typeToAspectNames(type.itemType);
+
+    if (type.type === "or") {
+      let ret: string[] = [];
+      for (let t of type.types) {
+        if (t.type !== "class")
+          return [];
+        ret.push(t.name);
+      }
+      return ret;
+    }
+
+    return [];
+  }
+
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object' | 'boolean';
   export type TypeVoid       =  { is: 'type', type: 'void' };
   export type TypePrimitive  =  { is: 'type', type: 'primitive', name: PrimaryType };

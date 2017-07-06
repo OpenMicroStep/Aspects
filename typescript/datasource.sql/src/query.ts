@@ -739,22 +739,18 @@ class ScopeTreeItem {
 };
 
 function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspect.Installed, scope: Iterable<string>, stack: Set<string>) {
+  stack.add(aspect.name);
   for (let k of scope) {
     let a = aspect.attributes.get(k);
     if (a && !stack.has(k)) {
-      let sub_name = "";
-      if (a.type.type === "class")
-        sub_name = a.type.name;
-      else if((a.type.type === "array" || a.type.type === "set") && a.type.itemType.type === "class")
-        sub_name = a.type.itemType.name;
-      if (sub_name && !item.subs.has(sub_name)) {
-        stack.add(k);
-        let sub_tree = new ScopeTreeItem(cc.aspect(sub_name)!);
-        item.subs.set(sub_name, sub_tree);
-        buildScopeTreeItem(cc, sub_tree, sub_tree.cstor.aspect, scope, stack);
-        if (!sub_tree.objects)
-          sub_tree.objects = new Set();
-        stack.delete(k);
+      for (let sub_name of Aspect.typeToAspectNames(a.type)) {
+        if (!item.subs.has(sub_name)) {
+          let sub_tree = new ScopeTreeItem(cc.aspect(sub_name)!);
+          item.subs.set(sub_name, sub_tree);
+          buildScopeTreeItem(cc, sub_tree, sub_tree.cstor.aspect, scope, stack);
+          if (!sub_tree.objects)
+            sub_tree.objects = new Set();
+        }
       }
       if(a.type.type === "array" || a.type.type === "set")
         item.mult.set(a.name, a);
@@ -764,6 +760,7 @@ function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspe
   };
   if (item.mult.size > 0)
     item.objects = new Set();
+  stack.delete(aspect.name);
 }
 
 function buildScopeTree(cc: ControlCenter, cstors: Aspect.Constructor[], scope: Iterable<string>) : ScopeTree {

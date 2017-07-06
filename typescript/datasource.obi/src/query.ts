@@ -337,15 +337,12 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       let a = aspect.attributes.get(k);
       if (a) {
         let car_info = this.car_info(k);
-        let sub_name = "";
-        if (a.type.type === "class")
-          sub_name = a.type.name;
-        else if((a.type.type === "array" || a.type.type === "set") && a.type.itemType.type === "class")
-          sub_name = a.type.itemType.name;
-        if (sub_name && !stack.has(sub_name)) {
-          sub_cars.add(car_info);
-          let aspect = this.ctx.controlCenter.aspect(sub_name)!.aspect;
-          this.buildScopeTreeItem(aspect, scope, lvl + 1, stack, dt, rt);
+        for (let sub_name of Aspect.typeToAspectNames(a.type)) {
+          if (!stack.has(sub_name)) {
+            sub_cars.add(car_info);
+            let aspect = this.ctx.controlCenter.aspect(sub_name)!.aspect;
+            this.buildScopeTreeItem(aspect, scope, lvl + 1, stack, dt, rt);
+          }
         }
         let drcars = this.cars.get(car_info.table);
         if (!drcars)
