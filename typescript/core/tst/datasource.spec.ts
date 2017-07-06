@@ -111,6 +111,78 @@ function set_resources() {
   });
   assert.deepEqual<any>(sets, resources_sets());
 }
+function ind1_resources() {
+  let sets = parseRequest({
+    "resources0=": { $instanceOf: Resource, _name: { $eq: "Test" } },
+    "resources1=": {
+      $out: "=r",
+      "r=": { $elementOf: "=resources0" },
+    },
+    results: [{
+      name: "resources",
+      where: "=resources1",
+      sort: [ '+_name'],
+      scope: ['_name']
+    }]
+  });
+  let r = Object.assign(new ObjectSet("r"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "resources0", leftAttribute: "_name", value: "Test" },
+    ],
+    variables: [] as [string, ObjectSet][],
+    name: "resources",
+    sort: [ '+_name'],
+    scope: ['_name'],
+  });
+  r.variables.push(["resources0", r]);
+  assert.deepEqual<any>(sets, [r]);
+}
+function ind2_resources() {
+  let sets = parseRequest({
+    "resources0=": { $instanceOf: Resource, _name: { $eq: "Test" } },
+    "resources1=": {
+      $out: "=r0",
+      "r0=": { $elementOf: "=resources0" },
+      "r1=": { $elementOf: "=resources0" },
+      "=r0._name": "=r1._name",
+    },
+    results: [{
+      name: "resources",
+      where: "=resources1",
+      sort: [ '+_name'],
+      scope: ['_name']
+    }]
+  });
+  let r1 = Object.assign(new ObjectSet("r1"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "resources0", leftAttribute: "_name", value: "Test" },
+    ],
+    variables: [] as [string, ObjectSet][],
+  });
+  let r0 = Object.assign(new ObjectSet("r0"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "resources0", leftAttribute: "_name", value: "Test" },
+      { type: ConstraintType.Equal, leftVariable: "r0", leftAttribute: "_name", rightVariable: "r1", rightAttribute: "_name" },
+    ],
+    variables: [] as [string, ObjectSet][],
+    name: "resources",
+    sort: [ '+_name'],
+    scope: ['_name'],
+  });
+  r1.variables.push(["resources0", r1]);
+  r0.variables.push(["resources0", r0]);
+  r0.variables.push(["r1", r1]);
+  assert.deepEqual<any>(sets, [r0]);
+}
 function or_and() {
   let sets = parseRequest({
     "resources=": { $or: [{ _name: { $eq: "Test1" } }, { _name: { $eq: "Test2" } }] },
@@ -209,7 +281,6 @@ function recursion() {
       { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
     ],
   });
-  u_np1.variables.push(["y", u_np1]);
   u_np1.variables.push(["x", x]);
   assert.deepEqual(sets, [
     Object.assign(new ObjectSet("resources"), {
@@ -241,7 +312,6 @@ function set_persons1_p() {
       { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
     ],
   });
-  p.variables.push(["p", p]);
   p.variables.push(["c", c]);
   return p;
 }
@@ -320,7 +390,6 @@ function persons_and_their_cars() {
     ],
     variables: [],
   });
-  c.variables.push(["c", c]);
   c.variables.push(["p", p]);
 
   assert.deepEqual<any>(sets, [
@@ -406,6 +475,7 @@ function persons_with_cars_and_their_cars() {
   });
   p.variables.push(["persons.C._owner.C", C]);
   p.variables.push(["persons.C._owner.C._owner", p]);
+  p.variables.push(["persons.persons", p]);
 
   let c: any = Object.assign(new ObjectSet("c"), {
     typeConstraints: [
@@ -418,7 +488,6 @@ function persons_with_cars_and_their_cars() {
     name: "cars",
     scope: ['_owner'],
   });
-  c.variables.push(["c", c]);
   c.variables.push(["p", p]);
 
   assert.deepEqual<any>(sets, [c, C_owner]);
@@ -441,8 +510,8 @@ function set_cars2_c() {
       { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
     ],
   });
-  cars2_persons1_p.variables.push(["p.p", cars2_persons1_p]);
   cars2_persons1_p.variables.push(["p.c", cars2_persons1_c]);
+  cars2_persons1_p.variables.push(["p.p", cars2_persons1_p]);
 
   let cars2_c: any = Object.assign(new ObjectSet("c"), {
     typeConstraints: [
@@ -455,7 +524,6 @@ function set_cars2_c() {
     name: "cars2",
     scope: ['_name', '_owner', '_model'],
   });
-  cars2_c.variables.push(["c", cars2_c]);
   cars2_c.variables.push(["p", cars2_persons1_p]);
   return cars2_c;
 }
@@ -534,7 +602,6 @@ function persons_mixed() {
     name: "cars1",
     scope: ['_name', '_owner'],
   });
-  cars1_c.variables.push(["c", cars1_c]);
   cars1_c.variables.push(["p", cars1_p]);
 
   // cars2
@@ -612,6 +679,8 @@ export const tests = { name: 'DataSource', tests: [
     simple_resources,
     multi_resources,
     set_resources,
+    ind1_resources,
+    ind2_resources,
     or_and,
     no_instanceof,
     recursion,

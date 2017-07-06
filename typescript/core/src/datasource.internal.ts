@@ -414,20 +414,29 @@ export namespace DataSourceInternal {
         for (let [name, variable] of this.variables)
           ret.setVariable(name, variable === this ? ret : variable);
       }
+      if (ret.constraints.length)
+        ret.setVariable(this._name, ret);
       if (this.subs)
         ret.subs = new Map(this.subs);
       return ret;
     }
 
     hasVariable(name: string) : boolean {
-      return !!((this.variables && this.variables.has(name)) || (this.subs && this.subs.has(name)));
+      return !!(name === this._name || (this.variables && this.variables.has(name)) || (this.subs && this.subs.has(name)));
     }
     setVariable(name: string, set: ObjectSet) {
+      if (name === this._name) {
+        if (set !== this)
+          throw new Error(`variable ${name} is already used`);
+        return;
+      }
+
       if (!this.variables)
         this.variables = new Map();
+      else if (this.variables.get(name) === set)
+        return;
       if (this.hasVariable(name))
         throw new Error(`variable ${name} is already used`);
-
       this.variables.set(name, set);
     }
 
@@ -435,6 +444,15 @@ export namespace DataSourceInternal {
       if (name === this._name)
         return this;
       return this.variables && this.variables.get(name);
+    }
+    sub(sub: ObjectSet) : string {
+      if (!this.subs)
+        this.subs = new Map();
+      let name = sub._name;
+      if (this.hasVariable(name))
+        throw new Error(`variable ${name} is already used`);
+      this.subs.set(name, sub);
+      return name;
     }
 
     protected canAddType(c_with: ConstraintOnType) : boolean | undefined {
@@ -493,23 +511,15 @@ export namespace DataSourceInternal {
       }
     }
 
-    sub(sub: ObjectSet) : string {
-      if (!this.subs)
-        this.subs = new Map();
-      let name = sub._name;
-      if (this.hasVariable(name))
-        throw new Error(`variable ${name} is already used`);
-      this.subs.set(name, sub);
-      return name;
-    }
-
     merge(sub: ObjectSet) : Constraint | undefined {
       let prefix = "";
       if (sub.variables) {
-        prefix = sub._name + ".";
+        prefix = `${sub._name}.`;
         for (let [k, s] of sub.variables.entries())
           this.setVariable(prefix + k, s === sub ? this : s);
       }
+      if (sub.constraints.length)
+        this.setVariable(prefix + sub._name, this);
       return sub.constraints.length ? c_and(sub.constraints, prefix) : undefined;
     }
 
@@ -536,8 +546,8 @@ export namespace DataSourceInternal {
     }
   }
 
-  function c_or (constraints: Constraint[] = [], prefix = "") { return new ConstraintTree(ConstraintType.Or , prefix, constraints); }
-  function c_and(constraints: Constraint[] = [], prefix = "") { return new ConstraintTree(ConstraintType.And, prefix, constraints); }
+  function c_or (constraints: Constraint[] = [], prefix = "") { return constraints.length === 1 && !prefix ? constraints[0] : new ConstraintTree(ConstraintType.Or , prefix, constraints); }
+  function c_and(constraints: Constraint[] = [], prefix = "") { return constraints.length === 1 && !prefix ? constraints[0] : new ConstraintTree(ConstraintType.And, prefix, constraints); }
   function c_value(type: ConstraintOnValueTypes, leftVariable: string, leftAttribute: string, value: any): ConstraintValue 
   { return new ConstraintValue(type, leftVariable, leftAttribute, value); }
   function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: string, rightVariable: string, rightAttribute: string): ConstraintVariable
@@ -891,8 +901,6 @@ export namespace DataSourceInternal {
           throw new Error(`an element was expected`);
         nout = nout.substring(1);
         set = this.resolve(nout);
-        set.variables = new Map<string, ObjectSet>();
-        set.variables.set(nout, set);
       }
       else {
         set = set || this.createSet(name);
@@ -937,7 +945,7 @@ export namespace DataSourceInternal {
     }
 
     parseRightConditions(set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, left: VarPath, conditions: Value | ConstraintDefinition) {
-      if (typeof conditions === "object") {
+      if (conditions && typeof conditions === "object") {
         if (conditions instanceof VersionedObject) {
           constraints.push(c_value(ConstraintType.Equal, left.variable, left.attribute, conditions));
         }
@@ -964,6 +972,10 @@ export namespace DataSourceInternal {
           }
           this.pop();
         }
+      }
+      else if (typeof conditions === "string" && conditions.startsWith('=')) {
+        let right = this.resolveElement(conditions.substring(1), set, end);
+        constraints.push(c_var(ConstraintType.Equal, left.variable, left.attribute, right.variable, right.attribute));
       }
       else {
         constraints.push(c_value(ConstraintType.Equal, left.variable, left.attribute, conditions));
