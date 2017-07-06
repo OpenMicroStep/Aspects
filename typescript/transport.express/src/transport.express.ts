@@ -1,18 +1,14 @@
 import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, Invocation, InvocationState, Transport } from '@openmicrostep/aspects';
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import * as bodyparser from 'body-parser';
 
 const text_middleware = bodyparser.text({type: () => true });
 
 const coder = new Transport.JSONCoder();
 export class ExpressTransport implements PublicTransport {
-  app: Router;
-  findObject: (cstor: VersionedObjectConstructor<VersionedObject>, id: Identifier) => Promise<VersionedObject>;
-
-  constructor(app: Router, findObject: (cstor: VersionedObjectConstructor<VersionedObject>, id: Identifier) => Promise<VersionedObject>) {
-    this.app = app;
-    this.findObject = findObject;
-  }
+  constructor(
+    public app: Router, 
+    public findObject: (cstor: VersionedObjectConstructor<VersionedObject>, id: Identifier, req: Request) => Promise<VersionedObject>) {}
 
   installMethod(cstor: VersionedObjectConstructor<VersionedObject>, method: Aspect.InstalledMethod) {
     let path = `/${cstor.definition.version}/${cstor.definition.name}/:id/${method.name}`;
@@ -23,7 +19,7 @@ export class ExpressTransport implements PublicTransport {
       this.app.use(path, text_middleware);
     this.app[isA0Void ? "get" : "post"](path, (req, res) => {
       let id = req.params.id;
-      this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id).then(async (entity) => {
+      this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id, req).then(async (entity) => {
         let cc = entity.controlCenter();
         let inv: Invocation<any> | undefined;
         let json = await coder.decode_handle_encode(cc, isA0Void ? undefined : req.body, async (decoded) => {

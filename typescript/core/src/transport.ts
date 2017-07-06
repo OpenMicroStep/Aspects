@@ -8,7 +8,7 @@ export interface Encoder {
 export interface FlatEncoder extends Encoder {
   encode(s: any, keepAttributes?: boolean): any;
   cc: ControlCenter;
-  keepAttributes: boolean;
+  encodedVo: Set<VersionedObject>;
   remoteId(vo: VersionedObject): Identifier;
 }
 export interface FlatDecoder extends Decoder {
@@ -69,7 +69,8 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
       let r: any;
       let m = s.manager();
       r = { __is__: "VersionedObject", _id: m.id(), _rid: e.remoteId(s), __cls: m.name() };
-      if (e.keepAttributes) {
+      if (!e.encodedVo.has(s)) {
+        e.encodedVo.add(s);
         r._version = m.versionVersion();
         r._localAttributes = {};
         r._versionAttributes = {}
@@ -202,7 +203,7 @@ export abstract class FlatCoder<T> {
     const self = this;
     const encoder: FlatEncoder = {
       cc: cc,
-      keepAttributes: true,
+      encodedVo: new Set(),
       remoteId: remoteId,
       encode(s: any, keepAttributes?: boolean): any {
         let r = s;
@@ -218,10 +219,7 @@ export abstract class FlatCoder<T> {
             if (s.constructor)
               self.encoderByCstor.set(s.constructor, enc);
           }
-          let keepAttributesBak = this.keepAttributes;
-          this.keepAttributes = keepAttributes !== undefined ? keepAttributes : this.keepAttributes;
           r = enc.encode(this, s);
-          this.keepAttributes = keepAttributesBak;
         }
         else if (typeof s === "function") {
           throw new Error(`cannot encode function`);
@@ -263,7 +261,7 @@ export class JSONCoder extends FlatCoder<string> {
     return JSON.stringify(value);
   }
   decode(value: string) : any {
-    return JSON.parse(value);
+    return value === undefined ? undefined : JSON.parse(value);
   }
 }
 
