@@ -59,6 +59,11 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     if (reporter.diagnostics.length > 0)
       return new Invocation(reporter.diagnostics, true, objects);
     return this.farPromise('distantSave', [...changed]).then((inv) => {
+      this.controlCenter().notificationCenter().postNotification({
+        name: "saved",
+        object: this,
+        info: objects,
+      })
       return new Invocation(inv.diagnostics(), true, objects);
     });
   }
