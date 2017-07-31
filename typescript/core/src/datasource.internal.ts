@@ -1036,4 +1036,26 @@ export namespace DataSourceInternal {
     }
     return ret;
   }
+
+  export function buildScopeTreeItem(
+    cc: ControlCenter, aspect: Aspect.Installed, scope: Iterable<string>, 
+    lvl: number, stack: Set<string>,
+    handleAttribute: (aspect: Aspect.Installed, attribute: Aspect.InstalledAttribute) => void,
+  ) {
+    for (let k of scope) {
+      let a = aspect.attributes.get(k);
+      if (a) {
+        let sub_names = Aspect.typeToAspectNames(a.type);
+        handleAttribute(aspect, a);
+        if (sub_names.length) {
+          stack.add(k);
+          for (let sub_name of sub_names) {
+            let aspect = cc.aspect(sub_name)!.aspect;
+            buildScopeTreeItem(cc, aspect, scope, lvl + 1, stack, handleAttribute);
+          }
+          stack.delete(k);
+        }
+      }
+    }
+  }
 }

@@ -604,13 +604,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           let k = a.name;
           let v = row[k];
           v = mapper.get(k)!.fromDb(v);
-          v = this.loadValue(cc, this.ctx.component, a.type, v);
+          v = this.loadValue(cc, this.ctx.component, a.type, v, scopeitem, sub_items);
           remoteAttributes.set(k, v);
-          if (a.type.type === "class" && scopeitem.subs.size > 0) {
-            let sub = scopeitem.subs.get(a.type.name)!;
-            sub.objects!.add(v);
-            sub_items.add(sub);
-          }
         }
         if (scopeitem.objects) {
           for (let a of scopeitem.mult.values())
@@ -690,12 +685,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let isSet = a.type.type === "set";
         let c = remoteAttributes.get(a.name);
         let mult_sql_attr = mapper.get(a.name)!;
-        let value = this.loadValue(cc, this.ctx.component, atype.itemType, mult_sql_attr.fromDb(_value));
-        if (scopeitem.objects && atype.itemType.type === "class" && scopeitem.subs.size > 0) {
-          let sub = scopeitem.subs.get(atype.itemType.name)!;
-          sub.objects!.add(value);
-          sub_items.add(sub);
-        }
+        let value = this.loadValue(cc, this.ctx.component, atype.itemType, mult_sql_attr.fromDb(_value), scopeitem, sub_items);
         if (isSet)
           c.add(value);
         else // is array
@@ -706,8 +696,10 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return ret;
   }
 
-  loadValue(cc: ControlCenter, component: AComponent, type: Aspect.Type, value) {
-    if (type.type === "class") {
+  private loadValue(cc: ControlCenter, component: AComponent, type: Aspect.Type, value, scopeitem: ScopeTreeItem, sub_items: Set<ScopeTreeItem>) {
+    if (value === null)
+      value = undefined;
+    else if (type.type === "class" && value !== undefined) {
       let classname = type.name;
       let mapper = this.ctx.mappers[classname];
       let subid = mapper.fromDbKey(value);
@@ -716,6 +708,11 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         value = new (cc.aspect(classname)!)();
         value.manager().setId(subid);
         cc.registerObjects(component, [value]);
+      }
+      let sub = scopeitem.subs.get(value.manager().name());
+      if (sub) {
+        sub.objects!.add(value);
+        sub_items.add(sub);
       }
     }
     return value;
@@ -739,18 +736,20 @@ class ScopeTreeItem {
 };
 
 function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspect.Installed, scope: Iterable<string>, stack: Set<string>) {
-  stack.add(aspect.name);
   for (let k of scope) {
     let a = aspect.attributes.get(k);
     if (a && !stack.has(k)) {
-      for (let sub_name of Aspect.typeToAspectNames(a.type)) {
-        if (!item.subs.has(sub_name)) {
+      let sub_names = Aspect.typeToAspectNames(a.type);
+      if (sub_names.length) {
+        stack.add(k);
+        for (let sub_name of sub_names) {
           let sub_tree = new ScopeTreeItem(cc.aspect(sub_name)!);
           item.subs.set(sub_name, sub_tree);
           buildScopeTreeItem(cc, sub_tree, sub_tree.cstor.aspect, scope, stack);
           if (!sub_tree.objects)
             sub_tree.objects = new Set();
         }
+        stack.delete(k);
       }
       if(a.type.type === "array" || a.type.type === "set")
         item.mult.set(a.name, a);
@@ -760,7 +759,6 @@ function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspe
   };
   if (item.mult.size > 0)
     item.objects = new Set();
-  stack.delete(aspect.name);
 }
 
 function buildScopeTree(cc: ControlCenter, cstors: Aspect.Constructor[], scope: Iterable<string>) : ScopeTree {

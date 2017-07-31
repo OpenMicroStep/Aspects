@@ -331,18 +331,20 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     lvl: number, stack: Set<string>,
     dt: ({ table: string, or: number[] } | undefined)[], rt: ({ table: string, or: number[] } | undefined)[]
   ) {
-    stack.add(aspect.name);
     let sub_cars = new Set<ObiQuery.CarInfo>();
     for (let k of scope) {
       let a = aspect.attributes.get(k);
       if (a) {
         let car_info = this.car_info(k);
-        for (let sub_name of Aspect.typeToAspectNames(a.type)) {
-          if (!stack.has(sub_name)) {
+        let sub_names = Aspect.typeToAspectNames(a.type);
+        if (sub_names.length) {
+          stack.add(k);
+          for (let sub_name of sub_names) {
             sub_cars.add(car_info);
             let aspect = this.ctx.controlCenter.aspect(sub_name)!.aspect;
             this.buildScopeTreeItem(aspect, scope, lvl + 1, stack, dt, rt);
           }
+          stack.delete(k);
         }
         let drcars = this.cars.get(car_info.table);
         if (!drcars)
@@ -363,7 +365,6 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         tables[lvl] = sub_table = { table: this.nextAlias(), or: [] };
       sub_table.or.push(car_info.car._id!)
     }
-    stack.delete(aspect.name);
   }
 
   sql_columns() {
