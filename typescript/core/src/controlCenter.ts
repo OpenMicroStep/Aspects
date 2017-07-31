@@ -70,6 +70,8 @@ export class ControlCenter {
       throw new Error(`you must register the component with 'registerComponent' before registering objects`);
     const notificationCenter = this.notificationCenter();
     for (let o of objects) {
+      if (o.controlCenter() !== this)
+        throw new Error(`you can't register an object that is associated with another control center`);
       let id = o.id();
       let i = this._objects;
       let d = i.get(id);

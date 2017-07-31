@@ -58,6 +58,21 @@ function basics() {
   cc.unregisterComponent(c1);
 }
 
+function cannot_mix_cc() {
+  let cc1 = new ControlCenter();
+  let cc2 = new ControlCenter();
+  let c0 = {};
+  let C1 = Car.installAspect(cc1, 'test1');
+  let P1 = People.installAspect(cc1, 'test1');
+  let C2 = Car.installAspect(cc2, 'test1');
+  let P2 = People.installAspect(cc2, 'test1');
+  let c2 = new C2();
+  cc1.registerComponent(c0);
+  assert.throw(() => cc1.registerObjects(c0, [c2]));
+  assert.throw(() => c2._owner = new P1());
+}
+
 export const tests = { name: 'NotificationCenter', tests: [
-  basics
+  basics,
+  cannot_mix_cc,
 ]};

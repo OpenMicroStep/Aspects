@@ -258,6 +258,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       while ((add = ai < sadd.length) || di < sdel.length) {
         let other = add ? sadd[ai++] : sdel[di++];
         let other_manager = other.manager();
+        if (other_manager.controlCenter() !== this.controlCenter())
+          throw new Error(`you can't mix objects of different control centers`);
         if (other_manager.hasAttributeValue(data.relation.attribute)) {
           let v = other[data.relation.attribute];
           switch (otype.type) {
