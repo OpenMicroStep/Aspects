@@ -68,6 +68,7 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
     encode(e, s) {
       let r: any;
       let m = s.manager();
+      m = (m as any)._manager || m;
       r = { __is__: "VersionedObject", _id: m.id(), _rid: e.remoteId(s), __cls: m.name() };
       if (!e.encodedVo.has(s)) {
         e.encodedVo.add(s);

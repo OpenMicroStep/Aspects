@@ -1,4 +1,4 @@
-import {ControlCenter, areEquals, Identifier, Invocation, Invokable, Aspect, addIsEqualSupport, ImmutableMap} from './core';
+import {ControlCenter, areEquals, Identifier, Invocation, Invokable, Aspect, addIsEqualSupport, ImmutableMap, AComponent} from './core';
 import { Flux } from '@openmicrostep/async';
 import { Reporter, Diagnostic } from '@openmicrostep/msbuildsystem.shared';
 
@@ -67,6 +67,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   aspect() { return this._aspect; }
 
   isRegistered() { return this._components.size > 0; }
+
+  /** @internal */ registerComponent(component: AComponent) {
+    this._components.add(component);
+  }
 
   hasChanges(scope?: string[]) : boolean;
   hasChanges(scope?: (keyof T)[]) : boolean;
@@ -349,6 +353,34 @@ export namespace VersionedObjectManager {
     }
     return [...s];
   }
+  /** @internal */ 
+  export function UnregisteredVersionedObjectManager<T extends VersionedObject>(this: any, manager: VersionedObjectManager<T>) {
+    this._manager = manager;
+  }
+  function isRegisteredCheck(this: any) { 
+    throw new Error(`you must register this object (${this.id()}) before using it`); 
+  }
+  for (let k of Object.getOwnPropertyNames(VersionedObjectManager.prototype)) {
+    let prop = { ...Object.getOwnPropertyDescriptor(VersionedObjectManager.prototype, k) };
+    prop.value = isRegisteredCheck;
+    Object.defineProperty(UnregisteredVersionedObjectManager.prototype, k, prop);
+  }
+  UnregisteredVersionedObjectManager.prototype.id = function() { 
+    return this._manager.id();
+  }
+  UnregisteredVersionedObjectManager.prototype.controlCenter = function() { 
+    return this._manager.controlCenter();
+  }
+  UnregisteredVersionedObjectManager.prototype.aspect = function() { 
+    return this._manager.aspect();
+  }
+  UnregisteredVersionedObjectManager.prototype.name = function() { 
+    return this._manager.name();
+  }
+  UnregisteredVersionedObjectManager.prototype.registerComponent = function(component: AComponent) {
+    this._manager._object.__manager = this._manager;
+    this._manager.registerComponent(component);
+  }
 }
 export class VersionedObject {
   static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
@@ -437,11 +469,11 @@ VersionedObject.category('validation', {
 
 Object.defineProperty(VersionedObject.prototype, '_id', {
   enumerable: true,
-  get(this: VersionedObject) { return this.__manager._id; },
+  get(this: VersionedObject) { return this.__manager.id(); },
 });
 Object.defineProperty(VersionedObject.prototype, '_version', {
   enumerable: true,
-  get(this: VersionedObject) { return this.__manager._version; },
+  get(this: VersionedObject) { return this.__manager.localVersion(); },
 });
 
 function isEqualVersionedObject(this: VersionedObject, other, level?: number) {

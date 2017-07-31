@@ -1,4 +1,4 @@
-import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager, Aspect, ImmutableSet} from '@openmicrostep/aspects';
+import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager, Aspect, ImmutableSet, Invocation} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -181,77 +181,61 @@ function save_relation_c0p0_c1p0_c2p1(f: Flux<Context>) {
     f.continue();
   });
 }
-function query_cars_peoples(f: Flux<Context>) {
+async function _query_cars(f: Flux<Context>, q: () => Promise<Invocation<{ [k: string]: VersionedObject[] }>>) {
+  let {cc, component, c0, p0} = f.context;
+  let c0_cpy = { id: c0.id(), _name: c0._name, _owner: c0._owner, _model: c0._model };
+  let p0_cpy = { id: p0.id(), _firstname: p0._firstname, _lastname: p0._lastname, _birthDate: p0._birthDate };
+  cc.unregisterObjects(component, [p0, c0]);
+  let envelop = await q();
+  let cars = envelop.result()['cars'];
+  let peoples = envelop.result()['peoples'];
+  assert.equal(cars.length, 1);
+  assert.equal(peoples.length, 1);
+  let lc0 = cars[0] as typeof c0;
+  let lp0 = peoples[0] as typeof p0;
+  assert.notEqual(lc0, c0, "objects where unregistered, the datasource should not return the same object");
+  assert.notEqual(lp0, p0, "objects where unregistered, the datasource should not return the same object");
+  p0 = f.context.p0 = lp0;
+  c0 = f.context.c0 = lc0;
+  cc.registerObjects(component, [p0, c0]);
+
+  assert.equal(lc0._name, c0_cpy._name);
+  assert.equal(lc0._owner!.id(), c0_cpy._owner!.id());
+  assert.equal(lc0._owner, lp0);
+  assert.equal(lc0._model, c0_cpy._model);
+
+  assert.equal(lp0._firstname, p0_cpy._firstname);
+  assert.equal(lp0._lastname, p0_cpy._lastname);
+  assert.equal(lp0._birthDate!.getTime(), p0_cpy._birthDate!.getTime());
+
+  return { lp0: lp0, lc0: lc0 };
+}
+async function query_cars_peoples(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  let c0_id = c0.id()
-  let p0_id = p0.id()
-  cc.unregisterObjects(component, [c0, p0]);
-  db.farPromise('rawQuery', { results: [
-    { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0_id }, scope: ['_name', '_owner', '_model']             },
-    { name: "peoples", where: { $instanceOf: People            , _id: p0_id }, scope: ['_firstname', '_lastname', '_birthDate'] },
-  ]}).then((envelop) => {
-    let cars = envelop.result()['cars'];
-    let peoples = envelop.result()['peoples'];
-    assert.equal(cars.length, 1);
-    assert.equal(peoples.length, 1);
-    let lc0 = cars[0] as typeof c0;
-    let lp0 = peoples[0] as typeof p0;
-    assert.notEqual(lc0, c0, "objects where unregistered, the datasource should not return the same object");
-    assert.notEqual(lp0, p0, "objects where unregistered, the datasource should not return the same object");
-    assert.equal(lc0._name, c0._name);
-    assert.equal(lc0._owner!.id(), c0._owner!.id());
-    assert.equal(lc0._owner, lp0);
-    assert.equal(lc0._model, c0._model);
-    c0 = f.context.c0 = lc0;
-
-    assert.equal(lp0._firstname, p0._firstname);
-    assert.equal(lp0._lastname, p0._lastname);
-    assert.equal(lp0._birthDate!.getTime(), p0._birthDate!.getTime());
-    p0 = f.context.p0 = lp0;
-
-    cc.registerObjects(component, [p0, c0]);
-    f.continue();
+  await _query_cars(f, () => {
+    return db.farPromise('rawQuery', { results: [
+      { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0.id() }, scope: ['_name', '_owner', '_model']             },
+      { name: "peoples", where: { $instanceOf: People            , _id: p0.id() }, scope: ['_firstname', '_lastname', '_birthDate'] },
+    ]});
   });
+  f.continue();
 }
 
-function query_cars_peoples_relation_in_scope(f: Flux<Context>) {
+async function query_cars_peoples_relation_in_scope(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  let c0_id = c0.id()
-  let p0_id = p0.id()
-  cc.unregisterObjects(component, [c0, p0]);
-  db.farPromise('rawQuery', { results: [
-    { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0_id }, scope: ['_name', '_owner', '_model']                      },
-    { name: "peoples", where: { $instanceOf: People            , _id: p0_id }, scope: ['_firstname', '_lastname', '_birthDate', '_cars'] },
-  ]}).then((envelop) => {
-    let cars = envelop.result()['cars'];
-    let peoples = envelop.result()['peoples'];
-    assert.equal(cars.length, 1);
-    assert.equal(peoples.length, 1);
-    let lc0 = cars[0] as typeof c0;
-    let lp0 = peoples[0] as typeof p0;
-    assert.notEqual(lc0, c0, "objects where unregistered, the datasource should not return the same object");
-    assert.notEqual(lp0, p0, "objects where unregistered, the datasource should not return the same object");
-    assert.equal(lc0._name, c0._name);
-    assert.equal(lc0._owner!.id(), c0._owner!.id());
-    assert.equal(lc0._owner, lp0);
-    assert.equal(lc0._model, c0._model);
-    c0 = f.context.c0 = lc0;
-
-    assert.equal(lp0._firstname, p0._firstname);
-    assert.equal(lp0._lastname, p0._lastname);
-    assert.equal(lp0._birthDate!.getTime(), p0._birthDate!.getTime());
-    assert.sameMembers([...lp0._cars], [c0, c1]);
-    p0 = f.context.p0 = lp0;
-
-    cc.registerObjects(component, [p0, c0]);
-    f.continue();
+  let {lp0, lc0} = await _query_cars(f, () => {
+    return db.farPromise('rawQuery', { results: [
+      { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0.id() }, scope: ['_name', '_owner', '_model']             },
+      { name: "peoples", where: { $instanceOf: People            , _id: p0.id() }, scope: ['_firstname', '_lastname', '_birthDate', '_cars'] },
+    ]});
   });
+  assert.sameMembers([...lp0._cars], [lc0, c1]);
+  f.continue();
 }
 
 function query_cars_peoples_constraint_on_relation(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  let c0_id = c0.id()
-  let p0_id = p0.id()
+  let p0_cpy = { id: p0.id(), _firstname: p0._firstname, _lastname: p0._lastname, _birthDate: p0._birthDate };
   cc.unregisterObjects(component, [c0, p0]);
   db.farPromise('rawQuery', { results: [
     { name: "peoples", where: { $instanceOf: People, _cars: { $has: c0 } }, scope: ['_firstname', '_lastname', '_birthDate', '_cars'] },
@@ -259,19 +243,20 @@ function query_cars_peoples_constraint_on_relation(f: Flux<Context>) {
     let peoples = envelop.result()['peoples'];
     assert.equal(peoples.length, 1);
     let lp0 = peoples[0] as typeof p0;
+    cc.registerObjects(component, [lp0]);
     assert.equal(lp0._cars.size, 2);
     let lc0 = [...lp0._cars].find(c => c.id() === c0.id()) as typeof c0;
+    cc.registerObjects(component, [lc0]);
     assert.notEqual(lc0, c0, "objects where unregistered, the datasource should not return the same object");
     assert.notEqual(lp0, p0, "objects where unregistered, the datasource should not return the same object");
     c0 = f.context.c0 = lc0;
-
-    assert.equal(lp0._firstname, p0._firstname);
-    assert.equal(lp0._lastname, p0._lastname);
-    assert.equal(lp0._birthDate!.getTime(), p0._birthDate!.getTime());
-    assert.sameMembers([...lp0._cars], [c0, c1]);
     p0 = f.context.p0 = lp0;
 
-    cc.registerObjects(component, [p0, c0]);
+    assert.equal(lp0._firstname, p0_cpy._firstname);
+    assert.equal(lp0._lastname, p0_cpy._lastname);
+    assert.equal(lp0._birthDate!.getTime(), p0_cpy._birthDate!.getTime());
+    assert.sameMembers([...lp0._cars], [c0, c1]);
+
     f.continue();
   });
 }
@@ -453,12 +438,14 @@ async function query_union_cars_peoples(f: Flux<Context>) {
   assert.isTrue(inv.hasResult());
   let u = inv.result()['u'];
   let lc0 = u.find(v => v instanceof Car) as typeof c0;
-  let lp0 = u.find(v => v instanceof People);
+  let lp0 = u.find(v => v instanceof People) as typeof p0;
   assert.equal(u.length, 2);
+  cc.registerObjects(component, [lc0!, lp0!]);
   deepEqual(lc0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: lp0 }, ["_id", "_name", "_owner", "_model"]);
   deepEqual(lp0, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
-  
-  cc.registerObjects(component, [c0, p0]);
+  f.context.c0 = lc0!;
+  f.context.p0 = lp0!;
+
   f.continue();
 }
 async function query_cars_sub_scope(f: Flux<Context>) {
@@ -476,8 +463,11 @@ async function query_cars_sub_scope(f: Flux<Context>) {
   let u = inv.result()['u'];
   let lc0 = u.find(v => v instanceof Car) as typeof c0;
   assert.equal(u.length, 1);
+  cc.registerObjects(component, [lc0]);
+  cc.registerObjects(component, [lc0._owner!]);
   deepEqual(lc0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: lc0._owner }, ["_id", "_name", "_owner", "_model"]);
   deepEqual(lc0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
+  cc.unregisterObjects(component, [lc0, lc0._owner!]);
   
   cc.registerObjects(component, [c0, p0]);
   f.continue();

@@ -57,8 +57,10 @@ export class ControlCenter {
     this._objects.forEach((o, k) => {
       let m = o.manager();
       if (m._components.delete(component)) {
-        if (m._components.size === 0)
+        if (m._components.size === 0) {
           this._objects.delete(k);
+          o.__manager = new VersionedObjectManager.UnregisteredVersionedObjectManager(m);
+        }
       }
     });
   }
@@ -67,7 +69,7 @@ export class ControlCenter {
     if (!this._components.has(component))
       throw new Error(`you must register the component with 'registerComponent' before registering objects`);
     const notificationCenter = this.notificationCenter();
-    objects.forEach(o => {
+    for (let o of objects) {
       let id = o.id();
       let i = this._objects;
       let d = i.get(id);
@@ -77,8 +79,8 @@ export class ControlCenter {
         i.set(id, d = o);
       if (d !== o)
         throw new Error(`a different object with the same id (${id}) is already registered`);
-      d.manager()._components.add(component);
-    });
+      d.manager().registerComponent(component);
+    }
   }
 
   unregisterObjects(component: AComponent, objects: VersionedObject[]) {
@@ -91,8 +93,10 @@ export class ControlCenter {
       let m = o.manager();
       if (!m._components.delete(component))
         throw new Error(`cannot unregister an object that is not registered by the given component`);
-      if (m._components.size === 0)
+      if (m._components.size === 0) {
         i.delete(id);
+        o.__manager = new VersionedObjectManager.UnregisteredVersionedObjectManager(m);
+      }
     });
   }
 
