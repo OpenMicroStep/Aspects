@@ -6,11 +6,11 @@ class MSSQLMaker extends SqlMaker {
     return `[${value.replace(/\]/g, ']]')}]`;
   }
 
-  insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
-    let sql = `INSERT INTO ${this.quote(table)} (${sql_values.map(c => c.sql).join(',')})`;
+  insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
+    let sql = `INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')})`;
     if (output_columns.length > 0)
       sql += ` OUTPUT ${output_columns.map((c, i) => `Inserted.${this.quote(c)}`).join(',')}`;
-    sql += ` VALUES (${sql_values.map(c => '?').join(',')})`;
+    sql += ` VALUES (${this.join_sqls(sql_values, ',')})`;
     return {
       sql: sql,
       bind: this.join_bindings(sql_values)

@@ -5,8 +5,8 @@ class OracleSqlMaker extends SqlMaker {
     return `"${value.replace(/"/g, '""')}"`;
   }
   
-  insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
-    let sql = `INSERT INTO ${this.quote(table)} (${sql_values.map(c => c.sql).join(',')}) VALUES (${sql_values.map(c => '?').join(',')})`;
+  insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
+    let sql =`INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')}) VALUES (${this.join_sqls(sql_values, ',')})`;
     if (output_columns.length > 0)
       sql += ` RETURNING ${output_columns.map((c, i) => `${this.quote(c)} INTO :r${i}`).join(',')}`;
     return {

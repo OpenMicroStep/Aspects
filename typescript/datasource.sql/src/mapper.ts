@@ -24,7 +24,7 @@ elementFactories.registerSimple('sql-value', (reporter, name, definition, attrPa
   return new SqlValue('sql-value', name, parent);
 });
 export class SqlValue extends Element {
-  type: "autoincrement" | "ref" | "value"
+  type: "autoincrement" | "ref" | "value" | "sql"
   insert?: SqlInsert
   value?: string
 }

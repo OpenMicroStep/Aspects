@@ -78,15 +78,11 @@ export class SqlMaker {
     return sql_where.sql ? `WHERE ${sql_where.sql}` : '';
   }
 
-  values(columns: string[], values: any[]) : SqlBinding[] {
-    return columns.map((c, i) => ({ sql: this.quote(c), bind: [values[i] !== undefined ? values[i] : null] }));
-  }
-
-  insert(table: string, sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
+  insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
     if (output_columns.length > 1)
       throw new Error(`default maker doesn't support multiple output columns`);
     return {
-      sql: `INSERT INTO ${this.quote(table)} (${sql_values.map(c => c.sql).join(',')}) VALUES (${sql_values.map(c => '?').join(',')})`,
+      sql: `INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')}) VALUES (${this.join_sqls(sql_values, ',')})`,
       bind: this.join_bindings(sql_values)
     };
   }
@@ -128,11 +124,15 @@ export class SqlMaker {
   }
 
   value(value: any) : SqlBinding {
-    return { sql: '?', bind: [value] };
+    return { sql: '?', bind: [value !== undefined ? value : null] };
   }
 
   value_concat(values: SqlBinding[]) : SqlBinding {
     return { sql: this.join_sqls(values, " || "), bind: this.join_bindings(values) };
+  }
+
+  values(values: any[]) : SqlBinding[] {
+    return values.map(this.value.bind(this));
   }
 
   column(table: string, name: string, alias?: string) {

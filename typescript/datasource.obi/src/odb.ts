@@ -111,7 +111,7 @@ export class OuiDB {
 
   async raw_insert(tr: DBConnectorTransaction, table: string, oid: number, cid: number, v)  {
     table = "TJ_VAL_" + table;
-    let sql_insert = this.maker.insert(table, this.maker.values(["VAL_INST", "VAL_CAR", "VAL"], [oid, cid, v]), []);
+    let sql_insert = this.maker.insert(table, ["VAL_INST", "VAL_CAR", "VAL"], this.maker.values([oid, cid, v]), []);
     await tr.insert(sql_insert, []);
   }
 

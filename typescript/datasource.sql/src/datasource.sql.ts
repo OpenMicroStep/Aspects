@@ -117,9 +117,16 @@ export class SqlDataSource extends DataSource
         let key = "";
         let values = valuesByTable.get(c)!;
         let output_columns: string[] = [];
+        let columns: string[] = [];
+        let sql_values: SqlBinding[] = [];
         for (let value of c.values) {
           switch (value.type) {
             case 'autoincrement':
+              output_columns.push(value.name); 
+              break;
+            case 'sql':
+              columns.push(value.name);
+              sql_values.push({ sql: value.value!, bind: [] });
               output_columns.push(value.name); 
               break;
             case 'ref': {
@@ -133,7 +140,9 @@ export class SqlDataSource extends DataSource
               throw new Error(`unsupported sql-value type: ${value.type}`);
           }
         }
-        let sql_insert = this.maker.insert(c.table, this.maker.values(Array.from(values.keys()), Array.from(values.values())), output_columns);
+        columns.push(...values.keys());
+        sql_values.push(...this.maker.values([...values.values()]));
+        let sql_insert = this.maker.insert(c.table, columns, sql_values, output_columns);
         let result = await tr.tr.insert(sql_insert, output_columns); // sequential insertion
         output_columns.forEach((c, i) => values.set(c, result[i]));
         if (c === idAttr.insert) {
