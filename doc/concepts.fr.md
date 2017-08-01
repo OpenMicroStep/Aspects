@@ -20,66 +20,31 @@ Le pluriel veut souligner qu'un même objet n'est pas vue exactement de la même
 Les objets utilisés dans une application peuvent apparaître dans différents langages. 
 Aujourd'hui, pour permettre l'utilisation d'un seul langage coté client et serveur, on écrira en TypeScript, qui est un surensemble typé du javascript.
 
-La classe d'un objet aura une représentation, nommée *interface*, dans chacun des langages. 
-On disposera par exemple d'une interface objective-c (.h) pour l'utilisation de l'objet coté serveur et d'une interface javascript (.ts) pour l'utilisation de l'objet dans un client web.
+La classe d'un objet à une représentation, nommée *interface*.
+Les interfaces sont décrites dans un fichier indépendant du langage, formalisé et qui s'écrit sous la forme d'une documentation pour encourager tout un chacun à décrire le plus possible les objets construits.
 
-Ces interfaces seront rassemblées dans un même fichier .interfaces. 
-Et c'est le build qui construira automatiquement ces fichiers. La description des interfaces est donnée ci-dessous.
-
-**Ex:** class Personne en obj-c et ts
-	
-```objc
-@interface Person : NSObject 
-{
-@private
-  MSString *_firstName, *_lastName;
-  MSDate *_birthDate;
-}
-
-- (MSString*)firstName;
-- (MSString*)lastName;
-- (MSString*)fullName; // first last
-- (MSDate*)birthDate;
-- (int)age;
-
-@end
-```
-
-```ts
-export class Person {
-  _firstName: string;
-  _lastName:  string;
-  _birthDate: date;
-
-  firstName() : string;
-  lastName()  : string;
-  fullName()  : string;
-  birthDate() : date;
-  age()       : integer;
-}
-```
-
-*ts* ne permet pas cependant de séparer l'interface de l'implémentation.
-
-Au lieu de cela, on écrira les interfaces dans un fichier indépendant du langage, qui est formalisé et qui s'écrit sous la forme d'une documentation pour encourager tout un chacun à décrire le plus possible les objets construits.
-
-Voici à quoi ressemble les interfaces de Person rassemblés dans un même fichier `Person.interface.md` :
+Voici à quoi ressemble les interfaces de *Person* et *Cat* rassemblés dans un même fichier `Person.interface.md` :
 
 ```md
 ## class Person
-Description de la classe
+Une personne
 
 ### attributes
 #### _firstName: string;
+Prénom
 #### _lastName:  string;
+Nom de famille
 #### _birthDate: date;
+Date de naissance
 #### _mother: Person;
+Mère
 #### _father: Person;
+Père
 #### _cats: [0, *, Cat];
 _relation_: `_owner`
+Chats dont la personne est propriétaire
 
 ### queries
-
 #### _sons: [0, *, Person]
 Les enfants de cette personne
 
@@ -101,14 +66,30 @@ Les enfants de cette personne
 #### age()       : integer;
 
 ## class Cat
+Un chat
 ### attributes
 #### _owner: Person
 _relation_: `_cats`
+Le propriétaire
 ```
 
 Dans l'exemple ci-dessus, on a 5 mots clés qui sont `class`, `attributes`, `queries`, `category` et `farCategory`.
 
-Toute méthode doit faire partie d'une catégorie. Chaque catégorie doit être implémentée dans les langages spécifiés pour cette catégorie.
+__Toute méthode doit faire partie d'une catégorie__. Chaque catégorie doit être implémentée dans les langages spécifiés pour cette catégorie.
+
+Tous les attributs de __même nom__ doivent avoir le __même type__.
+
+### Sous-objets
+
+La notion de sous-objet permet de regrouper des ensembles d'attributs facilement, par exemple la position GPS est un sous-objet contenant les attributs longitude et latitude.
+
+Les valeurs des sous-objets sont donc considérés comme étant des attributs de l'objet qui les contients.
+
+Ainsi:
+
+ - la suppression d'un objet implique la __suppression des sous-objets__
+ - les sous objets ne contiennent pas d'attribut `_id`, ni `_version` car celui-ci est porté par l'objet parent (le 1er objet parent qui n'est pas un sous-objet)
+ - les relations vers les sous-objets sont interdits
 
 ### Description des types
 
@@ -122,7 +103,7 @@ Le type est soit un type primaire, soit un type décrit.
 - boolean
 - array
 - set
-- map
+- dict
 - identifier
 - object
 - nom d'une classe
@@ -145,15 +126,29 @@ Exemples de cardinalités:
 Pour un dictionnaire, il est possible de décrire finement sa constitution via la syntaxe: `{ property: type }`.
 Si property vaut `*`, elle représente alors toutes les clés restantes possibles.
 
+Examples:
+
+```
+[2, 2, string]: un tableau de 2 strings
+dict: pas d'autre vérification que c'est un dictionaire
+{k1:t1,k2:t2} le dico ne contient que les clés k1 et k2
+{k1:t1,*:t2} les autres clés sont de type t2 
+```
+
 ### Relations
 
 L'un des objectifs d'aspect étant de maintenir un graphe d'objet cohérent. Pour les problématiques liées aux relations l'approche classique est de mettre à jour dans les "setters" l'autre coté de la relation. Cela est certe efficace, seulement, cette gestion _manuelle_ ne respecte pas les principes d'aspects.
 
-Lors de la suppression d'un objet aspect, aucun usage de cet objet n'est permis, il est donc de la responsabilité du developpeur de supprimer tout usage avant suppression. Il est possible de demander au CdC la liste des usages en cours d'un objet (composants et relations). Tant qu'il restera un usage, l'objet n'est pas supprimable.
+Lors de la suppression d'un objet aspect, aucun usage de cet objet n'est permis, il est donc de la responsabilité du développeur de supprimer tout usage avant suppression. Il est possible de demander au CdC la liste des usages en cours d'un objet (composants et relations). Tant qu'il restera un usage, l'objet n'est pas supprimable.
+La vérification permettant de supprimer un objet est de la reponsabilité de la DataSource.
 
-Pour maintenir les relations, le CdC a besoin de relier les 2 cotés de la relation. Cette information est saisie dans le fichier d'interface (_relation_: `_nom_de_l_attribut`).
+> Sur ce point, il reste du travail, car l'information sur la liste des usages ne peut être connu que du coté "serveur".
+
+Pour maintenir les relations, le CdC a besoin de relier les 2 cotés de la relation. Cette information est saisie dans le fichier d'interface (_relation_: `_nom_de_l_attribut`). Pour qu'une relation soit fonctionnelle, elle doit être saisie des 2 cotés.
 
 ### Requêtes
+
+> Non implémenté
 
 Une requête est définit par son nom, le type de retour associé et la définition de la requête en elle même.
 Elle permet de demander simplement des informations supplémentaires proches de l'objet qui la défini sans avoir à créer une requête dédié.
@@ -164,17 +159,12 @@ Elle prend la forme d'un attribut accessible uniquement en lecture seule et char
 
 Pour les méthodes des catégories lointaines, on vérifiera les types des arguments et du résultat en fonction de la déclaration de la méthode.
 
-~~~
+```md
 ### category calculation [objc]
-  age(void)    : integer;
-  labels(void) : {first-last:string, last-first:string, names:[2, 2, string]},
-  mess(dict)   : {_key:identifier, nom:string, prénom:string, *:int},
-
-[2, 2, string]: un array de 2 strings
-dict: pas d'autre vérification que c'est un dico
-{k1:t1,k2:t2} le dico ne contient que les clés k1 et k2
-{k1:t1,*:t2} les autres clés sont de type t2 
-~~~
+#### `age(void)    : integer`
+#### `labels(void) : {first-last:string, last-first:string, names:[2, 2, string]}`
+#### `mess(dict)   : {_key:identifier, nom:string, prénom:string, *:int}`
+```
 
 ## <a name="Aspects"></a>Aspects et catégories [☝︎](#☝︎)
 
@@ -182,14 +172,14 @@ Un objet n'est en général pas le même selon qu'on le regarde du point de vue 
 
 Un aspect représente alors l'objet selon un point de vue particulier. Dès lors, décrire un aspect `server` et un aspect `client` revient à énumérer les catégories qui seront effectivement présentes dans chacun des environnements.
 
-~~~
+```md
 ### aspect server
 #### categories: core, calculation
 
 ### aspect client
 #### categories: core
 #### farCategories: calculation
-~~~
+```
 
 Les méthodes de `calculation` s'exécutent sur le serveur (en fait sur l'aspect qui a mis cette `farCategory` dans ses `categories`) et non sur le client. Par contre, le client y a accès si la catégorie est signalée dans les `farCategories` de l'aspect.
 
@@ -205,18 +195,11 @@ aspect client       core calculation(far) carto(far)
 
 Pour introduire les aspects, nous avons parlé de clients et de serveurs mais de manière plus générale, un aspect est simplement la description d'un environnement qui exécute un certain nombre de catégories et qui peut accéder à d'autres catégories implémentées sur d'autres environnements.
 
-La seule restriction est qu'une catégorie déclarée comme farCategory ne doit appartenir en tant que catégorie qu'à un et un seul aspect, celui qui implémente effectivement cette catégorie. (Peut évoluer dans le futur.)
-
-Futur:
-
-- un aspect peut déclarer explicitement ses attributs s'il veut en restreindre la liste ?
-- si une catégorie de `categories` est multi-languages mais que l'aspect ne contient qu'une implémentation, il faut pouvoir dire laquelle. A priori, cela dépend de la target donc c'est sans donc voir comment on sait que la target étant en objc il faut prendre l'implémentation objc.
-
 ## <a name="farCategory"></a>farCategory [☝︎](#☝︎)
 
 Restriction des méthodes pour les méthodes des catégories lointaines:
 
-- elle ne peut utiliser que des méthodes de catégories standards (non lointaines). Donc elle ne peut pas non plus utiliser des méthodes de sa propre catégorie. L'idée est qu'une méthode lointaine s'utilise côté client et s'implémente côté serveur.
+- elle ne peut utiliser que des _méthodes de catégories standards_ (non lointaines). L'idée est qu'une méthode lointaine s'utilise côté client et s'implémente côté serveur.
 - Un seul argument qui peut être un dictionnaire
 - Vérification des types en profondeur selon la signature
 - Appel au travers d'une invocation
@@ -240,18 +223,25 @@ Et il y a tous les retours qui ne sont pas ordinaires que l'on qualifie habituel
 
 Il peut aussi se faire qu'une erreur se soit produite mais que l'on ait quand même un résultat. C'est un cas classique lors du décodage d'une donnée, par exemple on décode un fichier .interface.md ou .json et il n'est pas bien formé. Il y a une erreur car la donnée est pas bien formée mais il y a potentiellement un résultat de tout ce qui a été traduit. Enfin, on peut aussi vouloir récupérer plusieurs erreurs comme lors de l'analyse d'un fichier par un compilateur.
 
-Donc outre le résultat classique, une méthode lointaine peut **toujours** retourner un objet Diagnostic (dico {is: diagnostic, reasons:[]} ?) qui contient un ensemble de raisons. Chaque raison a au moins un nom mais peut aussi contenir toute information complémentaire (date, ligne, colonne, texte explicatif, etc.). Si un résultat est quand même retourné, il est présent:
+Donc outre le résultat classique, une méthode lointaine peut **toujours** retourner des diagnotisques. Chaque raison a au moins un nom mais peut aussi contenir toute information complémentaire (date, ligne, colonne, texte explicatif, etc.). Si un résultat est quand même retourné, il est présent:
+
+> Non implémenté
+> L'object a terme est d'avoir un flux de diagnostic dont certain sont des résultats.
+> Pour l'instant l'objet Invocation contient un ensemble de diagnostics et un resultat
 
 - soit dans le résultat s'il est valide,
 - soit dans le diagnostic (clé, attribut ou méthode uncompletedResult) s'il est inachevé. S'il se retrouve là, il est à utiliser avec précaution car c'est:
 	- soit que le résultat a été intentionnellement placé à cet endroit par la méthode lointaine pour pouvoir retourner un résultat dont elle veut éviter la vérification du type,
 	- soit que le résultat était initialement dans `result` mais que la vérification a échoué.
 
+
 ### Vérification 
 
 Lors de l'application d'une méthode lointaine, il y a une vérification des types de l'argument et du résultat. Cette vérification peut mener à une erreur et éventuellement à un uncompletedResult si c'est le résultat qui ne vérifie pas le type déclaré. La profondeur de la vérification dépend de la signature donnée à la méthode (cf. plus haut signature des méthodes).
 
-Par exemple, le retour peut avoir comme type {aKey:[1,2,integer]} ce qui signifie que le résultat est un dictionnaire devant contenir une clé aKey qui a pour valeur un tableau de 1 ou 2 entiers. Il n'y a pas d'autres clés. Si on veut que le dico puisse contenir d'autres clés non vérifiées il faut écrire *:any.
+> Je ne suis pas d'accord sur ce point, je pense que si le résultat n'est pas valide au niveau du type, alors c'est une erreur de programmation, il n'y a pas de raison de fuité des informations potentiellement sensible au client, donc: un diagnostic de type et pas de resultat. C'est d'ailleur l'implémentation actuelle.
+
+Par exemple, le retour peut avoir comme type `{aKey:[1,2,integer]}` ce qui signifie que le résultat est un dictionnaire devant contenir une clé aKey qui a pour valeur un tableau de 1 ou 2 entiers. Il n'y a pas d'autres clés. Si on veut que le dico puisse contenir d'autres clés non vérifiées il faut écrire `*:any`.
 
 De plus si le résultat contient des objets, il doivent respecter les attributs et leurs types déclarés pour leur classe. Autrement dit, chaque attribut doit appartenir aux attributs de la classe et avoir le bon type.
 
@@ -278,23 +268,20 @@ L'appel se construit selon 4 procédés différents qui ont sensiblement le mêm
 Ils ne permettent une vérification du typage à la compilation mais tous les procédés effectuent la vérification dynamique des types.
 
 Le cdc garde trace de toute les transactions non terminées.
+> Non implémenté
 
 C'est à partir de l'invocation que l'appel se fait. 
 Il y a 4 méthodes différentes en fonction de la manière dont on veut traiter le résultat.
-
-On suppose que l'enveloppe a été créée
-
-	envelop= new Invocation(receiver, methodName, argument);
 	
 1/ Callback
 
-	envelop.far((envelop)=> {…})
+	receiver.farCallback(method_name, argument, (envelop)=> {…})
 
 Le callback n'a qu'un seul argument qui est l'enveloppe dans laquelle a été placé le résultat.
 
 2/ Evénement
 
-	envelop.farEvent('event'); 
+	receiver.farEvent(method_name, argument, 'event name'); 
 
 Lors du retour, l'évènement `event` est publié sur l'objet `receiver` avec en information de la notification, l'enveloppe contenant le résultat (éventuellement partiel). Pour le recevoir, il faut s'être déclaré comme observateur dans le centre de notification (nc) du cdc.
 
@@ -306,19 +293,21 @@ où l'`observeur` est celui qui veut recevoir l'événement et `méthod` une mé
 
 3/ Async
 
-	envelop.farAsync(pool, envelopKey?);
+	receiver.farAsync(pool, method_name, argument);
 	
-Construit une fonction Async pouvant s'utiliser dans un pool et qui place l'enveloppe dans `pool.context.envelop` ou `pool.context.envelopKey` si `envelopKey` est donnée.
+Construit une fonction Async pouvant s'utiliser dans un pool et qui place l'enveloppe dans `pool.context.envelop`.
 
 4/ Promise
 
-	envelop.farPromise(envelop);
+	receiver.farPromise(method_name, argument);
 	
 Construit une promise à partir de l'enveloppe.
 
 Enfin il est possible d'annuler une invocation envoyée et non terminée en utilisant la méthode
 
 	envelop.abort()
+
+> Non implémenté
 
 ### Implémentation d'une méthode lointaine
 
@@ -331,7 +320,7 @@ Si la méthode est asynchrone:
 
 ## Persistence DataSource
 
-Un objet persistent contient toujours un attribut *_id* et un attribut *_version* qui sont toujours transmis avec l'objet. Par contre, certains messages pourront renvoyer des objets partiels (avec seulement quelques attributs renseignés), principalement pour constituer des listes. Dans ce cas l'objet sera signalé comme chargé partiellement (*_partial:true*).
+Un objet persistent contient toujours un attribut *_id* et un attribut *_version* qui sont toujours transmis avec l'objet. Par contre, certains messages pourront renvoyer des objets partiels (avec seulement quelques attributs renseignés), principalement pour constituer des listes. Dans ce cas l'objet sera signalé comme chargé partiellement (*manager().isPartial()*).
 
 L'objet DataSource exporte plusieurs méthodes via une catégotie lointaine permettant de récupérer des données en posant des questions, de récupérer des objets complets à partir d'in identifiant ou de sauver ces objets.
 
@@ -342,8 +331,6 @@ Toute application cliente est organisée autour d'un centre de contrôle permett
 - de gérer les objets au sein du client
 - de gérer les objets et les méthodes lointaines entre le client et le serveur
 - d'organiser les comportements des composants d'interface pour rendre ces derniers les plus indépendants possibles des outils utilisés (angular, react...)
-
-Un CdC nommé `x` sait prendre en compte tous les objets déclarant un aspect nommé `x`.
 
 Les méthodes déclarées dans les catégories de l'aspect sont directement accessibles.
 
