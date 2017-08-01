@@ -10,21 +10,15 @@ Ce format utilise 2 types d'objets:
 
  - ensemble (`ObjectSet`)
   - des contraintes de type (instanceOf, memberOf, in, union, elementOf)
-  - une liste de contraintes
+  - une liste de contraintes  (`Constraint`)
   - si nommé, c'est un ensemble qui sera dans le dictionnaire de sortie
   - si nommé, un ordre de recherche peut être définit
   - si nommé, un ensemble d'attributs sortant
- - contrainte (`Constraint`)
-  - operateur
-  - entre la valeur d'un attribut ou l'objet
-  - et une autre valeur
-    - fixe (`ConstraintOnValue`)
-    - définit dans un autre ensemble (`ConstraintBetweenSet`)
 
 ## Algorithme
 
-L'algorithme est récursif avec détection de cycle et ne va manipuler que les ensembles finaux.
-Cela implique d'analyser les contraintes plusieurs fois en cas de réutilisation mais limite le nombre d'allocation nécéssaire.
+L'algorithme est récursif avec détection de cycle et ne va manipuler que les ensembles finaux (le système classique de chargement des éléments n'est pas utilisé).
+Cela implique d'analyser les contraintes plusieurs fois en cas de réutilisation mais limite l'impact sur les performances.
 Pour ce faire, l'analyse part des objets finaux et remonte toutes les dépendances.
 Si la dépendance est déjà résolu alors on utilise ce résultat (ie. un ensemble).
 
@@ -60,19 +54,15 @@ Par exemple, la requête:
 ```
 
 
-Sera transformé en 4 ensembles et 7 contraintes (TX et CX):
+Sera transformé en 3 ensembles et 7 contraintes:
 
 ```ts
-G=  Ensemble([instanceOf Gap     ], [])
-
-g2= Ensemble([elementOf G (T1)   ], [_resource, _startingDate, _endingDate  ])
+g2= Ensemble([instanceOf Gap     ], [_resource, _startingDate, _endingDate  ])
                                      C1 ==      C2   >         C3   <        
-g1= Ensemble([elementOf G (T2)   ], [_resource, _endingDate  , _startingDate], name= "conflicts", scope: ['_startingDate', '_endingDate', '_resource'])
+g1= Ensemble([instanceOf Gap     ], [_resource, _endingDate  , _startingDate], name= "conflicts", scope: ['_startingDate', '_endingDate', '_resource'])
                                      C5 ==
 r = Ensemble([instanceOf Resource], [_id      ], name= "resources", scope: [...])
 ```
-
-Des méthodes de simplification seront mises à disposition des datasources pour simplier les ensembles en fonction de profils d'optimisations.
 
 Cette forme est facilement utilisable pour transformation en SQL:
 
