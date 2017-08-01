@@ -5,7 +5,7 @@ Application d'une source de données à une base documentaire
 
  - correspondances entre les noms d'attributs et leurs chemins au sein d'un document
  - correspondances entre le type des attributes et les valeurs effective
- - absence de transaction
+ - absence de transaction, l'ordre d'insertion est important
  - dependances vis à vis de l'objet racine et relations_n,n_ / _1,n_ / _1,1_
  - valeurs par défaut et non existance
  - action sur la suppression et gestion des usages
@@ -13,17 +13,12 @@ Application d'une source de données à une base documentaire
 
 ## Définition du mappage Document
 
-La définition du mappage Document vers Aspects se fait via 2 éléments: 
+La définition du mappage Document vers Aspects se fait en partant de la forme du document.
 
- - `doc-mapped-object`: définition du mappage d'un objet Aspect
+ - `doc`: définition du mappage d'un Document
    - `name`: le nom de l'objet Aspect à mapper
-   - `collection`: le nom de la collection qui contient le document
-   - `attributes`: liste d'attributs à mapper (_id et _version compris)
-   - `fromDbKey?: (id) => id`, fonction de transformation de l'id Aspect vers l'id en base pour l'ensemble des attributs,
-   - `toDbKey?: (id) => id`, fonction de transformation de l'id en base vers l'id Aspect pour l'ensemble des attributs,
- - `doc-mapped-attribute`: mappage d'un attribut Aspect vers Document
+ - `doc-attribute`: mappage d'un attribut Document vers Aspect
    - `name`: le nom de l'attribut Aspect à mapper
-   - `path`: chemin vers la valeur (`[]` signifie pour tout valeur de ce tableau, `.` permet de définir le parcours)
    - `fromDb?: (value) => value`, fonction de transformation de la valeur Aspect vers la valeur en base pour cet attribut,
    - `toDb?: (value) => value`, fonction de transformation de la valeur en base vers la valeur Aspect pour cet attribut,
 
@@ -39,24 +34,19 @@ class Cat
   _name: string
   _owner: Person
 
-"Person=": { is: "doc-mapped-object",
-  collection: "Person",
-  attributes: [
-    { is: "doc-mapped-attribute", name: "_id"       , path: "id"        },
-    { is: "doc-mapped-attribute", name: "_version"  , path: "version"   },
-    { is: "doc-mapped-attribute", name: "_firstname", path: "firstname" },
-    { is: "doc-mapped-attribute", name: "_lastname" , path: "lastname"  },
-    { is: "doc-mapped-attribute", name: "_cats"     , path: "cats[].id" },
-  ],
+
+"Person=": { is: "doc",
+  id       : { is: "attribute", name: "_id"        },
+  version  : { is: "attribute", name: "_version"   },
+  firstname: { is: "attribute", name: "_firstname" },
+  lastname : { is: "attribute", name: "_lastname"  },
+  cats     : ["=Cat"],
 },
-"Cat=": { is: "doc-mapped-object",
-  collection: "Person",
-  attributes: [
-    { is: "doc-mapped-attribute", name: "_id"     , path: "cats[].id"      },
-    { is: "doc-mapped-attribute", name: "_version", path: "cats[].version" },
-    { is: "doc-mapped-attribute", name: "_name"   , path: "cats[].name"    },
-    { is: "doc-mapped-attribute", name: "_owner"  , path: "id"             },
-  ],
+"Cat=": { is: "doc",
+  id       : { is: "doc-attribute", name: "_id"        },
+  version  : { is: "doc-attribute", name: "_version"   },
+  firstname: { is: "doc-attribute", name: "_firstname" },
+  name     : { is: "doc-attribute", name: "_name"      },
 }
 ```
 
@@ -72,23 +62,19 @@ class Cat
   _name: string
   _owners: Person[]
 
-"Person=": { is: "doc-mapped-object",
-  collection: "Person",
-  attributes: [
-    { is: "doc-mapped-attribute", name: "_id"       , path: "id"        },
-    { is: "doc-mapped-attribute", name: "_version"  , path: "version"   },
-    { is: "doc-mapped-attribute", name: "_firstname", path: "firstname" },
-    { is: "doc-mapped-attribute", name: "_lastname" , path: "lastname"  },
-    { is: "doc-mapped-attribute", name: "_cats"     , path: "cats[]"    },
-  ],
+"Person=": { is: "doc",
+  id       : { is: "doc-attribute", name: "_id"        },
+  version  : { is: "doc-attribute", name: "_version"   },
+  firstname: { is: "doc-attribute", name: "_firstname" },
+  lastname : { is: "doc-attribute", name: "_lastname"  },
+  firstname: { is: "doc-attribute", name: "_firstname" },
+  cats:      { is: "doc-attribute", name: "_cats"      },
 },
-"Cat=": { is: "doc-mapped-object",
-  collection: "Cat",
-  attributes: [
-    { is: "doc-mapped-attribute", name: "_id"     , path: "id"       },
-    { is: "doc-mapped-attribute", name: "_version", path: "version"  },
-    { is: "doc-mapped-attribute", name: "_name"   , path: "name"     },
-    { is: "doc-mapped-attribute", name: "_owners" , path: "owners[]" },
-  ],
+"Cat=": { is: "doc",
+  id       : { is: "doc-attribute", name: "_id"        },
+  version  : { is: "doc-attribute", name: "_version"   },
+  firstname: { is: "doc-attribute", name: "_firstname" },
+  name     : { is: "doc-attribute", name: "_name"      },
+  owners   : { is: "doc-attribute", name: "_owners"    },
 }
 ```
