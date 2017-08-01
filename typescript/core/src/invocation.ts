@@ -49,7 +49,7 @@ export class Invocation<R> {
     Invocation.farCallback(receiver, method, argument, (invocation) => {
       receiver.manager().controlCenter().notificationCenter().postNotification({
         name: eventName,
-        object: onObject || this,
+        object: onObject || receiver,
         info: invocation
       })
     });
