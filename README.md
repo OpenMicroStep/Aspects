@@ -11,3 +11,6 @@ Aspects is a set of concepts to:
 
 To install aspects for javascript: `npm install @openmicrostep/aspects`
 
+## Documentation
+
+ - français: [doc/concepts.fr.md](doc/concepts.fr.md).
