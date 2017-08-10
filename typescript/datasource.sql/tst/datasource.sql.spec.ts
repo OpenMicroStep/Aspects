@@ -26,11 +26,14 @@ function createSqlControlCenter(flux) {
       ],
       attributes: [
           { is: "sql-mapped-attribute", name: "_id"        , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "id"        }] },
-          { is: "sql-mapped-attribute", name: "_version"   , insert: "=V", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "idVersion" }, { is: "sql-path", table: "Version", key: "id", where: { type: "Resource" }, value: "version" }] },
+          { is: "sql-mapped-attribute", name: "_version"   , insert: "=V", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "idVersion" }, 
+                                                                                  { is: "sql-path", table: "Version" , key: "id"    , value: "version"   , where: { type: "Resource" } }]
+          , fromDb: v => v - 100      , toDb: v => v + 100 },
           { is: "sql-mapped-attribute", name: "_name"      , insert: "=R", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "name"      }] },
           { is: "sql-mapped-attribute", name: "_firstname" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "firstname" }] },
           { is: "sql-mapped-attribute", name: "_lastname"  , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "lastname"  }] },
-          { is: "sql-mapped-attribute", name: "_birthDate" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "birthDate" }], fromDb: v => new Date(+v), toDb: d => d.getTime() },
+          { is: "sql-mapped-attribute", name: "_birthDate" , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "birthDate" }]
+          , fromDb: v => new Date(+v) , toDb: d => d.getTime() },
           { is: "sql-mapped-attribute", name: "_father"    , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "father"    }] },
           { is: "sql-mapped-attribute", name: "_mother"    , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "mother"    }] },
           { is: "sql-mapped-attribute", name: "_cars"                    , path: [{ is: "sql-path", table: "Car"     , key: "owner" , value: "id"        }] },

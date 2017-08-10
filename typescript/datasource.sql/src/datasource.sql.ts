@@ -60,7 +60,6 @@ export class SqlDataSource extends DataSource
       }
       else { // update syntax
         let iddb = attribute.toDbKey(mapper.toDbKey(id));
-        let ovdb = ov && mapValue(this, mapper, attribute, ov);
         let key = attribute.pathref_uniqid();
         let values = valuesByPath.get(key);
         if (!values) {
@@ -87,8 +86,10 @@ export class SqlDataSource extends DataSource
           }
         }
         values.sets.push(this.maker.set(this.maker.quote(last.value), nvdb));
-        if (!isNew)
+        if (!isNew) {
+          let ovdb = mapValue(this, mapper, attribute, ov);
           values.checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, ovdb));
+        }
       }
     };
     for (let [k, nv] of manager.localAttributes()) {
