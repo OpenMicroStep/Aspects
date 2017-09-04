@@ -44,7 +44,7 @@ export class InMemoryDataSource extends DataSource
         if (v instanceof InMemoryDataSource.DataStoreObject) {
           let dObject = v;
           let lId = this.ds.fromDSId(dObject.id);
-          let lObject = cc.registeredObject(lId, dObject.is);
+          let lObject = cc.findOrCreate(lId, dObject.is);
           stack.add(k);
           this._load(component, ds, scope, stack, lObject, dObject);
           stack.delete(k);
@@ -78,7 +78,7 @@ export class InMemoryDataSource extends DataSource
     res.forEach((objs, set) => {
       ret[set.name] = objs.map(dObject => {
         let lId = this.ds.fromDSId(dObject.id);
-        let lObject = cc.registeredObject(lId, dObject.is);
+        let lObject = cc.findOrCreate(lId, dObject.is);
         if (set.scope)
           this._loads(component, ds, set.scope, lObject, dObject);
         return lObject;

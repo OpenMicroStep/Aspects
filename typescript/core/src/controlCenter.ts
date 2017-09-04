@@ -11,11 +11,11 @@ export interface AComponent {
 }
 
 export class ControlCenter {
-  /** @internal */ _notificationCenter = new NotificationCenter();
-  /** @internal */ _objects = new Map<Identifier, VersionedObject>();
-  /** @internal */ _components = new Set<AComponent>();
-  /** @internal */ _aspects = new Map<string, Aspect.Constructor>();
-  /** @internal */ _cache: AspectCache;
+  /** @internal */ readonly _notificationCenter = new NotificationCenter();
+  /** @internal */ readonly _objects = new Map<Identifier, VersionedObject>();
+  /** @internal */ readonly _components = new Set<AComponent>();
+  /** @internal */ readonly _aspects = new Map<string, Aspect.Constructor>();
+  /** @internal */ readonly _cache: AspectCache;
 
   static readonly globalCache = new AspectCache();
 
@@ -25,28 +25,7 @@ export class ControlCenter {
   /// events
   notificationCenter() { return this._notificationCenter; }
 
-  /// category component
-  registeredObject(id: Identifier, classname: string) : VersionedObject;
-  registeredObject(id: Identifier) : VersionedObject | undefined;
-  registeredObject(id: Identifier, classname?: string) : VersionedObject | undefined {
-    let vo = this._objects.get(id);
-    if (!vo && classname) {
-      let cstor = this.aspect(classname)!;
-      vo = new cstor();
-      vo.manager().setId(id);
-    }
-    return vo;
-  }
-  
-  registeredObjects(component: AComponent) : VersionedObject[] {
-    let ret = <VersionedObject[]>[];
-    this._objects.forEach((o, k) => {
-      if (o.manager()._components.has(component))
-        ret.push(o);
-    });
-    return ret;
-  }
-
+  /// category registration
   registerComponent(component: AComponent) {
     this._components.add(component);
   }
@@ -65,7 +44,7 @@ export class ControlCenter {
     });
   }
 
-  registerObjects(component: AComponent, objects: VersionedObject[], method?: string, events?: string[]) {
+  registerObjects(component: AComponent, objects: VersionedObject[]) {
     if (!this._components.has(component))
       throw new Error(`you must register the component with 'registerComponent' before registering objects`);
     const notificationCenter = this.notificationCenter();
@@ -75,8 +54,6 @@ export class ControlCenter {
       let id = o.id();
       let i = this._objects;
       let d = i.get(id);
-      if (method)
-        (<(string | undefined)[]>(events || [undefined])).forEach(event => notificationCenter.addObserver(component as any, method, event, o));
       if (!d)
         i.set(id, d = o);
       if (d !== o)
@@ -114,26 +91,51 @@ export class ControlCenter {
     this.swapObjects(component, oldObject ? [oldObject] : [], newObject ? [newObject] : []);
     return newObject;
   }
+  
+  registeredObject(id: Identifier) : VersionedObject | undefined {
+    return this._objects.get(id);
+  }
+  
+  registeredObjects(component: AComponent) : VersionedObject[] {
+    let ret = <VersionedObject[]>[];
+    this._objects.forEach((o, k) => {
+      if (o.manager()._components.has(component))
+        ret.push(o);
+    });
+    return ret;
+  }
 
-  /// category VersionedObject
+  /// category creation
+  aspect(classname: string) {
+    return this._aspects.get(classname);
+  }
+
+  create<T extends VersionedObject>(classname: string, categories: string[]) : T {
+    let aspectCstor = this.aspect(classname);
+    if (!aspectCstor)
+      throw new Error(`cannot create ${classname}: no aspect found`);
+    for (let category of categories)
+      if (!aspectCstor.aspect.categories.has(category))
+        throw new Error(`cannot create ${classname}: category ${category} is missing in aspect ${aspectCstor.aspect.aspect}`);
+    return new aspectCstor() as T;
+  }
+
+  findOrCreate<T extends VersionedObject>(id: Identifier, classname: string, categories: string[] = []) : T {
+    let vo = this._objects.get(id);
+    if (!vo) {
+      vo = this.create<T>(classname, categories);
+      vo.manager().setId(id);
+    }
+    return vo as T;
+  }
+
+  /// category cache
   cache() {
     return this._cache;
   }
-  aspect(name: string) {
-    return this._aspects.get(name);
-  }
+
   installedAspectConstructors() {
     return this._aspects.values();
-  }
-
-  create<T extends VersionedObject>(cstor: VersionedObjectConstructor<VersionedObject>, categories: string[]) : T {
-    let aspectCstor = this.aspect(cstor.definition.name);
-    if (!aspectCstor)
-      throw new Error(`cannot create ${cstor.definition.name}: no aspect found`);
-    for (let category of categories)
-      if (!aspectCstor.aspect.categories.has(category))
-        throw new Error(`cannot create ${cstor.definition.name}: category ${category} is missing in aspect ${aspectCstor.aspect.aspect}`);
-    return new aspectCstor() as T;
   }
 
   changeObjectId(oldId: Identifier, newId: Identifier) {

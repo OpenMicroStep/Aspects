@@ -87,7 +87,7 @@ function shared() {
   let P = People.installAspect(cc, 'test1');
 
   let c0 = new C();
-  let c1 = c0.controlCenter().create<Car.Categories.local>(Car, ['local']);
+  let c1 = c0.controlCenter().create<Car.Categories.local>("Car", ['local']);
   assert.instanceOf(c1, C);
   assert.instanceOf(c1, Car);
 }

@@ -12,7 +12,7 @@ DemoApp.category('far', <DemoApp.ImplCategories.far<DemoApp>>{
         return value;
     },
     p0(): Person {
-        let p0 = this.controlCenter().create<Person.Categories.core>(Person, ['core']);
+        let p0 = this.controlCenter().create<Person.Categories.core>("Person", ['core']);
         p0.manager().setId(0);
         p0._firstName = "Linus";
         p0._lastName = "git";
@@ -20,7 +20,7 @@ DemoApp.category('far', <DemoApp.ImplCategories.far<DemoApp>>{
         return p0;
     },
     arr_p0_1(): Person[] {
-        let p0 = this.controlCenter().create<Person.Categories.core>(Person, ['core']);
+        let p0 = this.controlCenter().create<Person.Categories.core>("Person", ['core']);
         p0.manager().setId(0);
         p0._firstName = "Linus";
         p0._lastName = "Torvalds";
