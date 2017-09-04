@@ -488,7 +488,7 @@ function fastSafeCall(farImpl: Function, self, arg0): Promise<any> {
     else if (farImpl.length === 1) return Promise.resolve(farImpl.call(self, arg0));
     else {
       return new Promise((resolve) => {
-        Async.run({ result: undefined }, [
+        Async.run<{ result: any}>({ result: undefined }, [
           (p) => { farImpl.call(self, p, arg0); },
           (p) => { resolve(p.context.result); p.continue(); }
         ]);

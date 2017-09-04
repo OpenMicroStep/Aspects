@@ -167,7 +167,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
         }
         if (validator.preSavePerDomain) {
           let list = domainValidators.get(validator.preSavePerDomain);
-          list ? list.push(o) : validators.set(validator.preSavePerDomain, [o]);
+          list ? list.push(o) : domainValidators.set(validator.preSavePerDomain, [o]);
         }
       }
     }
