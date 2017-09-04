@@ -226,12 +226,42 @@ Les opérateurs sur les valeurs permettent de définir des contraintes.
 __Attention__: Toutes les comparaisons sur les chaînes de caractères (tri, `$eq`, `$neq`, `$lt`, ...) sont insensibles à la casse et suivent la spécification _Unicode Collation Algorithm_.
 Donc `"abc": { $eq: "ABC" }` est vrai.
 
+### Scope des objets trouvées
+
+Pour l'ensemble des objets trouvées, on définit l'ensemble d'informations (_scope_) à charger pour chaque objet.
+
+Le scope se définit par rapport au type des objets et au chemin nécéssaire pour accéder à un objet.
+A chaque couple type/chemin est associé un ensemble d'attributs à charger.
+
+On définit ainsi:
+
+ - `*`: tous les attributs possibles
+ - `_`: tous les chemins/types
+ - `.`: le chemin d'accès aux objets de premier niveau, soit les objets trouvées par la recherche
+ - `x.`: le chemin d'accès aux objets de second niveau via l'attribut _x_.
+ - `x.y.`: le chemin d'accès aux objets de troisième niveau via l'attribute _x_ puis _y_.
+
+Cette définition accepte autant de niveaux que nécéssaire.
+Si l'on souhaite uniquement charger des attributs de 1er niveau, il est possible de donner uniquement la liste des attributs possibles.
+
+Format:
+
+```js
+{
+  $type {
+    $chemin : $attributs,
+    ...
+  },
+  ...
+}
+```
+
 ### Tri du résultat
 
-La définition du tri se fait par un tableau dont les valeurs sont les attributs sur lequel porte le tri.
-Chaque attribut peut être préfixé par `+` ou `-` pour définir que le tri est respectivement __croissant__ ou __décroissant__.
-Le comportant par défaut est un tri __croissant__.
-La priorité du tri est définit par l'ordre des éléments dans le tableau, du plus prioritaire au moins prioritaire.
+La définition du tri se fait via le scope, cela permet d'utiliser une notion objet pour trier les objets.  
+Il suffit de préfixer un attribut par `+` ou `-` pour définir que le tri est respectivement __croissant__ ou __décroissant__.  
+La priorité du tri est définit par l'ordre des éléments dans le tableau, du plus prioritaire au moins prioritaire à partir du chemin `.`.  
+Si un attribut est utile uniquement pour le tri, il est possible d'ajouter `#` après `+` ou `-`, l'attribut ne sera alors pas chargé au sein de l'objet.
 
 ## Exemples:
 
@@ -309,8 +339,17 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
 {
   name: "person",
   where: { _firstname: "Vincent" },
-  sort: [ '+_firstname', '+_lastname'],
-  scope: ['_firstname', '_lastname'],
+  scope: { Person: { '.': ['+_firstname', '+_lastname'] } },
+}
+{
+  name: "person",
+  where: { _firstname: "Vincent" },
+  scope: { _: { _: ['+_firstname', '+_lastname'] } },
+}
+{
+  name: "person",
+  where: { _firstname: "Vincent" },
+  scope: ['+_firstname', '+_lastname'],
 }
 
 // Toutes les personnes et leurs chats dans 2 listes séparées
@@ -325,8 +364,8 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
     "=c._owner": { $eq: "=p" },
   },
   results: [
-    { name: "cats", where: "=cats", scope: ['_firstname', '_lastname', '_cats'] },
-    { name: "persons", where: "=persons", scope: ['_owner'] },
+    { name: "cats", where: "=cats", scope:['_owner'] },
+    { name: "persons", where: "=persons", scope: ['_firstname', '_lastname', '_cats'] },
   ]
 }
 
@@ -362,8 +401,8 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
       $out: "=c"
     },
     results: [
-      { name: "cats", where: "=cats", scope: ['_firstname', '_lastname', '_cats'] },
-      { name: "persons", where: "=persons", scope: ['_owner'] },
+      { name: "cats", where: "=cats", scope:['_owner'] },
+      { name: "persons", where: "=persons", scope: ['_firstname', '_lastname', '_cats'] },
     ]
 }
 
@@ -382,7 +421,10 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
     },
     "persons=": { $intersection: ["=C:_owner", "=P"] },
     results: [
-      { name: "persons", where: "=persons", scope: ['_owner'] },
+      { name: "persons", where: "=persons", scope: {
+        Person: { '.': ['_firstname', '_lastname', '_cats'] },
+        Cat { '_cats.': ['_name', '_owner'] },
+      }},
     ]
 }
 
@@ -412,7 +454,7 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
     },
     "persons=": { $intersection: ["=C:_owner", "=P"] },
     results: [
-      { name: "persons", where: "=persons", scope: ['_owner'] },
+      { name: "persons", where: "=persons", scope: ['_firstname', '_lastname'] },
     ]
 }
 
@@ -440,8 +482,14 @@ registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ rep
       "=g2._startingDate": { $lt: "=g1._endingDate"},
     },
     results: [
-      { name: "conflicts", where: "=conflicts", scope: ['_startingDate', '_endingDate', '_resource'] },
-      { name: "resources", where: "=conflicts:_resource", scope: [...] },
+      { name: "conflicts", where: "=conflicts", scope: {
+        Gap: {
+          '.': ['_startingDate', '_endingDate', '_resource'],
+        },
+        Resource {
+          '_resource.': ['*'],
+        }
+      }}
     ]
 }
 ```
