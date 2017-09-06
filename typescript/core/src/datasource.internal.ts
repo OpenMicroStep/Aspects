@@ -383,9 +383,9 @@ export namespace DataSourceInternal {
       }
     }
     if (aspects.size === 0) {
-      for (let cstor of cc._aspects.values()) {
-        if (hasAllAttributes(cstor.aspect, set, r_set, attributes))
-          aspects.add(cstor.aspect);
+      for (let aspect of cc.installedAspects()) {
+        if (hasAllAttributes(aspect, set, r_set, attributes))
+        aspects.add(aspect);
       }
     }
     else {
@@ -778,17 +778,17 @@ export namespace DataSourceInternal {
   }
   type VarPath = { set: ObjectSet, variable: string, attribute: string };
   class ParseContext {
-    constructor(public head: ParseStack, private _aspect: (name: string) => Aspect.Installed | undefined) {}
+    constructor(public head: ParseStack, public cc: ControlCenter) {}
 
     derive(head: ParseStack) {
-      return new ParseContext(head, this._aspect);
+      return new ParseContext(head, this.cc);
     }
     aspect(name: string | Function) : Aspect.Installed {
       let n: string = typeof name === "string" ? name : (name as any).aspect ? (name as any).aspect.name : (name as any).definition.name;
-      let aspect = this._aspect(n);
-      if (!aspect)
-        throw new Error(`aspect ${n} not found`);
-      return aspect;
+      return this.cc.aspectChecked(n);
+    }
+    aspects() {
+      return this.cc.installedAspects();
     }
     push(original: any) {
       this.head = new ParseStack(original, this.head);
@@ -993,8 +993,8 @@ export namespace DataSourceInternal {
     context.pop();
     return set;
   }
-  export function parseRequest(request: Request, findAspect: (name: string) => Aspect.Installed | undefined) : ObjectSet[] {
-    let context = new ParseContext(new ParseStack(request), findAspect);
+  export function parseRequest(request: Request, cc: ControlCenter) : ObjectSet[] {
+    let context = new ParseContext(new ParseStack(request), cc);
     let sets: ObjectSet[] = [];
     if (isResult(request))
       sets.push(parseResult(context, request));
@@ -1006,15 +1006,15 @@ export namespace DataSourceInternal {
     return sets;
   }
 
-  export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[], findAspect: (name: string) => Aspect.Installed | undefined) : VersionedObject[] {
-    let context = new ParseContext(new ParseStack(where), findAspect);
+  export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[], cc: ControlCenter) : VersionedObject[] {
+    let context = new ParseContext(new ParseStack(where), cc);
     let set = context.parseSet(where, "where");
     let sctx = new FilterContext(objects, versionedObjectMapper);
     return [...sctx.solveFull(set)];
   }
 
-  export function applyRequest(request: Request, objects: VersionedObject[], findAspect: (name: string) => Aspect.Installed | undefined) : { [s: string]: VersionedObject[] } {
-    let map = applySets(parseRequest(request, findAspect), objects, true);
+  export function applyRequest(request: Request, objects: VersionedObject[], cc: ControlCenter) : { [s: string]: VersionedObject[] } {
+    let map = applySets(parseRequest(request, cc), objects, true);
     let ret = {};
     map.forEach((objs, set) => {
       ret[set.name] = objs;
@@ -1050,7 +1050,7 @@ export namespace DataSourceInternal {
         if (sub_names.length) {
           stack.add(k);
           for (let sub_name of sub_names) {
-            let aspect = cc.aspect(sub_name)!.aspect;
+            let aspect = cc.aspect(sub_name)!;
             buildScopeTreeItem(cc, aspect, scope, lvl + 1, stack, handleAttribute);
           }
           stack.delete(k);

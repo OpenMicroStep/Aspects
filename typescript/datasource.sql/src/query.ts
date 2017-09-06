@@ -360,7 +360,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   }
 
   aspect(name: string) {
-    return this.ctx.controlCenter.aspect(name)!.aspect;
+    return this.ctx.controlCenter.aspectChecked(name);
   }
 
   setInitialUnion(queries: SqlMappedQuery[]) {
@@ -486,11 +486,12 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       //this.set.compatibleAspects(this.ctx.controlCenter);
     }
     let cc = this.ctx.controlCenter;
-    let aspects = [...this.mappers].map(m => cc.aspect(m.name)!);
-    this.scope = buildScopeTree(cc, aspects, this.set.scope || []);
+    let cstors = [...this.mappers].map(m => cc.aspectConstructorChecked(m.name)!);
+    this.scope = buildScopeTree(cc, cstors, this.set.scope || []);
     this.addAttribute("_id");
     this.addAttribute("_version");
-    for (let a of this.monoAttributes(aspects.map(a => a.aspect)))
+    // TODO: share mono attributes computation with execution work
+    for (let a of this.monoAttributes(cstors.map(c => c.aspect)))
       this.addAttribute(a);
     super.buildConstraints();
   }
@@ -705,8 +706,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let subid = mapper.fromDbKey(value);
       value = cc.registeredObject(subid);
       if (!value) {
-        value = new (cc.aspect(classname)!)();
-        value.manager().setId(subid);
+        value = cc.findOrCreate(subid, classname);
         cc.registerObjects(component, [value]);
       }
       let sub = scopeitem.subs.get(value.manager().name());
@@ -743,7 +743,7 @@ function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspe
       if (sub_names.length) {
         stack.add(k);
         for (let sub_name of sub_names) {
-          let sub_tree = new ScopeTreeItem(cc.aspect(sub_name)!);
+          let sub_tree = new ScopeTreeItem(cc.aspectConstructorChecked(sub_name));
           item.subs.set(sub_name, sub_tree);
           buildScopeTreeItem(cc, sub_tree, sub_tree.cstor.aspect, scope, stack);
           if (!sub_tree.objects)

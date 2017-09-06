@@ -40,7 +40,7 @@ export function classValidator(classname: string, allowUndefined: boolean) : Asp
     if (value === undefined && allowUndefined)
       return value;
     if (value instanceof VersionedObject) {
-      let cstor: Function | undefined = value.controlCenter().aspect(classname);
+      let cstor: Function | undefined = value.controlCenter().aspectConstructor(classname);
       if (!cstor && classname === "VersionedObject")
         return value;
       else if (!cstor)

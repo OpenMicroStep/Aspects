@@ -6,10 +6,7 @@ export {DataSource} from '../../../generated/aspects.interfaces';
 DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
   /// category core 
   filter(objects: VersionedObject[], arg1) {
-    return DataSourceInternal.applyWhere(arg1, objects, (name) => {
-      let cstor = this.controlCenter().aspect(name);
-      return cstor && cstor.aspect;
-    });
+    return DataSourceInternal.applyWhere(arg1, objects, this.controlCenter());
   }
 });
 export type DataSourceTransaction = {};
@@ -124,10 +121,7 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
 
 DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.implementation & { _safeValidators?: SafeValidators }>>{
   async safeQuery(request: { [k: string]: any }) {
-    let sets = DataSourceInternal.parseRequest(<any>request, (name) => {
-      let cstor = this.controlCenter().aspect(name);
-      return cstor && cstor.aspect;
-    });
+    let sets = DataSourceInternal.parseRequest(<any>request, this.controlCenter());
     let inv = await this.farPromise('implQuery', { tr: undefined, sets: sets });
     if (inv.hasResult()) {
       let r = inv.result();
@@ -196,10 +190,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
 
 DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.implementation>>{
   rawQuery(request: { [k: string]: any }) {
-    let sets = DataSourceInternal.parseRequest(<any>request, (name) => {
-      let cstor = this.controlCenter().aspect(name);
-      return cstor && cstor.aspect;
-    });
+    let sets = DataSourceInternal.parseRequest(<any>request, this.controlCenter());
     return this.farPromise('implQuery', { tr: undefined, sets: sets });
   },
   rawLoad(w: {objects: VersionedObject[], scope: string[]}) {

@@ -252,7 +252,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
     if (hasChanged && data.relation) {
       let { add: sadd, del: sdel } = diff<VersionedObject>(data.type, value, oldValue);
-      let otype = this.controlCenter().aspect(data.relation.class)!.aspect.attributes.get(data.relation.attribute)!.type;
+      let otype = this.controlCenter().aspectChecked(data.relation.class).attributes.get(data.relation.attribute)!.type;
       let add = true;
       let ai = 0, di = 0;
       while ((add = ai < sadd.length) || di < sdel.length) {

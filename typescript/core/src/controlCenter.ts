@@ -106,18 +106,39 @@ export class ControlCenter {
   }
 
   /// category creation
-  aspect(classname: string) {
+  aspectConstructor(classname: string) : Aspect.Constructor | undefined {
     return this._aspects.get(classname);
+  }
+  aspectConstructorChecked(classname: string) : Aspect.Constructor {
+    let cstor = this._aspects.get(classname);
+    if (!cstor)
+      throw new Error(`cannot find aspect ${classname}`);
+    return cstor;
+  }
+  installedAspectConstructors() : Iterable<Aspect.Constructor> {
+    return this._aspects.values();
+  }
+
+  aspect(classname: string) : Aspect.Installed | undefined {
+    let cstor = this.aspectConstructor(classname);
+    return cstor ? cstor.aspect : undefined;
+  }
+  aspectChecked(classname: string) : Aspect.Installed {
+    return this.aspectConstructorChecked(classname).aspect;
+  }
+  *installedAspects() : Iterable<Aspect.Installed> {
+    for (let cstor of this._aspects.values())
+      yield cstor.aspect;
   }
 
   create<T extends VersionedObject>(classname: string, categories: string[]) : T {
-    let aspectCstor = this.aspect(classname);
-    if (!aspectCstor)
+    let cstor = this.aspectConstructor(classname);
+    if (!cstor)
       throw new Error(`cannot create ${classname}: no aspect found`);
     for (let category of categories)
-      if (!aspectCstor.aspect.categories.has(category))
-        throw new Error(`cannot create ${classname}: category ${category} is missing in aspect ${aspectCstor.aspect.aspect}`);
-    return new aspectCstor() as T;
+      if (!cstor.aspect.categories.has(category))
+        throw new Error(`cannot create ${classname}: category ${category} is missing in aspect ${cstor.aspect.aspect}`);
+    return new cstor() as T;
   }
 
   findOrCreate<T extends VersionedObject>(id: Identifier, classname: string, categories: string[] = []) : T {
@@ -132,10 +153,6 @@ export class ControlCenter {
   /// category cache
   cache() {
     return this._cache;
-  }
-
-  installedAspectConstructors() {
-    return this._aspects.values();
   }
 
   changeObjectId(oldId: Identifier, newId: Identifier) {

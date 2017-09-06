@@ -148,7 +148,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
 
   aspect(is_system_name: string) {
     let aname = this.ctx.config.obiEntity_to_aspectClassname(is_system_name);
-    let aspect = this.ctx.controlCenter.aspect(aname)!.aspect;
+    let aspect = this.ctx.controlCenter.aspectChecked(aname);
     return aspect;
   }
 
@@ -341,7 +341,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
           stack.add(k);
           for (let sub_name of sub_names) {
             sub_cars.add(car_info);
-            let aspect = this.ctx.controlCenter.aspect(sub_name)!.aspect;
+            let aspect = this.ctx.controlCenter.aspectChecked(sub_name);
             this.buildScopeTreeItem(aspect, scope, lvl + 1, stack, dt, rt);
           }
           stack.delete(k);
@@ -397,7 +397,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
           if (!vo) {
             let isname = this.ctx.systemObiById.get(is)!.system_name;
             let aname = this.ctx.config.obiEntity_to_aspectClassname(isname);
-            vo = new (cc.aspect(aname)!)();
+            vo = new (cc.aspectConstructorChecked(aname))();
           }
           let manager = vo.manager();
           cc.registerObjects(this.ctx.component, [vo]);
@@ -471,7 +471,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       if (!value) {
         let obi_is = this.ctx.systemObiById.get(is)!;
         let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
-        value = new (this.ctx.controlCenter.aspect(classname)!)();
+        value = new (this.ctx.controlCenter.aspectConstructorChecked(classname))();
         value.manager().setId(subid);
         this.ctx.controlCenter.registerObjects(component, [value]);
       }

@@ -7,14 +7,10 @@ import ConstraintType = DataSourceInternal.ConstraintType;
 import ObjectSet = DataSourceInternal.ObjectSet;
 
 const cache = new AspectCache();
-let aspects = {
-  Resource: cache.cachedAspect("test1", Resource).aspect,
-  Car     : cache.cachedAspect("test1", Car     ).aspect,
-  People  : cache.cachedAspect("test1", People  ).aspect,
-}
-function findAspect(name: string): Aspect.Installed {
-  return aspects[name];
-}
+const cc = new ControlCenter(cache);
+Resource.installAspect(cc, "test1");
+Car.installAspect(cc, "test1");
+People.installAspect(cc, "test1");
 
 function serialize(s, map = new Map()) {
   let r = s;
@@ -51,14 +47,11 @@ function serialize(s, map = new Map()) {
       }
     }
   }
-  /*else if (typeof s === "function") {
-    r = s.aspect ? s.aspect.name : s.name;
-  }*/
   return r;
 }
 
 function parseRequest(req) {
-  let sets = DataSourceInternal.parseRequest(req, findAspect);
+  let sets = DataSourceInternal.parseRequest(req, cc);
   return sets.map(s => serialize(s));
 }
 
@@ -630,7 +623,7 @@ function persons_with_cars_and_their_cars_1k() { // about 170ms
         { name: "cars", where: "=cars", scope: ['_firstname', '_lastname', '_cars'] },
         { name: "persons", where: "=persons", scope: ['_owner'] },
       ]
-    }, findAspect);
+    }, cc);
   }
 }
 
@@ -648,19 +641,19 @@ function makeObjects() {
 }
 function applyWhere() {
   let objects = makeObjects();
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: Car }, objects, findAspect), objects.slice(0, 3));
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: Car, _name: "Renault" }, objects, findAspect), objects.slice(0, 2));
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: People }, objects, findAspect), objects.slice(3, 5));
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: People, _firstname: "Lisa" }, objects, findAspect), objects.slice(3, 4));
+  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: Car }, objects, cc), objects.slice(0, 3));
+  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: Car, _name: "Renault" }, objects, cc), objects.slice(0, 2));
+  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: People }, objects, cc), objects.slice(3, 5));
+  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: People, _firstname: "Lisa" }, objects, cc), objects.slice(3, 4));
 }
 
 function applyRequest() {
   let objects = makeObjects();
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { name: "cars", where: { $instanceOf: Car } }, objects, findAspect), 
+    { name: "cars", where: { $instanceOf: Car } }, objects, cc), 
     { cars: objects.slice(0, 3) });
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { name: "Renaults", where: { $instanceOf: Car, _name: "Renault" } }, objects, findAspect), 
+    { name: "Renaults", where: { $instanceOf: Car, _name: "Renault" } }, objects, cc), 
     { Renaults: objects.slice(0, 2) });
   assert.deepEqual(DataSourceInternal.applyRequest(
     { 
@@ -670,7 +663,7 @@ function applyRequest() {
         { name: "renaults", where: "=renaults" },
         { name: "cars", where: "=cars" }
       ]
-    }, objects, findAspect), 
+    }, objects, cc), 
     { renaults: objects.slice(0, 2), cars: objects.slice(0, 3) });
 }
 

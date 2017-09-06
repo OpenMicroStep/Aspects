@@ -62,7 +62,7 @@ export class InMemoryDataSource extends DataSource
     let component = {};
     cc.registerComponent(component);
     let res = DataSourceInternal.applySets(sets, ds.objectsAsArray(), true, {
-      aspect: (vo: InMemoryDataSource.DataStoreObject) => cc.aspect(vo.is)!.aspect,
+      aspect: (vo: InMemoryDataSource.DataStoreObject) => cc.aspectChecked(vo.is),
       has: (vo: InMemoryDataSource.DataStoreObject, attribute: string) => vo.has(attribute),
       get: (vo: InMemoryDataSource.DataStoreObject, attribute: string) => {
         if (attribute === "_id")
@@ -268,8 +268,7 @@ export namespace InMemoryDataSource {
       let lId = ds.fromDSId(value.id);
       let vo = cc.registeredObject(lId);
       if (!vo) {
-        vo = new (cc.aspect(value.is)!)();
-        vo.manager().setId(lId);
+        vo = cc.findOrCreate(lId, value.is);
         cc.registerObjects(cmp, [vo]);
       }
       return vo;

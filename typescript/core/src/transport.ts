@@ -91,7 +91,7 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
           throw new Error(`reference to reserved cc object ${id}`);
       }
       if (!r) {
-        let cstor = d.cc.aspect(s.__cls);
+        let cstor = d.cc.aspectConstructor(s.__cls);
         if (!cstor)
           throw new Error(`aspect ${s.__cls} not found`);
         r = new cstor();

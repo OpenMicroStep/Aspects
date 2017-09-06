@@ -53,8 +53,17 @@ Returns the list of registered object to _component_.
 
 ### Object creation
 
-#### aspect(name: string)
-Get final implementation of an installed aspect from its classname
+#### aspectConstructor(classname: string): Aspect.Constructor | undefined 
+Get final implementation of an installed aspect from its classname or undefined if not found
+
+#### aspectConstructorChecked(classname: string): Aspect.Constructor 
+Get final implementation of an installed aspect from its classname or throws if not found
+
+#### aspect(classname: string): Aspect.InstallAspect | undefined 
+Get an installed aspect from its classname or undefined if not found
+
+#### aspect(classname: string): Aspect.InstallAspect 
+Get an installed aspect from its classname or throws if not found
 
 #### create(classname: string, categories: [0, *, string])
 Create and returns a new object of _classname_ that responds to _categories_.  
