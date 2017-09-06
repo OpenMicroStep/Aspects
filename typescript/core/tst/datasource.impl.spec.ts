@@ -397,7 +397,11 @@ async function load_mixed_attributes(f: Flux<Context>) {
   c0.manager().unload();
   p0.manager().unload();
 
-  let inv = await db.farPromise('safeLoad', { objects: [c0, p0], scope: ['_name', '_owner', '_model', '_firstname', '_lastname'] });
+  let inv = await db.farPromise('safeLoad', { objects: [c0, p0], scope: {
+      People: { '.': ['_name', '_firstname', '_lastname'] },
+      Car: { '.': ['_name', '_owner', '_model'] },
+    }
+  });
   assert.deepEqual(inv.diagnostics(), []);
   assert.isTrue(inv.hasResult());
   let u = inv.result();
@@ -412,7 +416,11 @@ async function load_sub_attributes(f: Flux<Context>) {
   c0.manager().unload();
   p0.manager().unload();
 
-  let inv = await db.farPromise('safeLoad', { objects: [c0], scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] });
+  let inv = await db.farPromise('safeLoad', { objects: [c0], scope: {
+      Car: { '.': ['_name', '_owner', '_model'] },
+      People: { '_owner.': ['_name', '_firstname', '_lastname'] },
+    }
+  });
   assert.deepEqual(inv.diagnostics(), []);
   assert.isTrue(inv.hasResult());
   let u = inv.result();
@@ -431,7 +439,10 @@ async function query_union_cars_peoples(f: Flux<Context>) {
     "cars=": { $instanceOf: Car, _id: c0.id() },
     "peoples=": { $instanceOf: People, _id: p0.id() },
     results: [
-      { name: "u", where: { $union: ["=cars", "=peoples"] }, scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] },
+      { name: "u", where: { $union: ["=cars", "=peoples"] }, scope: {
+        Car: { '.': ['_name', '_owner', '_model'] },
+        People: { '.': ['_name', '_firstname', '_lastname', '_birthDate'] },
+      }}
     ]
   });
   assert.deepEqual(inv.diagnostics(), []);
@@ -455,7 +466,10 @@ async function query_cars_sub_scope(f: Flux<Context>) {
   let inv = await db.farPromise('rawQuery', {
     "cars=": { $instanceOf: Car, _id: c0.id() },
     results: [
-      { name: "u", where: "=cars", scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] },
+      { name: "u", where: "=cars", scope: {
+        Car: { '.': ['_name', '_owner', '_model'] },
+        People: { '_owner.': ['_name', '_firstname', '_lastname', '_birthDate'] },
+      }},
     ]
   });
   assert.deepEqual(inv.diagnostics(), []);
@@ -491,7 +505,9 @@ async function query_parents(f: Flux<Context>) {
       }
     },
     results: [
-      { name: "u", where: "=parents", scope: ['_name', '_owner', '_model', '_firstname', '_lastname', '_birthDate'] },
+      { name: "u", where: "=parents", scope: {
+        People: { '.': ['_name', '_firstname', '_lastname', '_birthDate'] },
+      } },
     ]
   });
   assert.deepEqual(inv.diagnostics(), []);
@@ -612,4 +628,3 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
     ]},
     ]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
 }
-

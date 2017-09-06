@@ -24,33 +24,39 @@ export class InMemoryDataSource extends DataSource
 
   private _loads(
     component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
-    scope: string[], lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
+    scope: DataSourceInternal.ResolvedScope, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
-    this._load(component, ds, scope, new Set(), lObject, dObject);
+    this._load(component, ds, scope, '.', '', lObject, dObject);
   }
 
   private _load(
     component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
-    scope: Iterable<string>, stack: Set<string>, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
+    scope: DataSourceInternal.ResolvedScope, path: string, npath: string, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
     let cc = this.controlCenter();
     let lManager = lObject.manager();
+    let aspect = lManager.aspect();
     let remoteAttributes = new Map<keyof VersionedObject, any>();
     cc.registerObjects(component, [lObject]);
-    for (let k of scope) {
-      let a = lManager.aspect().attributes.get(k);
-      if (a && !stack.has(k)) {
-        let v = dObject.get(k);
-        if (v instanceof InMemoryDataSource.DataStoreObject) {
-          let dObject = v;
-          let lId = this.ds.fromDSId(dObject.id);
-          let lObject = cc.findOrCreate(lId, dObject.is);
-          stack.add(k);
-          this._load(component, ds, scope, stack, lObject, dObject);
-          stack.delete(k);
-        }
-        remoteAttributes.set(k as keyof VersionedObject, ds.fromDSValue(cc, component, v));
+    function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
+      let cls_scope = scope[aspect.name];
+      if (!cls_scope) 
+        return
+      let attributes = cls_scope[path] || cls_scope['_'];      
+      if (!attributes)
+        return;
+      yield* attributes;
+    }
+    for (let a of attributes(aspect, scope, path)) {
+      let v = dObject.get(a.name);
+      if (v instanceof InMemoryDataSource.DataStoreObject) {
+        let dObject = v;
+        let lId = this.ds.fromDSId(dObject.id);
+        let lObject = cc.findOrCreate(lId, dObject.is);
+        let spath = `${npath}${a.name}.`;
+        this._load(component, ds, scope, spath, spath, lObject, dObject);
       }
+      remoteAttributes.set(a.name as keyof VersionedObject, ds.fromDSValue(cc, component, v));
     }
     lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
   }
@@ -91,7 +97,7 @@ export class InMemoryDataSource extends DataSource
   implLoad({tr, objects, scope} : {
     tr?: InMemoryDataSource.DataStoreTransaction;
     objects: VersionedObject[];
-    scope: string[];
+    scope: DataSourceInternal.Scope;
   }): VersionedObject[] {
     let ds = tr || this.ds;
     let cc = this.controlCenter();
@@ -99,11 +105,12 @@ export class InMemoryDataSource extends DataSource
     let ret: VersionedObject[] = [];
     cc.registerComponent(component);
     if (objects) {
+      let rscope = DataSourceInternal.resolveScopeForObjects(scope, this.controlCenter(), objects);
       for (let lObject of objects) {
         let dbId = this.ds.toDSId(lObject.id());
         let dObject = ds.get(dbId);
         if (dObject) {
-          this._loads(component, ds, scope, lObject, dObject);
+          this._loads(component, ds, rscope, lObject, dObject);
           ret.push(lObject);
         }
       }

@@ -400,8 +400,7 @@ export namespace DataSourceInternal {
     _name: string;
     typeConstraints: ConstraintOnType[] = [];
     name?: string = undefined;
-    scope?: string[] = undefined;
-    sort?: string[] = undefined;
+    scope?: ResolvedScope = undefined;
     constraints: Constraint[] = [];
     variables?: Map<string, ObjectSet> = undefined;
     subs?: Map<string, ObjectSet> = undefined;
@@ -471,17 +470,31 @@ export namespace DataSourceInternal {
         this.typeConstraints.push(c_with);
     }
 
-    addTypeIfMergeable(other: ObjectSet) : boolean {
+    tryToMerge(other: ObjectSet) : boolean {
       let r: ConstraintOnType[] = [];
+      let can: boolean | undefined = true;
       for (let c_with of other.typeConstraints) {
-        let can = this.canAddType(c_with);
+        can = this.canAddType(c_with);
         if (can === false)
-          return false;
+          break;
         if (can === true)
           r.push(c_with);
       }
-      this.typeConstraints.push(...r);
-      return true;
+      if (can !== false) {
+        this.typeConstraints.push(...r);
+        let prefix = "";
+        if (other.variables) {
+          prefix = `${other._name}.`;
+          for (let [k, s] of other.variables.entries())
+            this.setVariable(prefix + k, s === other ? this : s);
+        }
+        if (other.constraints.length) {
+          this.setVariable(prefix + other._name, this);
+          this.and(c_and(other.constraints, prefix));
+        }
+        return true;
+      }
+      return false;
     }
 
     aspectAttribute(name: string): Aspect.InstalledAttribute {
@@ -509,18 +522,6 @@ export namespace DataSourceInternal {
           attr = a;
         }
       }
-    }
-
-    merge(sub: ObjectSet) : Constraint | undefined {
-      let prefix = "";
-      if (sub.variables) {
-        prefix = `${sub._name}.`;
-        for (let [k, s] of sub.variables.entries())
-          this.setVariable(prefix + k, s === sub ? this : s);
-      }
-      if (sub.constraints.length)
-        this.setVariable(prefix + sub._name, this);
-      return sub.constraints.length ? c_and(sub.constraints, prefix) : undefined;
     }
 
     and(constraint?: Constraint) : void {
@@ -598,7 +599,16 @@ export namespace DataSourceInternal {
     throw new Error(`Unsupported on value constraint ${ConstraintType[op as any]}`);
   }
 
-  export type Scope = string[];
+  export type Scope = {
+    [s: string]: {
+      [s: string]: string[]
+    }
+  };
+  export type ResolvedScope = {
+    [s: string]: {
+      [s: string]: Set<Aspect.InstalledAttribute>
+    }
+  };
   export type Value = any;
   export type Instance<R> = string | R;
   export interface ConstraintDefinition {
@@ -637,8 +647,7 @@ export namespace DataSourceInternal {
   export type Result = {
     name: string;
     where: Instance<ObjectSetDefinition>;
-    sort?: string[];
-    scope?: string[];
+    scope?: string[] | Scope;
   }
   export type Request = Result | { results: (Result& { [s: string]: Instance<ObjectSetDefinition> })[], [s: string]: Instance<ObjectSetDefinition> };
 
@@ -658,9 +667,7 @@ export namespace DataSourceInternal {
     },
     $elementOf: (context, set, value) => {
       let sub = context.parseSet(value, `${set._name}.$elementOf`);
-      if (set.addTypeIfMergeable(sub)) // compatible
-        set.and(set.merge(sub));
-      else
+      if (!set.tryToMerge(sub)) // compatible
         throw new Error(`cannot elementOf between incompatible sets`);
     },
     $instanceOf: (context, set, value) => {
@@ -692,9 +699,7 @@ export namespace DataSourceInternal {
     $intersection: (context, set, value) => {
       value.forEach((v, i) => {
         let sub = context.parseSet(v, `${set._name}.$intersection[${i}]`);
-        if (set.addTypeIfMergeable(sub)) // must be compatible
-          set.and(set.merge(sub));
-        else
+        if (!set.tryToMerge(sub)) // must be compatible
           throw new Error(`cannot intersect between incompatible sets`);
       });
     },
@@ -711,9 +716,7 @@ export namespace DataSourceInternal {
         set.and(c_value(ConstraintType.In, set._name, "_id", value));
       else {
         let sub = context.parseSet(value, `${set._name}.$in`);
-        if (set.addTypeIfMergeable(sub)) // must be compatible
-          set.and(set.merge(sub));
-        else
+        if (!set.tryToMerge(sub)) // must be compatible
           throw new Error(`cannot intersect between incompatible sets`);
       }
     },
@@ -988,11 +991,102 @@ export namespace DataSourceInternal {
     let set = context.parseSet(result.where, result.name)
     set = set.clone(set._name);
     set.name = result.name;
-    set.scope = result.scope;
-    set.sort = result.sort;
+    if (result.scope)
+      set.scope = parseScope(context.cc, set, result.scope);
     context.pop();
     return set;
   }
+
+  function parseScopeType(s: ResolvedScope, aspect: Aspect.Installed, unsafe_scope_type: { [s: string]: string[] }) {
+    let safe_scope_type = s[aspect.name];
+    if (!safe_scope_type)
+      s[aspect.name] = safe_scope_type = {};
+    let all_safe_attributes: Set<Aspect.InstalledAttribute>[] = []
+    for (let unsafe_path in unsafe_scope_type) {
+      if (unsafe_path !== '_') {
+        let safe_attributes = safe_scope_type[unsafe_path];
+        if (!safe_attributes)
+          safe_attributes = safe_scope_type[unsafe_path] = new Set<Aspect.InstalledAttribute>();
+        all_safe_attributes.push(safe_attributes);
+        for (let unsafe_attribute of unsafe_scope_type[unsafe_path]) {
+          let safe_attribute = aspect.attributes.get(unsafe_attribute);
+          if (safe_attribute)
+            safe_attributes.add(safe_attribute);
+          else
+            throw new Error(`${unsafe_attribute} requested but not found for ${aspect.name}`);
+        }
+      }
+    }
+    let unsafe_attributes = unsafe_scope_type['_'] || [];
+    for (let unsafe_attribute of unsafe_attributes) {
+      let safe_attribute = aspect.attributes.get(unsafe_attribute);
+      if (safe_attribute) {
+        for (let safe_attributes of all_safe_attributes)
+          safe_attributes.add(safe_attribute);
+      }
+    }
+  }
+  function parseScopeTypes(s: ResolvedScope, types: ConstraintOnType[], unsafe_scope_type: { [s: string]: string[] }): number {
+    let n = 0;
+    for (let t of types) {
+      switch (t.type) {
+        case ConstraintType.InstanceOf:
+        case ConstraintType.MemberOf:
+          parseScopeType(s, t.value, unsafe_scope_type);
+          n++;
+          break;
+        case ConstraintType.UnionOf:
+          for (let set of t.value)
+            n += parseScopeTypes(s, set.typeConstraints, unsafe_scope_type);
+          break;
+        case ConstraintType.UnionOfAlln:
+          n += parseScopeTypes(s, t.value[0].typeConstraints, unsafe_scope_type);
+          break;
+      }
+    }
+    return n;
+  }
+  function parseScope(cc: ControlCenter, set: ObjectSet, unsafe_scope: Scope | string[]) : ResolvedScope {
+    let s: ResolvedScope = {};
+    unsafe_scope =  Array.isArray(unsafe_scope) ? { _: { '.': unsafe_scope } } : unsafe_scope;
+    for (let unsafe_type in unsafe_scope) {
+      let unsafe_scope_type = unsafe_scope[unsafe_type];
+      if (unsafe_type === '_') {
+        let n = parseScopeTypes(s, set.typeConstraints, unsafe_scope_type);
+        if (n === 0) {
+          for (let aspect of set.attributesAndCompatibleAspects(cc).compatibleAspects)
+            parseScopeType(s, aspect, unsafe_scope_type);
+        }
+      }
+      else
+        parseScopeType(s, cc.aspectChecked(unsafe_type), unsafe_scope_type);
+    }
+    return s;
+  }
+  export function resolveScope(unsafe_scope: Scope | string[], aspects: (type: string) => Iterable<Aspect.Installed>) : ResolvedScope {
+    let s: ResolvedScope = {};
+    unsafe_scope =  Array.isArray(unsafe_scope) ? { _: { '.': unsafe_scope } } : unsafe_scope;
+    for (let unsafe_type in unsafe_scope) {
+      let unsafe_scope_type = unsafe_scope[unsafe_type];
+      for (let aspect of aspects(unsafe_type))
+        parseScopeType(s, aspect, unsafe_scope_type);
+    }
+    return s;
+  }
+  export function resolveScopeForObjects(unsafe_scope: Scope | string[], cc: ControlCenter, objects: Iterable<VersionedObject>) : ResolvedScope {
+    return resolveScope(unsafe_scope, function *(type) {
+      if (type !== '_') {
+        yield cc.aspectChecked(type);
+      }
+      else {
+        let aspects = new Set<Aspect.Installed>();
+        for (let o of objects)
+          aspects.add(o.manager().aspect());
+        yield *aspects;
+      }
+    });
+  }
+
   export function parseRequest(request: Request, cc: ControlCenter) : ObjectSet[] {
     let context = new ParseContext(new ParseStack(request), cc);
     let sets: ObjectSet[] = [];
