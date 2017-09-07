@@ -7,6 +7,7 @@ import ConstraintTree = DataSourceInternal.ConstraintTree;
 import ConstraintValue = DataSourceInternal.ConstraintValue;
 import ConstraintVariable = DataSourceInternal.ConstraintVariable;
 import ConstraintSub = DataSourceInternal.ConstraintSub;
+import scope_at_type_path = DataSourceInternal.ResolvedScope.scope_at_type_path;
 
 export function mapValue(ctx: { mappers: { [s: string]: SqlMappedObject }  }, mapper: SqlMappedObject, attribute: SqlMappedAttribute, value) {
   if (value instanceof VersionedObject) {
@@ -22,14 +23,6 @@ export function mapValue(ctx: { mappers: { [s: string]: SqlMappedObject }  }, m
   }
   value = attribute.toDb(value);
   return value;
-}
-
-const emptySet = new Set();
-function scope_type_path(scope: DataSourceInternal.ResolvedScope | undefined, type: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {
-  if (!scope) return emptySet;
-  let scope_type = scope[type];
-  if (!scope_type) return emptySet;
-  return scope_type[path] || emptySet;
 }
 
 function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O): O[] | undefined {
@@ -599,7 +592,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       if (!type || !db_id)
         return;
       let mapper = this.ctx.mappers[type]!;
-      let scope_path = scope_type_path(this.set.scope, type, path);
+      let scope_path = scope_at_type_path(this.set.scope, type, path);
       let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(db_id));
       let version = row[prefix + "_version"];
       let vo = cc.findOrCreate(id, type);
@@ -654,7 +647,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           let types = Aspect.typeToAspectNames(attribute.type);
           let attribute_path = `${path}${attribute.name}.`;
           for (let type_r of types) {
-            let scope_path = scope_type_path(this.set.scope, type_r, attribute_path);
+            let scope_path = scope_at_type_path(this.set.scope, type_r, attribute_path);
             let s_m = new ObjectSet(aspect.name);
             let q_m = new SqlMappedQuery(this.ctx, s_m);
             let s_r = new ObjectSet(type_r);
@@ -686,13 +679,13 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       // add 1:1 relations
       let relation_11_paths: string[] = [];
       for (let type of types) {
-        let scope_path = scope_type_path(this.set.scope, type, path);
+        let scope_path = scope_at_type_path(this.set.scope, type, path);
         for (let a of scope_path) {
           if (a.type.type === "class" || a.type.type === "or") { // 1:1 relation
             let path_r = `${mult_path}${a.name}.`;
             let types_r = Aspect.typeToAspectNames(a.type);
             for (let type_r of types_r) {
-              let scope_path_r = scope_type_path(this.set.scope, type_r, path_r);
+              let scope_path_r = scope_at_type_path(this.set.scope, type_r, path_r);
               if (scope_path_r.size > 0) { // 1:1 relation with attributes requested
                 // TODO: reuse existing variable if possible
                 let s_r = new ObjectSet(type_r);

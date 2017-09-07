@@ -1,4 +1,9 @@
-import {ControlCenter, Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Invocation, InvocationState, Invokable, Aspect, DataSource, Validation } from './core';
+import {
+  ControlCenter, Identifier, VersionedObject, VersionedObjectManager,
+  FarImplementation, areEquals, Invocation, InvocationState, Invokable,
+  Aspect, DataSource, Validation,
+  ImmutableSet,
+} from './core';
 import {Reporter, Diagnostic, AttributeTypes as V} from '@openmicrostep/msbuildsystem.shared';
 
 export namespace DataSourceInternal {
@@ -98,7 +103,7 @@ export namespace DataSourceInternal {
             case ConstraintType.InstanceOf:
               ok = this.mapper.aspect(object).name === c.value.name; // TODO: real instanceof
               break;
-            case ConstraintType.MemberOf: 
+            case ConstraintType.MemberOf:
               ok = this.mapper.aspect(object).name === c.value.name;
               break;
             case ConstraintType.UnionOf:
@@ -197,7 +202,7 @@ export namespace DataSourceInternal {
                 let ok1 = set.constraints.every(c => this.passVars(set, set1, o1, set2, o2, c, ""));
                 ok2 = ok2 || ok1;
               }
-              if (!ok2) 
+              if (!ok2)
                 objs2.delete(o2);
             }
           }
@@ -206,7 +211,7 @@ export namespace DataSourceInternal {
       }
       return solution.full;
     }
-  
+
   };
 
   export enum ConstraintType {
@@ -232,7 +237,7 @@ export namespace DataSourceInternal {
     And,
     CustomStart = 100 // The first 100 ([0-99]) are reserved
   }
-  export type ConstraintBetweenColumnsTypes = 
+  export type ConstraintBetweenColumnsTypes =
     ConstraintType.Equal |
     ConstraintType.NotEqual |
     ConstraintType.GreaterThan |
@@ -240,28 +245,28 @@ export namespace DataSourceInternal {
     ConstraintType.LessThan |
     ConstraintType.LessThanOrEqual |
     ConstraintType.Has;
-  export type ConstraintBetweenSetTypes = 
+  export type ConstraintBetweenSetTypes =
     ConstraintBetweenColumnsTypes |
     ConstraintType.In |
     ConstraintType.NotIn;
-  export type ConstraintOnValueTypes = 
+  export type ConstraintOnValueTypes =
     ConstraintBetweenSetTypes |
     ConstraintType.Text |
     ConstraintType.Exists;
 
   export type ConstraintOnType =
-     { type: ConstraintType.InstanceOf | ConstraintType.MemberOf, value: Aspect.Installed } | 
-     { type: ConstraintType.UnionOf, value: Set<ObjectSet> } | 
-     { type: ConstraintType.UnionOfAlln, value: [ObjectSet, ObjectSet, ObjectSet] } | 
+     { type: ConstraintType.InstanceOf | ConstraintType.MemberOf, value: Aspect.Installed } |
+     { type: ConstraintType.UnionOf, value: Set<ObjectSet> } |
+     { type: ConstraintType.UnionOfAlln, value: [ObjectSet, ObjectSet, ObjectSet] } |
      { type: ConstraintType.Recursion, value: ObjectSet };
 
   export class ConstraintTree {
     constructor(
-      public type: ConstraintType.Or | ConstraintType.And, 
+      public type: ConstraintType.Or | ConstraintType.And,
       public prefix: string, // for fast variable prefixing
       public value: Constraint[]) {}
   }
-  
+
   export class ConstraintValue {
     constructor(
       public type: ConstraintOnValueTypes,
@@ -269,7 +274,7 @@ export namespace DataSourceInternal {
       public leftAttribute: string,
       public value: any) {}
   }
-  
+
   export class ConstraintVariable {
     constructor(
       public type: ConstraintBetweenColumnsTypes,
@@ -278,7 +283,7 @@ export namespace DataSourceInternal {
       public rightVariable: string,
       public rightAttribute: string) {}
   }
-  
+
   export class ConstraintSub {
     constructor(
       public type: ConstraintType.SubIn | ConstraintType.SubNotIn,
@@ -549,7 +554,7 @@ export namespace DataSourceInternal {
 
   function c_or (constraints: Constraint[] = [], prefix = "") { return constraints.length === 1 && !prefix ? constraints[0] : new ConstraintTree(ConstraintType.Or , prefix, constraints); }
   function c_and(constraints: Constraint[] = [], prefix = "") { return constraints.length === 1 && !prefix ? constraints[0] : new ConstraintTree(ConstraintType.And, prefix, constraints); }
-  function c_value(type: ConstraintOnValueTypes, leftVariable: string, leftAttribute: string, value: any): ConstraintValue 
+  function c_value(type: ConstraintOnValueTypes, leftVariable: string, leftAttribute: string, value: any): ConstraintValue
   { return new ConstraintValue(type, leftVariable, leftAttribute, value); }
   function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: string, rightVariable: string, rightAttribute: string): ConstraintVariable
   { return new ConstraintVariable(type, leftVariable, leftAttribute, rightVariable, rightAttribute); }
@@ -609,6 +614,16 @@ export namespace DataSourceInternal {
       [s: string]: Set<Aspect.InstalledAttribute>
     }
   };
+  export namespace ResolvedScope {
+    const emptySet = new Set();
+    export function scope_at_type_path(scope: ResolvedScope | undefined, type: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {
+      if (!scope) return emptySet;
+      let scope_type = scope[type];
+      if (!scope_type) return emptySet;
+      return scope_type[path] || emptySet;
+    }
+  }
+
   export type Value = any;
   export type Instance<R> = string | R;
   export interface ConstraintDefinition {
@@ -801,7 +816,7 @@ export namespace DataSourceInternal {
         throw new Error(`cannot pop stack`);
       this.head = this.head.parent;
     }
-    
+
     resolve(reference: string, end: ParseStack | undefined = undefined) : ObjectSet {
       let key = `${reference}=`;
       let v: ObjectSet | undefined, s: ParseStack | undefined = this.head;
@@ -967,7 +982,7 @@ export namespace DataSourceInternal {
             }
             else {
               let o = operatorsOnValue[key];
-              if (!o) 
+              if (!o)
                 throw new Error(`operator on value '${key}' not found`);
               o.validate(left.attribute, v);
               constraints.push(c_value(o.type, left.variable, left.attribute, v));
@@ -1132,7 +1147,7 @@ export namespace DataSourceInternal {
   }
 
   export function buildScopeTreeItem(
-    cc: ControlCenter, aspect: Aspect.Installed, scope: Iterable<string>, 
+    cc: ControlCenter, aspect: Aspect.Installed, scope: Iterable<string>,
     lvl: number, stack: Set<string>,
     handleAttribute: (aspect: Aspect.Installed, attribute: Aspect.InstalledAttribute) => void,
   ) {
