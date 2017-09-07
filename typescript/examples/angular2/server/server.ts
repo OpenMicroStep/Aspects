@@ -60,7 +60,7 @@ const transport = new ExpressTransport(router, async (cstor, id) => {
   if (id === db.id())
       return Promise.resolve(db);
   let [name, dbid] = id.toString().split(':');
-  return db.farPromise('safeQuery', { name: "q", where: { _id: dbid, $instanceof: controlCenter.aspect(name)! } })
+  return db.farPromise('safeQuery', { name: "q", where: { _id: dbid, $instanceof: name } })
     .then((envelop) => {
       if (envelop.state() === InvocationState.Terminated)
         return Promise.resolve(envelop.result()["q"][0]);
