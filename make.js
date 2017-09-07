@@ -263,7 +263,7 @@ module.exports =  {
       shell: true,
     },
     'cwd=': { is: 'group', elements: [{ is: 'file', name: "./" }] },
-    "install-deps=": { is: "task", components: ["=cmd"], cmd: "npm install -g -q coveralls nyc @openmicrostep/tests" },
+    "install-deps=": { is: "task", components: ["=cmd"], cmd: "npm install -g -q coveralls nyc@11.1.0 @openmicrostep/tests" },
     "build-bs=": { is: "task", components: ["=cmd"], cmd: Value([
       "msbuildsystem", "build", "-p", "MSBuildSystem/@msbuildsystem", "-p", "buildsystem", "-w", "dist/bs-aspects/"
     ]) },
