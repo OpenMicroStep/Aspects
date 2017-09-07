@@ -430,6 +430,32 @@ async function load_sub_attributes(f: Flux<Context>) {
 
   f.continue();
 }
+async function load_sub_mult_attributes(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  c0.manager().unload();
+  c1.manager().unload();
+  p0.manager().unload();
+
+  let inv = await db.farPromise('safeLoad', { objects: [p0], scope: {
+      People: { '.': ['_name', '_firstname', '_lastname', '_cars'] },
+      Car: { '_cars.': ['_name', '_owner', '_model'] },
+    }
+  });
+  assert.deepEqual(inv.diagnostics(), []);
+  assert.isTrue(inv.hasResult());
+  let u = inv.result();
+  assert.sameMembers(u, [p0]);
+  deepEqual(p0, {_id: p0.id(), _name: "Lisa Simpson", _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_name", "_firstname", "_lastname"]);
+  assert.deepEqual(
+    [...p0._cars].map(p => select(p, ["_id", "_name", "_owner", "_model"])), 
+    [
+      {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: p0 },
+      {_id: c1.id(), _name: "Renault", _model: "Clio 2", _owner: p0 },
+    ]
+  );
+
+  f.continue();
+}
 
 async function query_union_cars_peoples(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
@@ -621,6 +647,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       save_relation_c0p0_c1p0_c2p1,
       load_mixed_attributes,
       load_sub_attributes,
+      load_sub_mult_attributes,
       query_union_cars_peoples,
       query_cars_sub_scope,
       query_parents,

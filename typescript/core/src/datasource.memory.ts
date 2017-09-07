@@ -47,14 +47,23 @@ export class InMemoryDataSource extends DataSource
         return;
       yield* attributes;
     }
-    for (let a of attributes(aspect, scope, path)) {
-      let v = dObject.get(a.name);
+    const load = (a: Aspect.InstalledAttribute, v) => {
       if (v instanceof InMemoryDataSource.DataStoreObject) {
         let dObject = v;
         let lId = this.ds.fromDSId(dObject.id);
         let lObject = cc.findOrCreate(lId, dObject.is);
         let spath = `${npath}${a.name}.`;
         this._load(component, ds, scope, spath, spath, lObject, dObject);
+      }
+    }
+    for (let a of attributes(aspect, scope, path)) {
+      let v = dObject.get(a.name);
+      if (v instanceof Set || v instanceof Array) {
+        for (let vi of v)
+          load(a, vi);
+      }
+      else {
+        load(a, v);
       }
       remoteAttributes.set(a.name as keyof VersionedObject, ds.fromDSValue(cc, component, v));
     }
