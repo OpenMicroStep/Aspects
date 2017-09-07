@@ -24,8 +24,20 @@ export function mapValue(ctx: { mappers: { [s: string]: SqlMappedObject }  }, m
   return value;
 }
 
+const emptySet = new Set();
+function scope_type_path(scope: DataSourceInternal.ResolvedScope | undefined, type: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {
+  if (!scope) return emptySet;
+  let scope_type = scope[type];
+  if (!scope_type) return emptySet;
+  return scope_type[path] || emptySet;
+}
+
 function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O): O[] | undefined {
   return arr ? arr.map(map) : undefined;
+}
+
+function isMonoAttribute(a: Aspect.InstalledAttribute) : boolean {
+  return a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary";
 }
 
 export interface SqlMappedSharedContext extends SqlQuerySharedContext<SqlMappedSharedContext, SqlMappedQuery> {
@@ -142,13 +154,12 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
 
   attributesAndCompatibleAspects() {
     let ret =  this.set.attributesAndCompatibleAspects(this.ctx.controlCenter);
-    if (this.set.scope) for (let a of this.set.scope) {
+    if (this.set.scope) {
       for (let aspect of ret.compatibleAspects) {
-        let ia = aspect.attributes.get(a);
-        if (ia) {
-          ret.attributes.set(a, ia);
-          break;
-        }
+        let scope_type = this.set.scope[aspect.name];
+        let scope_path = scope_type ? scope_type['.'] : [];
+        for (let a of scope_path)
+          ret.attributes.set(a.name, a);
       }
     }
     return ret;
@@ -176,8 +187,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
           type = "integer";
         sql_column = this.ctx.maker.value_null_typed(type);
       }
-      this.columns.set(attribute.name, sql_column);
-      this.columns_ordered.push(attribute.name);
+      this.addColumn(attribute.name, sql_column);
     }
     return sql_column;
   }
@@ -191,10 +201,14 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     let sql_column = this.columns.get(attribute);
     if (!sql_column) {
       sql_column = this.sql_column(attribute, true);
-      this.columns.set(attribute, sql_column);
-      this.columns_ordered.push(attribute);
+      this.addColumn(attribute, sql_column);
     }
     return sql_column;
+  }
+
+  addColumn(name: string, sql_column: string) {
+    this.columns.set(name, sql_column);
+    this.columns_ordered.push(name);
   }
 
   buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any): SqlBinding {
@@ -281,7 +295,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   sql_select(): SqlBinding {
     return this.ctx.maker.select(
       this.sql_columns(),
-      this.sql_from(), 
+      this.sql_from(),
       this.sql_join(),
       this.sql_where()
     );
@@ -341,7 +355,6 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   mappers = new Set<SqlMappedObject>();
   tables = new Map<string, string>();
   hasSub = false;
-  private scope: ScopeTree = new Map();
 
   setInitialType(name: string, instanceOf: boolean): void {
     let mapper = this.ctx.mappers[name];
@@ -391,7 +404,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let u_n = q_n.initialFromTable!;
       q_np1.addLazyAttributes(info.attributes.values());
       q_0.addLazyAttributes(info.attributes.values());
-      
+
       let sql_columns: string[] = [maker.quote("__is")];
       for (let a of q_0.columns_ordered)
         sql_columns.push(maker.quote(a));
@@ -430,7 +443,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       this.addInitialFrom(maker.from_sub(q_all.sql_select(), alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
     }
   }
-  
+
   setInitialRecursion(q_n: SqlMappedQuery) {
     this.hasSub = true;
     this.mappers = q_n.mappers;
@@ -486,32 +499,27 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       //this.set.compatibleAspects(this.ctx.controlCenter);
     }
     let cc = this.ctx.controlCenter;
-    let cstors = [...this.mappers].map(m => cc.aspectConstructorChecked(m.name)!);
-    this.scope = buildScopeTree(cc, cstors, this.set.scope || []);
+    let aspects = [...this.mappers].map(m => cc.aspectChecked(m.name)!);
     this.addAttribute("_id");
     this.addAttribute("_version");
     // TODO: share mono attributes computation with execution work
-    for (let a of this.monoAttributes(cstors.map(c => c.aspect)))
+    for (let a of this.monoAttributes(aspects))
       this.addAttribute(a);
     super.buildConstraints();
   }
 
-  *monoAttributes(aspects: Iterable<Aspect.Installed>)  {
-    let attr: string[] = [];
-    if (this.set.scope) for (let attribute of this.set.scope) {
-      let isMono = -1;
+  monoAttributes(aspects: Iterable<Aspect.Installed>) : IterableIterator<string> {
+    let monoAttributes = new Set<string>();
+    if (this.set.scope) {
       for (let aspect of aspects) {
-        let a = aspect.attributes.get(attribute);
-        if (a) {
-          if (isMono !== 0 && (a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary"))
-            isMono = 1;
-          else
-            isMono = 0;
-        }
+        let scope_type = this.set.scope[aspect.name];
+        let scope_path = scope_type ? scope_type['.'] : [];
+        for (let a of scope_path)
+          if (isMonoAttribute(a))
+            monoAttributes.add(a.name);
       }
-      if (isMono === 1)
-        yield attribute;
     }
+    return monoAttributes.values();
   }
 
   buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any): SqlBinding {
@@ -585,119 +593,151 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let maker = this.ctx.maker;
     let remotes = new Map<VersionedObject, Map<string, any>>();
     let ret: VersionedObject[] = [];
-    const loadMonoRows = (mono_rows: any[], scope: ScopeTree, mult_items: Set<ScopeTreeItem>, sub_items: Set<ScopeTreeItem>) => {
-      for (let row of mono_rows) {
-        let is = row["__is"];
-        let db_id = row["_id"];
-        let mapper = this.ctx.mappers[is]!;
-        let scopeitem = scope.get(is)!;
-        let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(db_id));
-        let remoteAttributes = new Map<string, any>();
-        let vo = cc.registeredObject(id) || new scopeitem.cstor();
-        vo.manager().setId(id);
-        cc.registerObjects(this.ctx.component, [vo]);
-        remotes.set(vo, remoteAttributes);
+    const loadMonoRow = (row: any, prefix: string, path: string, mult_items: Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>) => {
+      let type = row[prefix + "__is"];
+      let db_id = row[prefix + "_id"];
+      if (!type || !db_id)
+        return;
+      let mapper = this.ctx.mappers[type]!;
+      let scope_path = scope_type_path(this.set.scope, type, path);
+      let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(db_id));
+      let version = row[prefix + "_version"];
+      let vo = cc.findOrCreate(id, type);
+      let remoteAttributes = remotes.get(vo);
+      if (!remoteAttributes)
+        remotes.set(vo, remoteAttributes = new Map<string, any>());
+      cc.registerObjects(this.ctx.component, [vo]);
 
-        if (scope === this.scope)
-          ret.push(vo);
+      let rtype = row[prefix + "__ris"];
+      if (rtype) {
+        let rname = rtype && row[prefix + "__rname"];
+        let rdb_id = rtype && row[prefix + "__rid"];
+        let rmapper = this.ctx.mappers[rtype]!;
+        let rid = rmapper.fromDbKey(rmapper.attribute_id().fromDbKey(rdb_id));
+        let rvo = cc.registeredObject(rid)!;
+        let rremoteAttributes = remotes.get(rvo)!;
+        let rset = rremoteAttributes.get(rname);
+        if (rset instanceof Set)
+          rset.add(vo);
+        else
+          rset.push(vo);
+      }
 
-        for (let a of scopeitem.mono.values()) {
+      if (path === '.')
+        ret.push(vo);
+
+      version = mapper.attribute_version().fromDb(version);
+      remoteAttributes.set("_version", version);
+      for (let a of scope_path) {
+        if (isMonoAttribute(a)) {
           let k = a.name;
-          let v = row[k];
+          let v = row[prefix + k];
           v = mapper.get(k)!.fromDb(v);
-          v = this.loadValue(cc, this.ctx.component, a.type, v, scopeitem, sub_items);
+          v = this.loadValue(cc, this.ctx.component, a.type, v);
           remoteAttributes.set(k, v);
         }
-        if (scopeitem.objects) {
-          for (let a of scopeitem.mult.values())
-            remoteAttributes.set(a.name, a.type.type === "set" ? new Set() : []);
-          mult_items.add(scopeitem);
-          scopeitem.objects.add(vo);
+        else {
+          let m_attrs = mult_items.get(vo.manager().aspect());
+          if (!m_attrs)
+            mult_items.set(vo.manager().aspect(), m_attrs = new Map());
+          let objects = m_attrs.get(a);
+          if (!objects)
+            m_attrs.set(a, objects = new Set());
+          objects.add(id);
+          remoteAttributes.set(a.name, a.type.type === "set" ? new Set() : []);
         }
       }
     }
+    const loadMultRows = async (mult_items: Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>, path: string) => {
+      for (let [aspect, m_attrs] of mult_items) {
+        for (let [attribute, ids] of m_attrs) {
+          let types = Aspect.typeToAspectNames(attribute.type);
+          let attribute_path = `${path}${attribute.name}.`;
+          for (let type_r of types) {
+            let scope_path = scope_type_path(this.set.scope, type_r, attribute_path);
+            let s_m = new ObjectSet(aspect.name);
+            let q_m = new SqlMappedQuery(this.ctx, s_m);
+            let s_r = new ObjectSet(type_r);
+            let q_r = new SqlMappedQuery(this.ctx, s_r);
+            this.ctx.queries.set(s_r, q_r);
+            q_r.setInitialType(type_r, false);
+            q_r.addAttribute("_id");
+            q_r.addAttribute("_version");
+            for (let a of scope_path)
+              q_r.addAttribute(a.name);
 
-    let mono_query = this.sql_select();
-    let mono_rows = await this.ctx.db.select(mono_query);
-    let mult_items = new Set<ScopeTreeItem>();
-    let sub_items = new Set<ScopeTreeItem>();
-    loadMonoRows(mono_rows, this.scope, mult_items, sub_items);    
-    while (mult_items.size > 0 || sub_items.size > 0) {
-      let psub_items = [...sub_items];
-      sub_items = new Set<ScopeTreeItem>();
-      for (let [idx, scopeitem] of psub_items.entries()) {
-        let ids = scopeitem.ids();
-        let classname = scopeitem.cstor.aspect.name;
-        let s = new ObjectSet(classname);
-        let q = new SqlMappedQuery(this.ctx, s);
-        let mapper = this.ctx.mappers[classname];
-        let attribute_id = mapper.attribute_id();
-        this.ctx.queries.set(s, q);
-        q.setInitialType(classname, false);
-        q.addAttribute("_id");
-        q.addAttributes(scopeitem.mono.keys());
-        q.addConstraint(q.buildConstraintValue(q.set, "_id", ConstraintType.In, ids));
-        let mono_query = q.sql_select();
-        let mono_rows = await this.ctx.db.select(mono_query);
-        let scope = new Map() as ScopeTree;
-        scope.set(scopeitem.cstor.aspect.name, scopeitem);
-        loadMonoRows(mono_rows, scope, mult_items, sub_items);
-      }
+            this.ctx.queries.set(s_m, q_m);
+            q_m.setInitialType(aspect.name, false);
+            q_m.addConstraint(q_m.buildConstraintValue(q_m.set, "_id", ConstraintType.In, [...ids]));
 
-      // Building UNION of SELECT (__is, _id, _attribute, _value)
-      let sql_selects: SqlBinding[] = [];
-      let pmult_items = [...mult_items];
-      mult_items = new Set<ScopeTreeItem>();
-      for (let [idx, scopeitem] of pmult_items.entries()) {
-        let ids = scopeitem.ids();
-        for (let mult_attribute of scopeitem.mult.values()) {
-          let classname = scopeitem.cstor.aspect.name;
-          let s = new ObjectSet(classname);
-          let q = new SqlMappedQuery(this.ctx, s);
-          let mapper = this.ctx.mappers[classname];
-          let attribute_id = mapper.attribute_id();
-          this.ctx.queries.set(s, q);
-          q.setInitialType(classname, false);
-          q.addAttribute("_id");
-          q.addConstraint(q.buildConstraintValue(q.set, "_id", ConstraintType.In, ids));
-          q.columns.set("_value", q.sql_column(mult_attribute.name));
-          q.columns_ordered.push("_value");
-          let sql_columns = q.sql_columns();
-          sql_columns.push(maker.column_alias_bind(maker.value(mult_attribute.name), "_attribute"));
-          sql_columns.push(maker.column_alias_bind(maker.value(idx), "_scope"));
-          let sql_select =  maker.select(
-            sql_columns,
-            q.sql_from(), [],
-            q.sql_where()
-          );
-          sql_selects.push(sql_select);
+            q_r.variables.add(q_m);
+            q_r.addConstraint(this.ctx.maker.compare(q_r.sql_column("_id"), ConstraintType.Equal, q_m.sql_column(attribute.name)));
+            let sql_columns = q_r.sql_columns();
+            sql_columns.push(maker.column_alias_bind(maker.value(aspect.name), `__ris`));
+            sql_columns.push(maker.column_alias_bind(maker.value(attribute.name), `__rname`));
+            sql_columns.push(maker.column_alias(q_m.sql_column("_id"), `__rid`));
+
+            await doQuery(q_r, sql_columns, [type_r], attribute_path, attribute_path);
+          }
         }
       }
-      let rows = sql_selects.length ? await this.ctx.db.select(maker.union(sql_selects)) : [];
-      for (let row of rows) {
-        let {__is, _id, _attribute, _value, _scope} = row as any;
-        let mapper = this.ctx.mappers[__is];
-        let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(_id));
-        let vo = cc.registeredObject(id)!;
-        let remoteAttributes = remotes.get(vo)!;
-        let scopeitem = pmult_items[_scope];
-        let a = scopeitem.cstor.aspect.attributes.get(_attribute)!;
-        let atype = a.type as Aspect.TypeSet | Aspect.TypeArray;
-        let isSet = a.type.type === "set";
-        let c = remoteAttributes.get(a.name);
-        let mult_sql_attr = mapper.get(a.name)!;
-        let value = this.loadValue(cc, this.ctx.component, atype.itemType, mult_sql_attr.fromDb(_value), scopeitem, sub_items);
-        if (isSet)
-          c.add(value);
-        else // is array
-          c.push(value);
+    };
+    const doQuery = async (query: SqlMappedQuery, sql_columns: (string | SqlBinding)[], types: string[], path: string, mult_path: string) => {
+      // add 1:1 relations
+      let relation_11_paths: string[] = [];
+      for (let type of types) {
+        let scope_path = scope_type_path(this.set.scope, type, path);
+        for (let a of scope_path) {
+          if (a.type.type === "class" || a.type.type === "or") { // 1:1 relation
+            let path_r = `${mult_path}${a.name}.`;
+            let types_r = Aspect.typeToAspectNames(a.type);
+            for (let type_r of types_r) {
+              let scope_path_r = scope_type_path(this.set.scope, type_r, path_r);
+              if (scope_path_r.size > 0) { // 1:1 relation with attributes requested
+                // TODO: reuse existing variable if possible
+                let s_r = new ObjectSet(type_r);
+                let q_r = new SqlMappedQuery(this.ctx, s_r);
+                let relation_idx = relation_11_paths.length;
+                relation_11_paths.push(path_r);
+                q_r.setInitialType(type_r, false);
+                query.variables.add(q_r);
+                query.addConstraint(maker.compare(query.sql_column(a.name), ConstraintType.Equal, q_r.sql_column("_id")));
+                sql_columns.push(maker.column_alias_bind(maker.value(type_r), `${relation_idx}:__is`));
+                sql_columns.push(maker.column_alias(q_r.sql_column("_id"), `${relation_idx}:_id`));
+                sql_columns.push(maker.column_alias(q_r.sql_column("_version"), `${relation_idx}:_version`));
+                for (let a of scope_path_r)
+                  sql_columns.push(maker.column_alias(q_r.sql_column(a.name), `${relation_idx}:${a.name}`));
+                relation_idx++;
+              }
+            }
+          }
+        }
       }
-    }
+      let mono_query = this.ctx.maker.select(
+        sql_columns,
+        query.sql_from(),
+        query.sql_join(),
+        query.sql_where()
+      );
+      let mono_rows = await this.ctx.db.select(mono_query);
+      let mult_items = [new Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>()];
+      for (let row of mono_rows) {
+        loadMonoRow(row, '', path, mult_items[0]);
+        for (let [idx, path] of relation_11_paths.entries()) {
+          loadMonoRow(row, `${idx}:`, path, mult_items[idx + 1] = new Map());
+        }
+      }
+      await loadMultRows(mult_items[0], mult_path);
+      for (let [idx, path] of relation_11_paths.entries()) {
+        await loadMultRows(mult_items[idx + 1], path);
+      }
+    };
+    await doQuery(this, this.sql_columns(), [...this.mappers].map(m => m.name), '.', '');
     this.mergeRemotes(remotes);
     return ret;
   }
 
-  private loadValue(cc: ControlCenter, component: AComponent, type: Aspect.Type, value, scopeitem: ScopeTreeItem, sub_items: Set<ScopeTreeItem>) {
+  private loadValue(cc: ControlCenter, component: AComponent, type: Aspect.Type, value) {
     if (value === null)
       value = undefined;
     else if (type.type === "class" && value !== undefined) {
@@ -709,66 +749,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         value = cc.findOrCreate(subid, classname);
         cc.registerObjects(component, [value]);
       }
-      let sub = scopeitem.subs.get(value.manager().name());
-      if (sub) {
-        sub.objects!.add(value);
-        sub_items.add(sub);
-      }
     }
     return value;
   }
-}
-
-type ScopeTree = Map<string, ScopeTreeItem>;
-class ScopeTreeItem {
-  constructor(public cstor: Aspect.Constructor) {}
-  mono: Map<string, Aspect.InstalledAttribute> = new Map();
-  mult: Map<string, Aspect.InstalledAttribute> = new Map(); 
-  subs: ScopeTree = new Map();
-  objects?: Set<VersionedObject> = undefined;
-
-  ids() {
-    let ids: any[] = [];
-    if (this.objects) for (let vo of this.objects)
-      ids.push(vo.id());
-    return ids;
-  }
-};
-
-function buildScopeTreeItem(cc: ControlCenter, item: ScopeTreeItem, aspect: Aspect.Installed, scope: Iterable<string>, stack: Set<string>) {
-  for (let k of scope) {
-    let a = aspect.attributes.get(k);
-    if (a && !stack.has(k)) {
-      let sub_names = Aspect.typeToAspectNames(a.type);
-      if (sub_names.length) {
-        stack.add(k);
-        for (let sub_name of sub_names) {
-          let sub_tree = new ScopeTreeItem(cc.aspectConstructorChecked(sub_name));
-          item.subs.set(sub_name, sub_tree);
-          buildScopeTreeItem(cc, sub_tree, sub_tree.cstor.aspect, scope, stack);
-          if (!sub_tree.objects)
-            sub_tree.objects = new Set();
-        }
-        stack.delete(k);
-      }
-      if(a.type.type === "array" || a.type.type === "set")
-        item.mult.set(a.name, a);
-      else
-        item.mono.set(a.name, a);
-    }
-  };
-  if (item.mult.size > 0)
-    item.objects = new Set();
-}
-
-function buildScopeTree(cc: ControlCenter, cstors: Aspect.Constructor[], scope: Iterable<string>) : ScopeTree {
-  let clear_scope = new Set(scope);
-  clear_scope.add("_version");
-  let ret: ScopeTree = new Map();
-  for (let cstor of cstors) {
-    let item = new ScopeTreeItem(cstor);
-    ret.set(cstor.aspect.name, item);
-    buildScopeTreeItem(cc, item, cstor.aspect, clear_scope, new Set());
-  }
-  return ret;
 }

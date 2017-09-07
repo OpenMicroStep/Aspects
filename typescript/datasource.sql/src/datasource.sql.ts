@@ -212,7 +212,7 @@ export class SqlDataSource extends DataSource
   async implLoad({tr, objects, scope} : {
     tr?: SqlDataSourceTransaction;
     objects: VersionedObject[];
-    scope?: string[];
+    scope: DataSourceInternal.Scope;
   }): Promise<VersionedObject[]> {
     let types = new Map<Aspect.Installed, VersionedObject[]>();
     for (let object of objects) {
@@ -236,7 +236,11 @@ export class SqlDataSource extends DataSource
     else {
       set = sets.values().next().value;
     }
-    set.scope = scope;
+    set.scope = DataSourceInternal.resolveScope(scope, (type) => {
+      if (type === '_') 
+        return types.keys();
+      return [this.controlCenter().aspectChecked(type)];
+    });
     return await this.scoped(component => SqlQuery.execute(this._ctx(tr, component), set).then(() => objects));
   }
 

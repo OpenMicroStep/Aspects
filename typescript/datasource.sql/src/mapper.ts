@@ -83,6 +83,10 @@ export class SqlMappedObject extends Element {
   attribute_id() : SqlMappedAttribute {
     return this.get("_id")!;
   }
+  
+  attribute_version() : SqlMappedAttribute {
+    return this.get("_version")!;
+  }
 
   get(attribute: string) : SqlMappedAttribute | undefined {
     return this.attributes.find(a => a.name === attribute);
