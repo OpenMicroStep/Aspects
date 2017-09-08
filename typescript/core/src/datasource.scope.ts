@@ -1,0 +1,189 @@
+import { Aspect, ImmutableSet } from './core';
+
+export type Scope = {
+  [s: string]: {
+    [s: string]: string[]
+  }
+};
+export type ResolvedScope = {
+  [s: string]: {
+    [s: string]: Set<Aspect.InstalledAttribute>
+  }
+};
+export namespace ResolvedScope {
+  const emptySet = new Set();
+  export function scope_at_type_path(scope: ResolvedScope | undefined, type: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {
+    if (!scope) return emptySet;
+    let scope_type = scope[type];
+    if (!scope_type) return emptySet;
+    return scope_type[path] || emptySet;
+  }
+}
+
+export type ResolvedSort = { asc: boolean, path: Aspect.InstalledAttribute[] }[];
+
+type ParseScopeContext = {
+  unsafe_scope: Scope,
+  unsafe_path_count: number,
+  safe_path_count: number,
+  safe_aspect_path_idx: number;
+  safe_aspect_path_cnt: number;
+  safe_aspect_path: Aspect.InstalledAttribute[],
+  max_path_len: number,
+  scope: ResolvedScope,
+  sort: ResolvedSort,
+  aspectsForType: (type: string) => Iterable<Aspect.Installed>,
+};
+
+function areEquals(a: Aspect.InstalledAttribute[], b: Aspect.InstalledAttribute[]) {
+  if (a.length !== b.length)
+    return false;
+  for (var i = 0; i < a.length; i++) {
+    var ai = a[i];
+    var bi = b[i];
+    if (ai !== bi && (
+      ai.name !== bi.name ||
+      ai.relation !== bi.relation ||
+      ai.type.type !== bi.type.type
+    ))
+      return false;
+  }
+  return true;
+}
+
+function parseScopeAttr(ctx: ParseScopeContext,
+  safe_path: string,
+  safe_attributes: Set<Aspect.InstalledAttribute>, aspect: Aspect.Installed,
+  unsafe_attribute: string, is_absolute: boolean, allow_sort: boolean
+) {
+  let sort_match = unsafe_attribute.match(/^(\+|-)(#)?/);
+  if (sort_match) {
+    if (!is_absolute)
+      throw new Error(`sort is forbidden on '_' paths: ${unsafe_attribute}`);
+    if (!allow_sort)
+      throw new Error(`sort is forbidden on '${safe_path}' path: ${unsafe_attribute}`);
+    unsafe_attribute = unsafe_attribute.substring(sort_match[0].length);
+  }
+
+  let safe_attribute = aspect.attributes.get(unsafe_attribute);
+  if (!safe_attribute)
+    throw new Error(`${unsafe_attribute} requested but not found for ${aspect.name}`);
+
+  if (!sort_match || sort_match[2] !== "#")
+    safe_attributes.add(safe_attribute);
+
+  let cnt = ctx.safe_aspect_path_cnt;
+  if (Aspect.typeIsClass(safe_attribute.type)) {
+    let path_a = `${safe_path.length === 1 ? '' : safe_path}${safe_attribute.name}.`;
+    if (is_absolute || path_a.length < ctx.max_path_len) {
+      ctx.safe_aspect_path.push(safe_attribute);
+      parseScopePath(ctx, path_a, sort_match !== null);
+      ctx.safe_aspect_path.pop();
+    }
+  }
+
+  if (sort_match && cnt === ctx.safe_aspect_path_cnt) {
+    let idx = ctx.safe_aspect_path_idx + ctx.safe_aspect_path_cnt;
+    let asc = sort_match[1] === '+';
+    let path = ctx.safe_aspect_path.slice(0);
+    path.push(safe_attribute);
+    if (idx < ctx.sort.length) {
+      let other = ctx.sort[idx];
+      if (other.asc !== asc || !areEquals(other.path, path))
+        throw new Error(`incompatible sort`);
+    }
+    else {
+      ctx.sort.push({ asc: sort_match[1] === '+', path: path });
+    }
+    ctx.safe_aspect_path_cnt++;
+    if (sort_match[2] !== "#")
+      safe_attributes.add(safe_attribute);
+  }
+}
+
+function parseScopeType(ctx: ParseScopeContext,
+  safe_path: string | "_",
+  aspect: Aspect.Installed, unsafe_scope_type: { [s: string]: string[] },
+  allow_sort: boolean,
+) {
+  let unsafe_attributes = unsafe_scope_type[safe_path];
+  let unsafe_attributes_ = unsafe_scope_type["_"];
+  if (!unsafe_attributes && !unsafe_attributes_)
+    return;
+
+  let safe_scope_type = ctx.scope[aspect.name];
+  if (!safe_scope_type)
+    ctx.scope[aspect.name] = safe_scope_type = {};
+  let safe_attributes = safe_scope_type[safe_path];
+  if (!safe_attributes) {
+    ctx.safe_path_count++;
+    safe_attributes = safe_scope_type[safe_path] = new Set<Aspect.InstalledAttribute>();
+  }
+
+  if (unsafe_attributes && unsafe_attributes !== unsafe_attributes_) {
+    for (let unsafe_attribute of unsafe_attributes) {
+      parseScopeAttr(ctx, safe_path, safe_attributes, aspect, unsafe_attribute, true, allow_sort);
+    }
+  }
+  if (unsafe_attributes_) {
+    for (let unsafe_attribute of unsafe_attributes_) {
+      parseScopeAttr(ctx, safe_path, safe_attributes, aspect, unsafe_attribute, false, allow_sort);
+    }
+  }
+}
+
+function parseScopePath(ctx: ParseScopeContext, safe_path: string, allow_sort) {
+  let idx = ctx.safe_aspect_path_idx;
+  let cnt = ctx.safe_aspect_path_cnt;
+  let n = 0;
+  for (let unsafe_type in ctx.unsafe_scope) {
+    let unsafe_scope_type = ctx.unsafe_scope[unsafe_type];
+    for (let aspect of ctx.aspectsForType(unsafe_type)) {
+      ctx.safe_aspect_path_idx = idx + cnt;
+      ctx.safe_aspect_path_cnt = 0;
+      parseScopeType(ctx, safe_path, aspect, unsafe_scope_type, allow_sort);
+      if (ctx.safe_aspect_path_cnt > 0 && ctx.safe_aspect_path_cnt !== n)  {
+        if (n === 0)
+          n = ctx.safe_aspect_path_cnt
+        else
+          throw new Error(`incompatible sort count`);
+      }
+    }
+  }
+  ctx.safe_aspect_path_idx = idx;
+  ctx.safe_aspect_path_cnt = cnt + n;
+}
+
+export function parseScope(
+  unsafe_scope: Scope | string[],
+  aspectsForType: (type: string | "_") => Iterable<Aspect.Installed>
+) : { scope: ResolvedScope, sort: ResolvedSort } {
+  if (Array.isArray(unsafe_scope))
+    unsafe_scope = { _: { '.' : unsafe_scope }};
+  let ctx: ParseScopeContext = {
+    unsafe_scope: unsafe_scope,
+    unsafe_path_count: 0,
+    safe_path_count: 0,
+    safe_aspect_path_idx: 0,
+    safe_aspect_path_cnt: 0,
+    safe_aspect_path: [],
+    max_path_len: 0,
+    scope: {},
+    sort: [],
+    aspectsForType: aspectsForType,
+  };
+  let max_path_len = 0;
+  let path_count = 0;
+  for (let t in ctx.unsafe_scope) {
+    for (let p in ctx.unsafe_scope[t]) {
+      path_count++;
+      if (p.length > max_path_len)
+        max_path_len = p.length;
+    }
+  }
+  ctx.max_path_len = max_path_len;
+  ctx.unsafe_path_count = path_count;
+  parseScopePath(ctx, '.', true);
+  parseScopePath(ctx, '_', true);
+  return { scope: ctx.scope, sort: ctx.sort };
+}

@@ -2,7 +2,6 @@ import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, AspectCa
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
-import {tests as tests_memory} from './datasource.memory.spec';
 import ConstraintType = DataSourceInternal.ConstraintType;
 import ObjectSet = DataSourceInternal.ObjectSet;
 
@@ -11,6 +10,13 @@ const cc = new ControlCenter(cache);
 Resource.installAspect(cc, "test1");
 Car.installAspect(cc, "test1");
 People.installAspect(cc, "test1");
+
+function aspect_attr(type: string, attr: string) {
+  let r =  cc.aspectChecked(type).attributes.get(attr);
+  if (!r)
+    throw new Error(`attribute ${attr} not found on ${type}`);
+  return r;
+}
 
 function serialize(s, map = new Map()) {
   let r = s;
@@ -65,9 +71,10 @@ function resources_sets() {
         { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test" },
       ],
       name: "resources",
+      sort: [],
       scope: {
         Resource: {
-          ".": [cc.aspectChecked("Resource").attributes.get("_name")],
+          ".": [aspect_attr("Resource", "_name")],
         }
       },
     })
@@ -114,7 +121,6 @@ function ind1_resources() {
     results: [{
       name: "resources",
       where: "=resources1",
-      sort: [ '+_name'],
       scope: ['_name']
     }]
   });
@@ -127,9 +133,10 @@ function ind1_resources() {
     ],
     variables: [] as [string, ObjectSet][],
     name: "resources",
+    sort: [],
     scope: {
       Resource: {
-        ".": [cc.aspectChecked("Resource").attributes.get("_name")],
+        ".": [aspect_attr("Resource", "_name")],
       }
     },
   });
@@ -174,9 +181,10 @@ function ind2_resources() {
     ],
     variables: [] as [string, ObjectSet][],
     name: "resources",
+    sort: [],
     scope: {
       Resource: {
-        ".": [cc.aspectChecked("Resource").attributes.get("_name")],
+        ".": [aspect_attr("Resource", "_name")],
       }
     },
   });
@@ -206,9 +214,10 @@ function or_and() {
         ]}
       ],
       name: "resources",
+      sort: [],
       scope: {
         Resource: {
-          ".": [cc.aspectChecked("Resource").attributes.get("_name")],
+          ".": [aspect_attr("Resource", "_name")],
         }
       },
     })
@@ -230,15 +239,16 @@ function no_instanceof_all() {
         { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test" },
       ],
       name: "resources",
+      sort: [],
       scope: {
         Car: {
-          ".": [cc.aspectChecked("Car").attributes.get("_name")],
+          ".": [aspect_attr("Car", "_name")],
         },
         People: {
-          ".": [cc.aspectChecked("People").attributes.get("_name")],
+          ".": [aspect_attr("People", "_name")],
         },
         Resource: {
-          ".": [cc.aspectChecked("Resource").attributes.get("_name")],
+          ".": [aspect_attr("Resource", "_name")],
         },
       },
     })
@@ -260,9 +270,10 @@ function no_instanceof_where_model() {
         { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_model", value: "Test" },
       ],
       name: "resources",
+      sort: [],
       scope: {
         Car: {
-          ".": [cc.aspectChecked("Car").attributes.get("_name")],
+          ".": [aspect_attr("Car", "_name")],
         },
       },
     })
@@ -336,9 +347,10 @@ function recursion() {
       ],
       constraints: [],
       name: "resources",
+      sort: [],
       scope: {
         Resource: {
-          ".": [cc.aspectChecked("Resource").attributes.get("_name")],
+          ".": [aspect_attr("Resource", "_name")],
         }
       },
     })
@@ -355,9 +367,10 @@ function set_persons1_p() {
     ],
     variables: [],
     name: "peoples1",
+    sort: [],
     scope: {
       People: {
-        ".": [cc.aspectChecked("People").attributes.get("_firstname"), cc.aspectChecked("People").attributes.get("_lastname")],
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname")],
       }
     },
   });
@@ -382,9 +395,10 @@ function set_persons2_C_owner() {
     ],
     variables: [],
     name: "peoples2",
+    sort: [],
     scope: {
       People: {
-        ".": [cc.aspectChecked("People").attributes.get("_firstname"), cc.aspectChecked("People").attributes.get("_lastname"), cc.aspectChecked("People").attributes.get("_birthDate")],
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname"), aspect_attr("People", "_birthDate")],
       },
     }
   });
@@ -464,13 +478,14 @@ function persons_and_their_cars() {
         { type: ConstraintType.UnionOf, value: [c, persons] },
       ],
       name: "union",
+      sort: [],
       scope: {
         People: {
-          ".": [cc.aspectChecked("People").attributes.get("_name"), cc.aspectChecked("People").attributes.get("_firstname"), cc.aspectChecked("People").attributes.get("_lastname"), cc.aspectChecked("People").attributes.get("_cars")],
+          ".": [aspect_attr("People", "_name"), aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname"), aspect_attr("People", "_cars")],
         },
         Car: {
-          ".": [cc.aspectChecked("People").attributes.get("_name")],
-          "_cars.": [cc.aspectChecked("Car").attributes.get("_owner")]
+          ".": [aspect_attr("People", "_name")],
+          "_cars.": [aspect_attr("Car", "_owner")]
         }
       }
     })
@@ -524,9 +539,10 @@ function persons_with_cars_and_their_cars() {
     ],
     variables: [],
     name: "persons",
+    sort: [],
     scope: {
       People: {
-        ".": [cc.aspectChecked("People").attributes.get("_firstname"), cc.aspectChecked("People").attributes.get("_lastname"), cc.aspectChecked("People").attributes.get("_cars")],
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname"), aspect_attr("People", "_cars")],
       },
     },
   });
@@ -564,9 +580,10 @@ function persons_with_cars_and_their_cars() {
     ],
     variables: [],
     name: "cars",
+    sort: [],
     scope: {
       Car: {
-        ".": [cc.aspectChecked("Car").attributes.get("_owner")]
+        ".": [aspect_attr("Car", "_owner")]
       },
     },
   });
@@ -604,9 +621,10 @@ function set_cars2_c() {
     ],
     variables: [],
     name: "cars2",
+    sort: [],
     scope: {
       Car: {
-        ".": [cc.aspectChecked("Car").attributes.get("_name"), cc.aspectChecked("Car").attributes.get("_owner"), cc.aspectChecked("Car").attributes.get("_model")],
+        ".": [aspect_attr("Car", "_name"), aspect_attr("Car", "_owner"), aspect_attr("Car", "_model")],
       },
     },
   });
@@ -686,9 +704,10 @@ function persons_mixed() {
     ],
     variables: [],
     name: "cars1",
+    sort: [],
     scope: {
       Car: {
-        ".": [cc.aspectChecked("Car").attributes.get("_name"), cc.aspectChecked("Car").attributes.get("_owner")]
+        ".": [aspect_attr("Car", "_name"), aspect_attr("Car", "_owner")]
       }
     },
   });
@@ -747,25 +766,25 @@ function applyWhere() {
 function applyRequest() {
   let objects = makeObjects();
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { name: "cars", where: { $instanceOf: Car } }, objects, cc), 
+    { name: "cars", where: { $instanceOf: Car } }, objects, cc),
     { cars: objects.slice(0, 3) });
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { name: "Renaults", where: { $instanceOf: Car, _name: "Renault" } }, objects, cc), 
+    { name: "Renaults", where: { $instanceOf: Car, _name: "Renault" } }, objects, cc),
     { Renaults: objects.slice(0, 2) });
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { 
+    {
       "cars=": { $instanceOf: Car },
       "renaults=": { _name: "Renault", $in: "=cars" },
       results: [
         { name: "renaults", where: "=renaults" },
         { name: "cars", where: "=cars" }
       ]
-    }, objects, cc), 
+    }, objects, cc),
     { renaults: objects.slice(0, 2), cars: objects.slice(0, 3) });
 }
 
-export const tests = { name: 'DataSource', tests: [
-  { name: "objectset", tests: [
+export const tests = { name: 'DataSource.request', tests: [
+  { name: "parseRequest", tests: [
     simple_resources,
     multi_resources,
     set_resources,
@@ -782,11 +801,10 @@ export const tests = { name: 'DataSource', tests: [
     persons_with_cars_and_their_cars,
     persons_cars_sub,
     persons_mixed,
+    { name: "perfs", tests: [
+      persons_with_cars_and_their_cars_1k,
+    ]},
   ]},
   applyWhere,
   applyRequest,
-  { name: "perfs", tests: [
-    persons_with_cars_and_their_cars_1k,
-  ]},
-  tests_memory,
 ]};

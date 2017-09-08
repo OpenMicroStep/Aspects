@@ -4,6 +4,7 @@ import {
   Aspect, DataSource, Validation,
   ImmutableSet,
 } from './core';
+import * as DataSourceScope from './datasource.scope';
 import {Reporter, Diagnostic, AttributeTypes as V} from '@openmicrostep/msbuildsystem.shared';
 
 export namespace DataSourceInternal {
@@ -340,19 +341,19 @@ export namespace DataSourceInternal {
     }
     return false;
   }
-  function hasAttribute(aspect: Aspect.Installed, set: ObjectSet, r_set: ObjectSet | undefined, attributes: Map<string, Aspect.InstalledAttribute>, constraint: Constraint): boolean {
+  function hasAttribute(aspect: Aspect.Installed, set: ObjectSet, r_set: ObjectSet | undefined, attributes: Map<string, Aspect.InstalledAttribute>, constraint: Constraint, prefix: string): boolean {
     if (constraint instanceof ConstraintTree) {
       let has = false;
       for (let c of constraint.value)
-        has = hasAttribute(aspect, set, r_set, attributes, c) || has;
+        has = hasAttribute(aspect, set, r_set, attributes, c, prefix + constraint.prefix) || has;
       return has;
     }
     else if (constraint instanceof ConstraintValue) {
-      return hasVariableAttribute(aspect, set, r_set, attributes, constraint.leftVariable, constraint.leftAttribute);
+      return hasVariableAttribute(aspect, set, r_set, attributes, prefix + constraint.leftVariable, constraint.leftAttribute);
     }
     else if (constraint instanceof ConstraintVariable) {
-      let lhas = hasVariableAttribute(aspect, set, r_set, attributes, constraint.leftVariable , constraint.leftAttribute );
-      let rhas = hasVariableAttribute(aspect, set, r_set, attributes, constraint.rightVariable, constraint.rightAttribute);
+      let lhas = hasVariableAttribute(aspect, set, r_set, attributes, prefix + constraint.leftVariable , constraint.leftAttribute );
+      let rhas = hasVariableAttribute(aspect, set, r_set, attributes, prefix + constraint.rightVariable, constraint.rightAttribute);
       return lhas || rhas;
     }
     else if (constraint instanceof ConstraintSub) {
@@ -366,7 +367,7 @@ export namespace DataSourceInternal {
   }
   function hasAllAttributes(aspect: Aspect.Installed, set: ObjectSet, r_set: ObjectSet | undefined, attributes: Map<string, Aspect.InstalledAttribute>) {
     for (let c of set.constraints) {
-      if (!hasAttribute(aspect, set, r_set, attributes, c))
+      if (!hasAttribute(aspect, set, r_set, attributes, c, ''))
         return false;
     }
     return true;
@@ -406,6 +407,7 @@ export namespace DataSourceInternal {
     typeConstraints: ConstraintOnType[] = [];
     name?: string = undefined;
     scope?: ResolvedScope = undefined;
+    sort?: ResolvedSort = undefined;
     constraints: Constraint[] = [];
     variables?: Map<string, ObjectSet> = undefined;
     subs?: Map<string, ObjectSet> = undefined;
@@ -604,25 +606,10 @@ export namespace DataSourceInternal {
     throw new Error(`Unsupported on value constraint ${ConstraintType[op as any]}`);
   }
 
-  export type Scope = {
-    [s: string]: {
-      [s: string]: string[]
-    }
-  };
-  export type ResolvedScope = {
-    [s: string]: {
-      [s: string]: Set<Aspect.InstalledAttribute>
-    }
-  };
-  export namespace ResolvedScope {
-    const emptySet = new Set();
-    export function scope_at_type_path(scope: ResolvedScope | undefined, type: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {
-      if (!scope) return emptySet;
-      let scope_type = scope[type];
-      if (!scope_type) return emptySet;
-      return scope_type[path] || emptySet;
-    }
-  }
+  export import Scope = DataSourceScope.Scope;
+  export import ResolvedScope = DataSourceScope.ResolvedScope;
+  export import ResolvedSort = DataSourceScope.ResolvedSort;
+  export import parseScope = DataSourceScope.parseScope;
 
   export type Value = any;
   export type Instance<R> = string | R;
@@ -1006,90 +993,22 @@ export namespace DataSourceInternal {
     let set = context.parseSet(result.where, result.name)
     set = set.clone(set._name);
     set.name = result.name;
-    if (result.scope)
-      set.scope = parseScope(context.cc, set, result.scope);
+    if (result.scope) {
+      let r = parseScope(result.scope, function *(type) {
+        if (type !== '_')
+          yield context.aspect(type);
+        else
+          yield* set.attributesAndCompatibleAspects(context.cc).compatibleAspects;
+      });
+      set.scope = r.scope;
+      set.sort = r.sort;
+    }
     context.pop();
     return set;
   }
 
-  function parseScopeType(s: ResolvedScope, aspect: Aspect.Installed, unsafe_scope_type: { [s: string]: string[] }) {
-    let safe_scope_type = s[aspect.name];
-    if (!safe_scope_type)
-      s[aspect.name] = safe_scope_type = {};
-    let all_safe_attributes: Set<Aspect.InstalledAttribute>[] = []
-    for (let unsafe_path in unsafe_scope_type) {
-      if (unsafe_path !== '_') {
-        let safe_attributes = safe_scope_type[unsafe_path];
-        if (!safe_attributes)
-          safe_attributes = safe_scope_type[unsafe_path] = new Set<Aspect.InstalledAttribute>();
-        all_safe_attributes.push(safe_attributes);
-        for (let unsafe_attribute of unsafe_scope_type[unsafe_path]) {
-          let safe_attribute = aspect.attributes.get(unsafe_attribute);
-          if (safe_attribute)
-            safe_attributes.add(safe_attribute);
-          else
-            throw new Error(`${unsafe_attribute} requested but not found for ${aspect.name}`);
-        }
-      }
-    }
-    let unsafe_attributes = unsafe_scope_type['_'] || [];
-    for (let unsafe_attribute of unsafe_attributes) {
-      let safe_attribute = aspect.attributes.get(unsafe_attribute);
-      if (safe_attribute) {
-        for (let safe_attributes of all_safe_attributes)
-          safe_attributes.add(safe_attribute);
-      }
-    }
-  }
-  function parseScopeTypes(s: ResolvedScope, types: ConstraintOnType[], unsafe_scope_type: { [s: string]: string[] }): number {
-    let n = 0;
-    for (let t of types) {
-      switch (t.type) {
-        case ConstraintType.InstanceOf:
-        case ConstraintType.MemberOf:
-          parseScopeType(s, t.value, unsafe_scope_type);
-          n++;
-          break;
-        case ConstraintType.UnionOf:
-          for (let set of t.value)
-            n += parseScopeTypes(s, set.typeConstraints, unsafe_scope_type);
-          break;
-        case ConstraintType.UnionOfAlln:
-          n += parseScopeTypes(s, t.value[0].typeConstraints, unsafe_scope_type);
-          break;
-      }
-    }
-    return n;
-  }
-  function parseScope(cc: ControlCenter, set: ObjectSet, unsafe_scope: Scope | string[]) : ResolvedScope {
-    let s: ResolvedScope = {};
-    unsafe_scope =  Array.isArray(unsafe_scope) ? { _: { '.': unsafe_scope } } : unsafe_scope;
-    for (let unsafe_type in unsafe_scope) {
-      let unsafe_scope_type = unsafe_scope[unsafe_type];
-      if (unsafe_type === '_') {
-        let n = parseScopeTypes(s, set.typeConstraints, unsafe_scope_type);
-        if (n === 0) {
-          for (let aspect of set.attributesAndCompatibleAspects(cc).compatibleAspects)
-            parseScopeType(s, aspect, unsafe_scope_type);
-        }
-      }
-      else
-        parseScopeType(s, cc.aspectChecked(unsafe_type), unsafe_scope_type);
-    }
-    return s;
-  }
-  export function resolveScope(unsafe_scope: Scope | string[], aspects: (type: string) => Iterable<Aspect.Installed>) : ResolvedScope {
-    let s: ResolvedScope = {};
-    unsafe_scope =  Array.isArray(unsafe_scope) ? { _: { '.': unsafe_scope } } : unsafe_scope;
-    for (let unsafe_type in unsafe_scope) {
-      let unsafe_scope_type = unsafe_scope[unsafe_type];
-      for (let aspect of aspects(unsafe_type))
-        parseScopeType(s, aspect, unsafe_scope_type);
-    }
-    return s;
-  }
   export function resolveScopeForObjects(unsafe_scope: Scope | string[], cc: ControlCenter, objects: Iterable<VersionedObject>) : ResolvedScope {
-    return resolveScope(unsafe_scope, function *(type) {
+    return parseScope(unsafe_scope, function *(type) {
       if (type !== '_') {
         yield cc.aspectChecked(type);
       }
@@ -1097,9 +1016,9 @@ export namespace DataSourceInternal {
         let aspects = new Set<Aspect.Installed>();
         for (let o of objects)
           aspects.add(o.manager().aspect());
-        yield *aspects;
+        yield* aspects;
       }
-    });
+    }).scope;
   }
 
   export function parseRequest(request: Request, cc: ControlCenter) : ObjectSet[] {
