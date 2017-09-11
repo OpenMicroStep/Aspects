@@ -146,6 +146,29 @@ function query_peoples(f: Flux<Context>) {
   });
 }
 
+function sort_c0_c1_c2_c3_asc(f: Flux<Context>) {
+  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: "Car" }, scope: {
+    Car: { '.' : ['+_name', '+_model'] },
+  } }).then((envelop) => {
+    assert.deepEqual(envelop.result(), {
+      cars: [c2, c3, c1, c0],
+    });
+    f.continue();
+  });
+}
+
+function sort_c0_c1_c2_c3_dsc(f: Flux<Context>) {
+  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: "Car" }, scope: {
+    Car: { '.' : ['-_name', '-_model'] },
+  } }).then((envelop) => {
+    assert.deepEqual(envelop.result(), {
+      cars: [c0, c1, c3, c2],
+    });
+    f.continue();
+  });
+}
 
 function save_c0_c1_c2_c3_p0_p1_p2_p3_p4(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
@@ -625,6 +648,14 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_in_c2,
       query_id_c2,
       query_peoples,
+      { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
+    ]},
+    { name: "sort", tests: [
+      { name: "init", test: (f: any) => { f.setFirstElements([createControlCenter, init]); f.continue(); } },
+      save_c0_c1_c2_c3_p0_p1_p2_p3_p4,
+      save_relation_c0p0_c1p0_c2p1,
+      sort_c0_c1_c2_c3_asc,
+      sort_c0_c1_c2_c3_dsc,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]},
     { name: "relations", tests: [

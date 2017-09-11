@@ -18,12 +18,20 @@ export namespace DataSourceInternal {
     has(object: T, attribute: string): boolean;
     get(object: T, attribute: string): any;
     todb(object: T, attribute: string, value): any;
+    sort(a, b, type: Aspect.Type): number;
   };
   export const versionedObjectMapper: Mapper<VersionedObject> = {
     aspect(vo: VersionedObject) { return vo.manager().aspect(); },
     has(vo: VersionedObject, attribute: string) { return vo.manager().hasAttributeValue(attribute); },
     get(vo: VersionedObject, attribute:  keyof VersionedObject) { return vo.manager().attributeValue(attribute); },
-    todb(vo: VersionedObject, attribute: string, value) { return value; }
+    todb(vo: VersionedObject, attribute: string, value) { return value; },
+    sort(a, b, type: Aspect.Type) {
+      if (Aspect.typeIsClass(type)) {
+        a = a.id();
+        b = b.id();
+      }
+      return a === b ? 0 : (a < b ? -1 : +1 );
+    },
   }
   export class FilterContext<T> {
     _resolution = new Map<ObjectSet, Solution<T>>();
@@ -211,6 +219,32 @@ export namespace DataSourceInternal {
         solution.full = solution.partial;
       }
       return solution.full;
+    }
+
+    valueAtPath(o: T, path: Aspect.InstalledAttribute[]) {
+      let v = o;
+      for (let a of path) {
+        v = this.mapper.get(v, a.name);
+      }
+      return v;
+    }
+
+    solveSorted(set: ObjectSet) : T[] {
+      let full = this.solveFull(set);
+      if (!set.sort)
+        return [...full];
+
+      return [...full].sort((a, b) => {
+        let r = 0;
+        for (let s of set.sort!) {
+          let va = this.valueAtPath(a, s.path);
+          let vb = this.valueAtPath(b, s.path);
+          r = this.mapper.sort(va, vb, s.path[s.path.length - 1].type);
+          if (r !== 0)
+            return s.asc ? +r : -r;
+        }
+        return r;
+      });
     }
 
   };
@@ -1038,7 +1072,7 @@ export namespace DataSourceInternal {
     let context = new ParseContext(new ParseStack(where), cc);
     let set = context.parseSet(where, "where");
     let sctx = new FilterContext(objects, versionedObjectMapper);
-    return [...sctx.solveFull(set)];
+    return sctx.solveSorted(set);
   }
 
   export function applyRequest(request: Request, objects: VersionedObject[], cc: ControlCenter) : { [s: string]: VersionedObject[] } {
@@ -1059,7 +1093,7 @@ export namespace DataSourceInternal {
     let sctx = new FilterContext(objects, mapper);
     for (let set of sets) {
       if (set.name || !namedOnly) {
-        ret.set(set, [...sctx.solveFull(set)]);
+        ret.set(set, sctx.solveSorted(set));
       }
     }
     return ret;

@@ -88,7 +88,14 @@ export class InMemoryDataSource extends DataSource
         if (attribute === "_id" && typeof value !== "object")
           return ds.get(this.ds.toDSId(value));
         return ds.toDSValue(value);
-      }
+      },
+      sort: (a, b, type) => {
+        if (Aspect.typeIsClass(type)) {
+          a = a.id;
+          b = b.id;
+        }
+        return a === b ? 0 : (a < b ? -1 : +1 );
+      },
     });
     res.forEach((objs, set) => {
       ret[set.name] = objs.map(dObject => {
