@@ -26,6 +26,7 @@ type ParseScopeContext = {
   unsafe_scope: Scope,
   unsafe_path_count: number,
   safe_path_count: number,
+  safe_aspect_path_abs: number;
   safe_aspect_path_idx: number;
   safe_aspect_path_cnt: number;
   safe_aspect_path: Aspect.InstalledAttribute[],
@@ -73,16 +74,37 @@ function parseScopeAttr(ctx: ParseScopeContext,
     safe_attributes.add(safe_attribute);
 
   let cnt = ctx.safe_aspect_path_cnt;
-  if (Aspect.typeIsClass(safe_attribute.type)) {
+  let types = Aspect.typeToAspectNames(safe_attribute.type);
+  if (types.length) {
     let path_a = `${safe_path.length === 1 ? '' : safe_path}${safe_attribute.name}.`;
-    if (is_absolute || path_a.length < ctx.max_path_len) {
+    let go_deeper = is_absolute || path_a.length <= ctx.max_path_len;
+    if (!go_deeper) {
+      go_deeper = ctx.safe_aspect_path.indexOf(safe_attribute, ctx.safe_aspect_path_abs) === -1;
+      if (!go_deeper) { // cycle found, let's add '_'
+        let safe_attributes = get_safe_attributes(ctx, aspect, "_");
+        safe_attributes.add(safe_attribute);
+      }
+    }
+
+    if (go_deeper) {
       ctx.safe_aspect_path.push(safe_attribute);
-      parseScopePath(ctx, path_a, sort_match !== null);
+      if (is_absolute) {
+        let abs = ctx.safe_aspect_path_abs;
+        ctx.safe_aspect_path_abs = ctx.safe_aspect_path.length;
+        parseScopePath(ctx, iterParseTypes(ctx, path_a, types, sort_match !== null));
+        ctx.safe_aspect_path_abs = abs;
+      }
+      else {
+        parseScopePath(ctx, iterParseTypes(ctx, path_a, types, sort_match !== null));
+      }
       ctx.safe_aspect_path.pop();
     }
   }
 
   if (sort_match && cnt === ctx.safe_aspect_path_cnt) {
+    if (Aspect.typeIsMultiple(safe_attribute.type))
+      throw new Error(`cannot sort on multiple values`);
+
     let idx = ctx.safe_aspect_path_idx + ctx.safe_aspect_path_cnt;
     let asc = sort_match[1] === '+';
     let path = ctx.safe_aspect_path.slice(0);
@@ -101,6 +123,18 @@ function parseScopeAttr(ctx: ParseScopeContext,
   }
 }
 
+function get_safe_attributes(ctx: ParseScopeContext, aspect: Aspect.Installed, safe_path: string) {
+  let safe_scope_type = ctx.scope[aspect.name];
+  if (!safe_scope_type)
+    ctx.scope[aspect.name] = safe_scope_type = {};
+  let safe_attributes = safe_scope_type[safe_path];
+  if (!safe_attributes) {
+    ctx.safe_path_count++;
+    safe_attributes = safe_scope_type[safe_path] = new Set<Aspect.InstalledAttribute>();
+  }
+  return safe_attributes;
+}
+
 function parseScopeType(ctx: ParseScopeContext,
   safe_path: string | "_",
   aspect: Aspect.Installed, unsafe_scope_type: { [s: string]: string[] },
@@ -111,15 +145,7 @@ function parseScopeType(ctx: ParseScopeContext,
   if (!unsafe_attributes && !unsafe_attributes_)
     return;
 
-  let safe_scope_type = ctx.scope[aspect.name];
-  if (!safe_scope_type)
-    ctx.scope[aspect.name] = safe_scope_type = {};
-  let safe_attributes = safe_scope_type[safe_path];
-  if (!safe_attributes) {
-    ctx.safe_path_count++;
-    safe_attributes = safe_scope_type[safe_path] = new Set<Aspect.InstalledAttribute>();
-  }
-
+  let safe_attributes = get_safe_attributes(ctx, aspect, safe_path);
   if (unsafe_attributes && unsafe_attributes !== unsafe_attributes_) {
     for (let unsafe_attribute of unsafe_attributes) {
       parseScopeAttr(ctx, safe_path, safe_attributes, aspect, unsafe_attribute, true, allow_sort);
@@ -132,24 +158,22 @@ function parseScopeType(ctx: ParseScopeContext,
   }
 }
 
-function parseScopePath(ctx: ParseScopeContext, safe_path: string, allow_sort) {
+function parseScopePath(ctx: ParseScopeContext, iter: IterableIterator<void>) {
   let idx = ctx.safe_aspect_path_idx;
   let cnt = ctx.safe_aspect_path_cnt;
   let n = 0;
-  for (let unsafe_type in ctx.unsafe_scope) {
-    let unsafe_scope_type = ctx.unsafe_scope[unsafe_type];
-    for (let aspect of ctx.aspectsForType(unsafe_type)) {
-      ctx.safe_aspect_path_idx = idx + cnt;
-      ctx.safe_aspect_path_cnt = 0;
-      parseScopeType(ctx, safe_path, aspect, unsafe_scope_type, allow_sort);
-      if (ctx.safe_aspect_path_cnt > 0 && ctx.safe_aspect_path_cnt !== n)  {
-        if (n === 0)
-          n = ctx.safe_aspect_path_cnt
-        else
-          throw new Error(`incompatible sort count`);
-      }
+  let done = false;
+  do {
+    ctx.safe_aspect_path_idx = idx + cnt;
+    ctx.safe_aspect_path_cnt = 0;
+    done = iter.next().done;
+    if (ctx.safe_aspect_path_cnt > 0 && ctx.safe_aspect_path_cnt !== n)  {
+      if (n === 0)
+        n = ctx.safe_aspect_path_cnt
+      else
+        throw new Error(`incompatible sort count`);
     }
-  }
+  } while (!done);
   ctx.safe_aspect_path_idx = idx;
   ctx.safe_aspect_path_cnt = cnt + n;
 }
@@ -164,6 +188,7 @@ export function parseScope(
     unsafe_scope: unsafe_scope,
     unsafe_path_count: 0,
     safe_path_count: 0,
+    safe_aspect_path_abs: 0,
     safe_aspect_path_idx: 0,
     safe_aspect_path_cnt: 0,
     safe_aspect_path: [],
@@ -183,7 +208,30 @@ export function parseScope(
   }
   ctx.max_path_len = max_path_len;
   ctx.unsafe_path_count = path_count;
-  parseScopePath(ctx, '.', true);
-  parseScopePath(ctx, '_', true);
+  parseScopePath(ctx, iterParseRootTypes(ctx, '.'));
+
   return { scope: ctx.scope, sort: ctx.sort };
+
+}
+
+function* iterParseRootTypes(ctx: ParseScopeContext, safe_path: string) {
+  for (let unsafe_type in ctx.unsafe_scope) {
+    let unsafe_scope_type = ctx.unsafe_scope[unsafe_type];
+    for (let aspect of ctx.aspectsForType(unsafe_type)) {
+      yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type, true);
+    }
+  }
+}
+
+function* iterParseTypes(ctx: ParseScopeContext, safe_path: string, types: Iterable<string>, allow_sort: boolean) {
+  for (let unsafe_type of types) {
+    let unsafe_scope_type = ctx.unsafe_scope[unsafe_type];
+    let unsafe_scope_type_ = ctx.unsafe_scope["_"];
+    for (let aspect of ctx.aspectsForType(unsafe_type)) {
+      if (unsafe_scope_type)
+        yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type, allow_sort);
+      if (unsafe_scope_type_)
+        yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type_, allow_sort);
+    }
+  }
 }

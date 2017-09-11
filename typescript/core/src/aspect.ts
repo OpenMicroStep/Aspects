@@ -53,6 +53,10 @@ export namespace Aspect {
     return false;
   }
 
+  export function typeIsMultiple(type: Type) : boolean {
+    return type.type === "array" || type.type === "set";
+  }
+
   export function typeToAspectNames(type: Type) : string[] {
     if (type.type === "class")
       return [type.name];

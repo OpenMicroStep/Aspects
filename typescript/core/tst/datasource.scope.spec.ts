@@ -132,7 +132,6 @@ function scope_1A1_121() {
   });
   assert.deepEqual<any>(r.scope, {
     People: {
-      "_": [aspect_attr("People", "_cars")],
       ".": [aspect_attr("People", "_cars")],
       "_cars._owner.": [aspect_attr("People", "_cars")],
     },
@@ -142,7 +141,51 @@ function scope_1A1_121() {
   });
   assert.deepEqual<any>(r.sort, []);
 }
-
+function scope_1A1_1A1() {
+  let r = parseScope({
+    People: {
+      '_': ['_cars'],
+    },
+    Car: {
+      '_': ['_owner'],
+    },
+  });
+  assert.deepEqual<any>(r.scope, {
+    People: {
+      "_": [aspect_attr("People", "_cars")],
+      ".": [aspect_attr("People", "_cars")],
+      "_owner.": [aspect_attr("People", "_cars")],
+      "_cars._owner.": [aspect_attr("People", "_cars")],
+    },
+    Car: {
+      "_": [aspect_attr("Car", "_owner")],
+      ".": [aspect_attr("Car", "_owner")],
+      "_cars.": [aspect_attr("Car", "_owner")],
+      "_owner._cars.": [aspect_attr("Car", "_owner")],
+    },
+  });
+  assert.deepEqual<any>(r.sort, []);
+}
+function scope_1A1_1A1_nocycle() {
+  let r = parseScope({
+    People: {
+      '_': ['_cars'],
+    },
+    Car: {
+      '_': ['_name'],
+    },
+  });
+  assert.deepEqual<any>(r.scope, {
+    People: {
+      ".": [aspect_attr("People", "_cars")],
+    },
+    Car: {
+      ".": [aspect_attr("Car", "_name")],
+      "_cars.": [aspect_attr("Car", "_name")],
+    },
+  });
+  assert.deepEqual<any>(r.sort, []);
+}
 
 function sort_111() {
   let r = parseScope({
@@ -227,6 +270,8 @@ export const tests = { name: 'DataSource.parseScope', tests: [
   scope_alias,
   scope_A11_113_111,
   scope_1A1_121,
+  scope_1A1_1A1,
+  scope_1A1_1A1_nocycle,
   sort_111,
   sort_112,
   sort_112_112,
