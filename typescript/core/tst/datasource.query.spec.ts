@@ -287,7 +287,7 @@ function no_instanceof_scope_model() {
       where: "=resources",
       scope: ['_model']
     }]
-  }), `_model requested but not found for Resource`);
+  }), `'_model' requested but not found for 'Resource'`);
 }
 
 function recursion() {

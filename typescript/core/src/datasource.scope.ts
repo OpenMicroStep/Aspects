@@ -60,15 +60,15 @@ function parseScopeAttr(ctx: ParseScopeContext,
   let sort_match = unsafe_attribute.match(/^(\+|-)(#)?/);
   if (sort_match) {
     if (!is_absolute)
-      throw new Error(`sort is forbidden on '_' paths: ${unsafe_attribute}`);
+      throw new Error(`sort is forbidden on '_' paths`);
     if (!allow_sort)
-      throw new Error(`sort is forbidden on '${safe_path}' path: ${unsafe_attribute}`);
+      throw new Error(`sort is forbidden on '${safe_path}' path`);
     unsafe_attribute = unsafe_attribute.substring(sort_match[0].length);
   }
 
   let safe_attribute = aspect.attributes.get(unsafe_attribute);
   if (!safe_attribute)
-    throw new Error(`${unsafe_attribute} requested but not found for ${aspect.name}`);
+    throw new Error(`'${unsafe_attribute}' requested but not found for '${aspect.name}'`);
 
   if (!sort_match || sort_match[2] !== "#")
     safe_attributes.add(safe_attribute);
@@ -103,7 +103,7 @@ function parseScopeAttr(ctx: ParseScopeContext,
 
   if (sort_match && cnt === ctx.safe_aspect_path_cnt) {
     if (Aspect.typeIsMultiple(safe_attribute.type))
-      throw new Error(`cannot sort on multiple values`);
+      throw new Error(`cannot sort on '${safe_attribute.name}' (multiple values)`);
 
     let idx = ctx.safe_aspect_path_idx + ctx.safe_aspect_path_cnt;
     let asc = sort_match[1] === '+';
@@ -112,7 +112,7 @@ function parseScopeAttr(ctx: ParseScopeContext,
     if (idx < ctx.sort.length) {
       let other = ctx.sort[idx];
       if (other.asc !== asc || !areEquals(other.path, path))
-        throw new Error(`incompatible sort`);
+        throw new Error(`incompatible sorts`);
     }
     else {
       ctx.sort.push({ asc: sort_match[1] === '+', path: path });

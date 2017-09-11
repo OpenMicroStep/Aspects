@@ -120,7 +120,6 @@ function scope_A11_113_111() {
   assert.deepEqual<any>(r.sort, []);
 }
 
-
 function scope_1A1_121() {
   let r = parseScope({
     People: {
@@ -141,6 +140,7 @@ function scope_1A1_121() {
   });
   assert.deepEqual<any>(r.sort, []);
 }
+
 function scope_1A1_1A1() {
   let r = parseScope({
     People: {
@@ -166,6 +166,7 @@ function scope_1A1_1A1() {
   });
   assert.deepEqual<any>(r.sort, []);
 }
+
 function scope_1A1_1A1_nocycle() {
   let r = parseScope({
     People: {
@@ -185,6 +186,16 @@ function scope_1A1_1A1_nocycle() {
     },
   });
   assert.deepEqual<any>(r.sort, []);
+}
+
+function scope_on_bad_attribute() {
+  assert.throw(() => {
+    parseScope({
+      Car: {
+        '.': ['_cars']
+      },
+    })
+  }, `'_cars' requested but not found for 'Car'`);
 }
 
 function sort_111() {
@@ -243,6 +254,7 @@ function sort_112_112() {
     { asc: false, path: [aspect_attr("Car", '_owner'), aspect_attr("People", '_firstname')] },
   ]);
 }
+
 function sort_211() {
   let r = parseScope({
     Car: {
@@ -265,6 +277,84 @@ function sort_211() {
   ]);
 }
 
+function sort_on__() {
+  assert.throw(() => {
+    parseScope({
+      Car: {
+        '_': ['+_name']
+      },
+    })
+  }, `sort is forbidden on '_' paths`);
+}
+
+function sort_on_sub() {
+  assert.throw(() => {
+    parseScope({
+      Car: {
+        '.': ['_owner']
+      },
+      People: {
+        '_owner.': ['+_name']
+      },
+    })
+  }, `sort is forbidden on '_owner.' path`);
+}
+
+function sort_on_mult() {
+  assert.throw(() => {
+    parseScope({
+      People: {
+        '.': ['+_cars']
+      },
+    })
+  }, `cannot sort on '_cars' (multiple values)`);
+}
+
+function sort_compatible() {
+  let r = parseScope({
+    People: {
+      '.': ['+_name']
+    },
+    Car: {
+      '.': ['+_name']
+    },
+  });
+  assert.deepEqual<any>(r.scope, {
+    Car: {
+      '.': [aspect_attr("Car", '_name')]
+    },
+    People: {
+      '.': [aspect_attr("People", '_name')]
+    },
+  });
+  assert.deepEqual<any>(r.sort, [
+    { asc: true , path: [aspect_attr("Car", '_name')] },
+  ]);
+}
+
+function sort_incompatible() {
+  assert.throw(() => {
+    parseScope({
+      People: {
+        '.': ['+_firstname']
+      },
+      Car: {
+        '.': ['+_name']
+      },
+    })
+  }, `incompatible sorts`);
+  assert.throw(() => {
+    parseScope({
+      People: {
+        '.': ['+_name', '+_lastname']
+      },
+      Car: {
+        '.': ['+_name']
+      },
+    })
+  }, `incompatible sort count`);
+}
+
 export const tests = { name: 'DataSource.parseScope', tests: [
   scope_111,
   scope_alias,
@@ -272,8 +362,14 @@ export const tests = { name: 'DataSource.parseScope', tests: [
   scope_1A1_121,
   scope_1A1_1A1,
   scope_1A1_1A1_nocycle,
+  scope_on_bad_attribute,
   sort_111,
   sort_112,
   sort_112_112,
   sort_211,
+  sort_on__,
+  sort_on_sub,
+  sort_on_mult,
+  sort_compatible,
+  sort_incompatible,
 ]};
