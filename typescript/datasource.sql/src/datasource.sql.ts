@@ -8,7 +8,7 @@ import {SqlQuery, SqlMappedQuery, SqlMappedSharedContext, mapValue} from './quer
 import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, DBConnectorCRUD, Pool} from './index';
 
 export type SqlDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
-export class SqlDataSource extends DataSource 
+export class SqlDataSource extends DataSource
 {
   constructor(manager: VersionedObjectManager<SqlDataSource>,
     public mappers: { [s: string] : SqlMappedObject },
@@ -123,12 +123,12 @@ export class SqlDataSource extends DataSource
         for (let value of c.values) {
           switch (value.type) {
             case 'autoincrement':
-              output_columns.push(value.name); 
+              output_columns.push(value.name);
               break;
             case 'sql':
               columns.push(value.name);
               sql_values.push({ sql: value.value!, bind: [] });
-              output_columns.push(value.name); 
+              output_columns.push(value.name);
               break;
             case 'ref': {
               let tvalues = valuesByTable.get(value.insert!);
@@ -212,7 +212,7 @@ export class SqlDataSource extends DataSource
   async implLoad({tr, objects, scope} : {
     tr?: SqlDataSourceTransaction;
     objects: VersionedObject[];
-    scope?: string[];
+    scope: DataSourceInternal.Scope;
   }): Promise<VersionedObject[]> {
     let types = new Map<Aspect.Installed, VersionedObject[]>();
     for (let object of objects) {
@@ -236,7 +236,11 @@ export class SqlDataSource extends DataSource
     else {
       set = sets.values().next().value;
     }
-    set.scope = scope;
+    set.scope = DataSourceInternal.parseScope(scope, (type) => {
+      if (type === '_')
+        return types.keys();
+      return [this.controlCenter().aspectChecked(type)];
+    }).scope;
     return await this.scoped(component => SqlQuery.execute(this._ctx(tr, component), set).then(() => objects));
   }
 

@@ -35,6 +35,28 @@ export namespace Aspect {
     }
   }
 
+  export function typeIsClass(type: Type) : boolean {
+    if (type.type === "class")
+      return true;
+
+    if(type.type === "array" || type.type === "set")
+      return typeIsClass(type.itemType);
+
+    if (type.type === "or") {
+      for (let t of type.types) {
+        if (t.type !== "class")
+          return false;
+      }
+      return type.types.length > 0;
+    }
+
+    return false;
+  }
+
+  export function typeIsMultiple(type: Type) : boolean {
+    return type.type === "array" || type.type === "set";
+  }
+
   export function typeToAspectNames(type: Type) : string[] {
     if (type.type === "class")
       return [type.name];

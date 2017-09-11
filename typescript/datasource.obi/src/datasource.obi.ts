@@ -18,7 +18,7 @@ export namespace ObiDataSource {
 function pass(a) { return a; }
 
 export type ObiDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
-export class ObiDataSource extends DataSource 
+export class ObiDataSource extends DataSource
 {
   constructor(manager: VersionedObjectManager<ObiDataSource>,
     public db: OuiDB,
@@ -134,7 +134,7 @@ export class ObiDataSource extends DataSource
       let isNew = state === VersionedObjectManager.State.NEW;
       if (isNew)
         oid = await this.db.nextObiId(tr);
-      
+
       let obi_ENT = this.config.aspectClassname_to_ObiEntity(aspect.name);
       let obi = this.db.systemObiByName.get(obi_ENT);
       if (!obi) {
@@ -159,7 +159,7 @@ export class ObiDataSource extends DataSource
           car: car,
           type: type,
           table: table,
-          relation: false,
+          direct: true,
         };
 
         switch (a.type.type) {
@@ -208,7 +208,7 @@ export class ObiDataSource extends DataSource
 
   implQuery({ tr, sets }: { tr?: ObiDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
     let ret = {};
-    return this.scoped(component => 
+    return this.scoped(component =>
       Promise.all(sets
         .filter(s => s.name)
         .map(s => this.execute(tr ? tr.tr : this.db.connector, s, component)
@@ -219,11 +219,11 @@ export class ObiDataSource extends DataSource
   async implLoad({tr, objects, scope} : {
     tr?: ObiDataSourceTransaction;
     objects: VersionedObject[];
-    scope?: string[];
+    scope: DataSourceInternal.Scope;
   }): Promise<VersionedObject[]> {
     let set = new ObjectSet('load');
     set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
-    set.scope = scope;
+    set.scope = DataSourceInternal.resolveScopeForObjects(scope, this.controlCenter(), objects);
     return await this.scoped(component => ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, component), set).then(() => objects));
   }
 

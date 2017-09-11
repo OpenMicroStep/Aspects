@@ -23,7 +23,7 @@ Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes imp
 
 #### query(q: dictionary): { * :[0, *, VersionedObject]}
 
-#### load(l: {objects: [0, *, VersionedObject], scope: [0, *, string]}): [0, *, VersionedObject]
+#### load(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject]
 
 #### save(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 
@@ -33,7 +33,7 @@ Partie accessible depuis l'exterieur de la DataSource
 
 #### distantQuery(q: { id: string, *: any }): { * :[0, *, VersionedObject]}
 
-#### distantLoad(l: {objects: [0, *, VersionedObject], scope: [0, *, string]}): [0, *, VersionedObject]
+#### distantLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject]
 
 #### distantSave(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 
@@ -45,7 +45,7 @@ Partie accessible depuis le serveur qui implemente toutes les vérifications rel
 query permet de récupérer des objets en posant une question et de les ramener en spécifiant les attributs à ramener pour chaque classe d'objets.
 Ex: ramener les Person dont le nom commence par A, en ramenant juste le nom.
 
-#### safeLoad(l: {objects: [0, *, VersionedObject], scope: [0, *, string]}): [0, *, VersionedObject]
+#### safeLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject]
 Retourne un ensemble d'objets sous forme de dico avec pour clé les identifiants.
 Pas de profondeur, quand la valeur est un objet la valeur retournée est juste l'identifiant.
 
@@ -63,7 +63,7 @@ A utiliser le plus rarement possible, jamais si possible.
 
 > __Attention__: `rawQuery` n'effectue aucune vérification de droits sur les objets à charger (contrairement à `rawQuery`). A utiliser en connaissance de causes.
 
-#### rawLoad(l: { objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
+#### rawLoad(l: { objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject]
 
 > __Attention__: `rawLoad` n'effectue aucune vérification de droits sur les objets à charger (contrairement à `safeLoad`). A utiliser en connaissance de causes.
 
@@ -90,7 +90,7 @@ Vérouille la datasource sur le tuple `on`. Tant que `implEndTransaction` n'a pa
 
 Effectue une requête et retourne le résultat
 
-#### implLoad(a: { tr: DataSourceOptionalTransaction, objects: [0, *, VersionedObject], scope: [0, *, string] }): [0, *, VersionedObject]
+#### implLoad(a: { tr: DataSourceOptionalTransaction, objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject]
 
 Charge les attributs de `objects` et retourne les objets.
 

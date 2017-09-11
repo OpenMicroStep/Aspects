@@ -2,7 +2,6 @@ import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, AspectCa
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
-import {tests as tests_memory} from './datasource.memory.spec';
 import ConstraintType = DataSourceInternal.ConstraintType;
 import ObjectSet = DataSourceInternal.ObjectSet;
 
@@ -11,6 +10,13 @@ const cc = new ControlCenter(cache);
 Resource.installAspect(cc, "test1");
 Car.installAspect(cc, "test1");
 People.installAspect(cc, "test1");
+
+function aspect_attr(type: string, attr: string) {
+  let r =  cc.aspectChecked(type).attributes.get(attr);
+  if (!r)
+    throw new Error(`attribute ${attr} not found on ${type}`);
+  return r;
+}
 
 function serialize(s, map = new Map()) {
   let r = s;
@@ -65,8 +71,12 @@ function resources_sets() {
         { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test" },
       ],
       name: "resources",
-      sort: [ '+_name'],
-      scope: ['_name'],
+      sort: [],
+      scope: {
+        Resource: {
+          ".": [aspect_attr("Resource", "_name")],
+        }
+      },
     })
   ];
 }
@@ -75,7 +85,6 @@ function simple_resources() {
   let sets = parseRequest({
     name: "resources",
     where: { $instanceOf: Resource, _name: "Test" },
-    sort: [ '+_name'],
     scope: ['_name'],
   });
   assert.deepEqual<any>(sets, resources_sets());
@@ -86,7 +95,6 @@ function multi_resources() {
     results: [{
       name: "resources",
       where: { $instanceOf: Resource, _name: "Test" },
-      sort: [ '+_name'],
       scope: ['_name']
     }]
   });
@@ -98,7 +106,6 @@ function set_resources() {
     results: [{
       name: "resources",
       where: "=resources",
-      sort: [ '+_name'],
       scope: ['_name']
     }]
   });
@@ -114,7 +121,6 @@ function ind1_resources() {
     results: [{
       name: "resources",
       where: "=resources1",
-      sort: [ '+_name'],
       scope: ['_name']
     }]
   });
@@ -127,8 +133,12 @@ function ind1_resources() {
     ],
     variables: [] as [string, ObjectSet][],
     name: "resources",
-    sort: [ '+_name'],
-    scope: ['_name'],
+    sort: [],
+    scope: {
+      Resource: {
+        ".": [aspect_attr("Resource", "_name")],
+      }
+    },
   });
   r.variables.push(["resources0", r]);
   assert.deepEqual<any>(sets, [r]);
@@ -145,8 +155,11 @@ function ind2_resources() {
     results: [{
       name: "resources",
       where: "=resources1",
-      sort: [ '+_name'],
-      scope: ['_name']
+      scope: {
+        Resource: {
+          ".": ["_name"],
+        }
+      },
     }]
   });
   let r1 = Object.assign(new ObjectSet("r1"), {
@@ -168,8 +181,12 @@ function ind2_resources() {
     ],
     variables: [] as [string, ObjectSet][],
     name: "resources",
-    sort: [ '+_name'],
-    scope: ['_name'],
+    sort: [],
+    scope: {
+      Resource: {
+        ".": [aspect_attr("Resource", "_name")],
+      }
+    },
   });
   r1.variables.push(["resources0", r1]);
   r0.variables.push(["resources0", r0]);
@@ -178,17 +195,18 @@ function ind2_resources() {
 }
 function or_and() {
   let sets = parseRequest({
-    "resources=": { $or: [{ _name: { $eq: "Test1" } }, { _name: { $eq: "Test2" } }] },
+    "resources=": { $instanceOf: "Resource", $or: [{ _name: { $eq: "Test1" } }, { _name: { $eq: "Test2" } }] },
     results: [{
       name: "resources",
       where: "=resources",
-      sort: [ '+_name'],
       scope: ['_name']
     }]
   });
   assert.deepEqual(sets, [
     Object.assign(new ObjectSet("resources"), {
-      typeConstraints: [],
+      typeConstraints: [
+        { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } },
+      ],
       constraints: [
         { type: ConstraintType.Or, prefix: "", value: [
           { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test1" },
@@ -196,18 +214,21 @@ function or_and() {
         ]}
       ],
       name: "resources",
-      sort: [ '+_name'],
-      scope: ['_name'],
+      sort: [],
+      scope: {
+        Resource: {
+          ".": [aspect_attr("Resource", "_name")],
+        }
+      },
     })
   ]);
 }
-function no_instanceof() {
+function no_instanceof_all() {
   let sets = parseRequest({
     "resources=": { _name: { $eq: "Test" } },
     results: [{
       name: "resources",
       where: "=resources",
-      sort: [ '+_name'],
       scope: ['_name']
     }]
   });
@@ -218,10 +239,55 @@ function no_instanceof() {
         { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_name", value: "Test" },
       ],
       name: "resources",
-      sort: [ '+_name'],
-      scope: ['_name'],
+      sort: [],
+      scope: {
+        Car: {
+          ".": [aspect_attr("Car", "_name")],
+        },
+        People: {
+          ".": [aspect_attr("People", "_name")],
+        },
+        Resource: {
+          ".": [aspect_attr("Resource", "_name")],
+        },
+      },
     })
   ]);
+}
+function no_instanceof_where_model() {
+  let sets = parseRequest({
+    "resources=": { _model: { $eq: "Test" } },
+    results: [{
+      name: "resources",
+      where: "=resources",
+      scope: ['_name']
+    }]
+  });
+  assert.deepEqual(sets, [
+    Object.assign(new ObjectSet("resources"), {
+      typeConstraints: [],
+      constraints: [
+        { type: ConstraintType.Equal, leftVariable: "resources", leftAttribute: "_model", value: "Test" },
+      ],
+      name: "resources",
+      sort: [],
+      scope: {
+        Car: {
+          ".": [aspect_attr("Car", "_name")],
+        },
+      },
+    })
+  ]);
+}
+function no_instanceof_scope_model() {
+  assert.throw(() => parseRequest({
+    "resources=": { _name: { $eq: "Test" } },
+    results: [{
+      name: "resources",
+      where: "=resources",
+      scope: ['_model']
+    }]
+  }), `'_model' requested but not found for 'Resource'`);
 }
 
 function recursion() {
@@ -241,7 +307,6 @@ function recursion() {
     results: [{
       name: "resources",
       where: "=resources",
-      sort: [ '+_name'],
       scope: ['_name']
     }]
   });
@@ -282,8 +347,12 @@ function recursion() {
       ],
       constraints: [],
       name: "resources",
-      sort: [ '+_name'],
-      scope: ['_name'],
+      sort: [],
+      scope: {
+        Resource: {
+          ".": [aspect_attr("Resource", "_name")],
+        }
+      },
     })
   ]);
 }
@@ -298,7 +367,12 @@ function set_persons1_p() {
     ],
     variables: [],
     name: "peoples1",
-    scope: ['_firstname', '_lastname'],
+    sort: [],
+    scope: {
+      People: {
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname")],
+      }
+    },
   });
   let c: any = Object.assign(new ObjectSet("c"), {
     typeConstraints: [
@@ -321,7 +395,12 @@ function set_persons2_C_owner() {
     ],
     variables: [],
     name: "peoples2",
-    scope: ['_firstname', '_lastname', '_birthDate'],
+    sort: [],
+    scope: {
+      People: {
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname"), aspect_attr("People", "_birthDate")],
+      },
+    }
   });
   let persons2_C: any = Object.assign(new ObjectSet("C"), {
     typeConstraints: [
@@ -362,7 +441,15 @@ function persons_and_their_cars() {
     },
     name: "union",
     where: { $union: ["=cars", "=persons"] },
-    scope: ['_firstname', '_lastname', '_owner', '_cars'],
+    scope: {
+      _: { ".": ['_name'] },
+      People: {
+        '.': ['_firstname', '_lastname', '_cars'],
+      },
+      Car: {
+        '_cars.': ['_owner'],
+      },
+    },
   });
   let persons: any = Object.assign(new ObjectSet("persons"), {
     typeConstraints: [
@@ -391,7 +478,16 @@ function persons_and_their_cars() {
         { type: ConstraintType.UnionOf, value: [c, persons] },
       ],
       name: "union",
-      scope: ['_firstname', '_lastname', '_owner', '_cars'],
+      sort: [],
+      scope: {
+        People: {
+          ".": [aspect_attr("People", "_name"), aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname"), aspect_attr("People", "_cars")],
+        },
+        Car: {
+          ".": [aspect_attr("People", "_name")],
+          "_cars.": [aspect_attr("Car", "_owner")]
+        }
+      }
     })
   ]);
 }
@@ -443,7 +539,12 @@ function persons_with_cars_and_their_cars() {
     ],
     variables: [],
     name: "persons",
-    scope: ['_firstname', '_lastname', '_cars'],
+    sort: [],
+    scope: {
+      People: {
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname"), aspect_attr("People", "_cars")],
+      },
+    },
   });
   let C: any = Object.assign(new ObjectSet("C"), {
     typeConstraints: [
@@ -479,7 +580,12 @@ function persons_with_cars_and_their_cars() {
     ],
     variables: [],
     name: "cars",
-    scope: ['_owner'],
+    sort: [],
+    scope: {
+      Car: {
+        ".": [aspect_attr("Car", "_owner")]
+      },
+    },
   });
   c.variables.push(["p", p]);
 
@@ -515,7 +621,12 @@ function set_cars2_c() {
     ],
     variables: [],
     name: "cars2",
-    scope: ['_name', '_owner', '_model'],
+    sort: [],
+    scope: {
+      Car: {
+        ".": [aspect_attr("Car", "_name"), aspect_attr("Car", "_owner"), aspect_attr("Car", "_model")],
+      },
+    },
   });
   cars2_c.variables.push(["p", cars2_persons1_p]);
   return cars2_c;
@@ -593,7 +704,12 @@ function persons_mixed() {
     ],
     variables: [],
     name: "cars1",
-    scope: ['_name', '_owner'],
+    sort: [],
+    scope: {
+      Car: {
+        ".": [aspect_attr("Car", "_name"), aspect_attr("Car", "_owner")]
+      }
+    },
   });
   cars1_c.variables.push(["p", cars1_p]);
 
@@ -620,8 +736,8 @@ function persons_with_cars_and_their_cars_1k() { // about 170ms
         $out: "=c"
       },
       results: [
-        { name: "cars", where: "=cars", scope: ['_firstname', '_lastname', '_cars'] },
-        { name: "persons", where: "=persons", scope: ['_owner'] },
+        { name: "cars", where: "=cars", scope: ['_owner'] },
+        { name: "persons", where: "=persons", scope: ['_firstname', '_lastname', '_cars'] },
       ]
     }, cc);
   }
@@ -650,32 +766,34 @@ function applyWhere() {
 function applyRequest() {
   let objects = makeObjects();
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { name: "cars", where: { $instanceOf: Car } }, objects, cc), 
+    { name: "cars", where: { $instanceOf: Car } }, objects, cc),
     { cars: objects.slice(0, 3) });
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { name: "Renaults", where: { $instanceOf: Car, _name: "Renault" } }, objects, cc), 
+    { name: "Renaults", where: { $instanceOf: Car, _name: "Renault" } }, objects, cc),
     { Renaults: objects.slice(0, 2) });
   assert.deepEqual(DataSourceInternal.applyRequest(
-    { 
+    {
       "cars=": { $instanceOf: Car },
       "renaults=": { _name: "Renault", $in: "=cars" },
       results: [
         { name: "renaults", where: "=renaults" },
         { name: "cars", where: "=cars" }
       ]
-    }, objects, cc), 
+    }, objects, cc),
     { renaults: objects.slice(0, 2), cars: objects.slice(0, 3) });
 }
 
-export const tests = { name: 'DataSource', tests: [
-  { name: "objectset", tests: [
+export const tests = { name: 'DataSource.request', tests: [
+  { name: "parseRequest", tests: [
     simple_resources,
     multi_resources,
     set_resources,
     ind1_resources,
     ind2_resources,
     or_and,
-    no_instanceof,
+    no_instanceof_all,
+    no_instanceof_where_model,
+    no_instanceof_scope_model,
     recursion,
     persons_with_cars,
     persons_with_cars_intersection,
@@ -683,11 +801,10 @@ export const tests = { name: 'DataSource', tests: [
     persons_with_cars_and_their_cars,
     persons_cars_sub,
     persons_mixed,
+    { name: "perfs", tests: [
+      persons_with_cars_and_their_cars_1k,
+    ]},
   ]},
   applyWhere,
   applyRequest,
-  { name: "perfs", tests: [
-    persons_with_cars_and_their_cars_1k,
-  ]},
-  tests_memory,
 ]};

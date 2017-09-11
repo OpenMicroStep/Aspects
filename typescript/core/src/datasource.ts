@@ -26,7 +26,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
   query(request: { id: string, [k: string]: any }) {
     return this.farPromise('distantQuery', request);
   },
-  load(w: {objects: VersionedObject[], scope: string[]}) {
+  load(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
     let diagnostics: Diagnostic[] = [];
     let saved: VersionedObject[]= [];
     for (let vo of w.objects) {
@@ -78,7 +78,7 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
       return new Invocation(reporter.diagnostics, false, undefined);
     return this.farPromise('safeQuery', query);
   },
-  distantLoad(w: {objects: VersionedObject[], scope: string[]}) {
+  distantLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
     // TODO: add some local checks
     return this.farPromise('safeLoad', w);
   },
@@ -90,7 +90,7 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
 
 export type SafeValidator<T extends VersionedObject = VersionedObject> = {
   filterObject?: (object: VersionedObject) => void,
-  preSaveAttributes?: string[],
+  preSaveAttributes?: DataSourceInternal.Scope,
   preSavePerObject?: (reporter: Reporter, set: { add(object: VersionedObject) }, object: T) => Promise<void>,
   preSavePerDomain?: (reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => Promise<void>,
 }
@@ -130,7 +130,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     }
     return inv;
   },
-  async safeLoad(w: {objects: VersionedObject[], scope: string[]}) {
+  async safeLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
     let inv = await this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
     if (inv.hasResult())
       filterObjects(this._safeValidators, inv.result());
@@ -168,7 +168,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     if (reporter.diagnostics.length > 0)
       return new Invocation(reporter.diagnostics, true, objects);
     for (let [validator, objects] of validators) {
-      if (validator.preSaveAttributes && validator.preSaveAttributes.length > 0)
+      if (validator.preSaveAttributes)
         await this.farPromise('implLoad', { tr: tr, objects: objects, scope: validator.preSaveAttributes });
       if (validator.preSavePerObject) {
         for (let o of objects)
@@ -193,7 +193,7 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
     let sets = DataSourceInternal.parseRequest(<any>request, this.controlCenter());
     return this.farPromise('implQuery', { tr: undefined, sets: sets });
   },
-  rawLoad(w: {objects: VersionedObject[], scope: string[]}) {
+  rawLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
     return this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
   },
   async rawSave(objects: VersionedObject[]) {
