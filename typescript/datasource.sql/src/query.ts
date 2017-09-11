@@ -59,6 +59,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   fromConditions: SqlBinding[] =  [];
   joins: SqlBinding[] = [];
   where: SqlBinding[] = [];
+  sort: string[] = [];
 
   static async build<
     SharedContext extends SqlQuerySharedContext<SharedContext, Q>,
@@ -241,6 +242,45 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       this.addConstraint(this.buildConstraint(constraint, ""));
   }
 
+  sql_sort_column({ asc, path }: { asc: boolean, path: Aspect.InstalledAttribute[] }): string {
+    let sql_column = "";
+    let column = "";
+    let q: SqlQuery<SharedContext> = this;
+    let i = 0, last = path.length - 1;
+    let p: Aspect.InstalledAttribute;
+    while (i < last) {
+      p = path[i++];
+      let types = Aspect.typeToAspectNames(p.type);
+      let q_r = new this.ctx.cstor(this.ctx, new ObjectSet(p.name));
+      if (types.length === 1) {
+        q_r.setInitialType(types[0], false);
+      }
+      else {
+        let queries: SqlQuery<SharedContext>[] = [];
+        for (let type of types) {
+          let q_rt = new this.ctx.cstor(this.ctx, new ObjectSet(p.name));
+          q_rt.setInitialType(type, false);
+          q_rt.addConstraint(this.ctx.maker.compare(q_rt.sql_column("_id"), ConstraintType.Equal, q.sql_column(p.name)));
+          queries.push(q_rt);
+        }
+        q_r.setInitialUnion(queries);
+      }
+      q_r.addConstraint(this.ctx.maker.compare(q_r.sql_column("_id"), ConstraintType.Equal, q.sql_column(p.name)));
+      this.variables.add(q_r);
+      q = q_r;
+    }
+    p = path[last];
+    return this.ctx.maker.sort_column(q.sql_column(p.name), asc);
+  }
+
+  buildSort() {
+    if (this.set.sort) {
+      for (let sort of this.set.sort) {
+        this.sort.push(this.sql_sort_column(sort));
+      }
+    }
+  }
+
   async buildTypeConstraints() {
     for (let c of this.set.typeConstraints) {
       switch (c.type) {
@@ -283,6 +323,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     }
     await this.buildTypeConstraints();
     this.buildConstraints();
+    this.buildSort();
   }
 
   sql_select(): SqlBinding {
@@ -290,7 +331,8 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       this.sql_columns(),
       this.sql_from(),
       this.sql_join(),
-      this.sql_where()
+      this.sql_where(),
+      this.sql_sort(),
     );
   }
 
@@ -333,6 +375,10 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
         conditions.push(variable.sql_where());
     }
     return this.ctx.maker.and(conditions);
+  }
+
+  sql_sort(): string[] {
+    return this.sort;
   }
 
   mergeRemotes(remotes: Map<VersionedObject, Map<string, any>>) {
@@ -710,7 +756,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         sql_columns,
         query.sql_from(),
         query.sql_join(),
-        query.sql_where()
+        query.sql_where(),
+        query.sql_sort(),
       );
       let mono_rows = await this.ctx.db.select(mono_query);
       let mult_items = [new Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>()];

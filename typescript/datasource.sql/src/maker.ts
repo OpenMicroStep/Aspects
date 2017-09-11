@@ -19,12 +19,6 @@ export class SqlMaker {
     return (sql_sort && sql_sort.length) ? `\nORDER BY ${sql_sort.join(',')}` : '';
   }
 
-  sort(sql_select: SqlBinding, sql_sort: string[]) {
-    if (sql_sort.length === 0)
-      return sql_select;
-    return { sql: `${sql_select.sql}\nORDER BY ${sql_sort.join(',')}`, bind: sql_select.bind };
-  }
-  
   union(sql_select: SqlBinding[]) : SqlBinding {
     if (sql_select.length === 1) return sql_select[0];
     let sql = `(${this.join_sqls(sql_select, ' UNION ')})`;
@@ -37,7 +31,7 @@ export class SqlMaker {
     return { sql: sql, bind: this.join_bindings(sql_select) };
   }
 
-  select(sql_columns: (string | SqlBinding)[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where: SqlBinding) : SqlBinding {
+  select(sql_columns: (string | SqlBinding)[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where?: SqlBinding, sql_sort?: string[]) : SqlBinding {
     let bind: SqlBinding[] = [];
     let columns = sql_columns.map(c => {
       if (typeof c === "string")
@@ -54,6 +48,9 @@ export class SqlMaker {
     if (sql_where && sql_where.sql) {
       sql += `\nWHERE ${sql_where.sql}`;
       bind.push(...sql_where.bind);
+    }
+    if (sql_sort && sql_sort.length) {
+      sql += `\nORDER BY ${sql_sort.join(',')}`;
     }
     return { sql: sql, bind: bind };
   }
@@ -148,8 +145,8 @@ export class SqlMaker {
     return { sql: `${sql_column.sql} ${this.quote(alias)}`, bind: sql_column.bind };
   }
 
-  sort_column(table: string, name: string, asc: boolean): string {
-    return `${this.quote(table)}.${this.quote(name)} ${asc ? 'ASC' : 'DESC'}`;
+  sort_column(sql_column: string, asc: boolean): string {
+    return `${sql_column} ${asc ? 'ASC' : 'DESC'}`;
   }
 
   set(sql_column: string, value: any) : SqlBinding {
