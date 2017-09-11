@@ -1,4 +1,4 @@
-import {Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Invocation, InvocationState, Invokable, Aspect, DataSourceInternal } from './core';
+import {Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Result, Invokable, Aspect, DataSourceInternal } from './core';
 import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import {DataSource} from '../../../generated/aspects.interfaces';
 export {DataSource} from '../../../generated/aspects.interfaces';
@@ -35,11 +35,11 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     }
     if (saved.length > 0) {
       return this.farPromise('distantLoad', { objects: saved, scope: w.scope }).then((envelop) => {
-        return new Invocation(envelop.diagnostics(), true, w.objects);
+        return Result.fromResultWithNewValue(envelop, w.objects);
       });
     }
     else {
-      return Promise.resolve(new Invocation([], true, w.objects));
+      return Promise.resolve(Result.fromValue(w.objects));
     }
   },
   save(objects: VersionedObject.Categories.validation[]) {
@@ -54,14 +54,14 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
       }
     }
     if (reporter.diagnostics.length > 0)
-      return new Invocation(reporter.diagnostics, true, objects);
+      return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects);
     return this.farPromise('distantSave', [...changed]).then((inv) => {
       this.controlCenter().notificationCenter().postNotification({
         name: "saved",
         object: this,
         info: objects,
       })
-      return new Invocation(inv.diagnostics(), true, objects);
+      return Result.fromResultWithNewValue(inv, objects);
     });
   }
 });
@@ -70,12 +70,12 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
   distantQuery(request) {
     let creator = this._queries && this._queries.get(request.id);
     if (!creator)
-      return new Invocation([{ type: "error", msg: `request ${request.id} doesn't exists` }], false, undefined);
+      return new Result([{ is: "diagnostic", type: "error", msg: `request ${request.id} doesn't exists` }]);
     let reporter = new Reporter();
     reporter.transform.push((d) => { d.type = "error"; return d; });
     let query = creator(reporter, request);
     if (reporter.failed)
-      return new Invocation(reporter.diagnostics, false, undefined);
+      return Result.fromDiagnostics(reporter.diagnostics);
     return this.farPromise('safeQuery', query);
   },
   distantLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
@@ -123,8 +123,8 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
   async safeQuery(request: { [k: string]: any }) {
     let sets = DataSourceInternal.parseRequest(<any>request, this.controlCenter());
     let inv = await this.farPromise('implQuery', { tr: undefined, sets: sets });
-    if (inv.hasResult()) {
-      let r = inv.result();
+    if (inv.hasOneValue()) {
+      let r = inv.value();
       for (let k in r)
         filterObjects(this._safeValidators, r[k]);
     }
@@ -132,21 +132,21 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
   },
   async safeLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
     let inv = await this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
-    if (inv.hasResult())
-      filterObjects(this._safeValidators, inv.result());
+    if (inv.hasOneValue())
+      filterObjects(this._safeValidators, inv.value());
     return inv;
   },
   async safeSave(objects: VersionedObject.Categories.validation[]) {
     // TODO: Do we want to force load attributes in case of failure or for unchanged objects ?
     let changed = filterChangedObjectsAndPrepareNew(objects);
     if (changed.size === 0)
-      return new Invocation([], true, objects);
-    
-    let begin = await this.farPromise('implBeginTransaction', undefined);
-    if (!begin.hasResult())
-      return new Invocation(begin.diagnostics(), true, objects);
+      return Result.fromValue(objects);
 
-    let tr = begin.result();
+    let begin = await this.farPromise('implBeginTransaction', undefined);
+    if (!begin.hasOneValue())
+      return Result.fromResultWithNewValue(begin, objects);
+
+    let tr = begin.value();
     let reporter = new Reporter();
     let cc = this.controlCenter();
     let validators = new Map<SafeValidator, VersionedObject[]>();
@@ -166,7 +166,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
       }
     }
     if (reporter.diagnostics.length > 0)
-      return new Invocation(reporter.diagnostics, true, objects);
+      return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects);
     for (let [validator, objects] of validators) {
       if (validator.preSaveAttributes)
         await this.farPromise('implLoad', { tr: tr, objects: objects, scope: validator.preSaveAttributes });
@@ -184,7 +184,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     }
     let end = await this.farPromise('implEndTransaction', { tr: tr, commit: reporter.diagnostics.length === 0 });
     reporter.diagnostics.push(...end.diagnostics());
-    return new Invocation(reporter.diagnostics, true, objects); // TODO: clean object scope
+    return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects); // TODO: clean object scope
   }
 });
 
@@ -199,14 +199,14 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
   async rawSave(objects: VersionedObject[]) {
     let changed = filterChangedObjectsAndPrepareNew(objects);
     if (changed.size === 0)
-      return new Invocation([], true, objects);
+      return Result.fromValue(objects);
     let begin = await this.farPromise('implBeginTransaction', undefined);
-    if (begin.hasResult()) {
-      let tr = begin.result();
+    if (begin.hasOneValue()) {
+      let tr = begin.value();
       let save = await this.farPromise('implSave', { tr: tr, objects: changed });
       let end = await this.farPromise('implEndTransaction', { tr: tr, commit: !save.hasDiagnostics() });
-      return new Invocation([...begin.diagnostics(), ...save.diagnostics(), ...end.diagnostics()], true, objects);
+      return Result.fromDiagnosticsAndValue([...begin.diagnostics(), ...save.diagnostics(), ...end.diagnostics()], objects);
     }
-    return new Invocation(begin.diagnostics(), true, objects);
+    return Result.fromResultWithNewValue(begin, objects);
   }
 });

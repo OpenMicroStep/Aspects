@@ -1,4 +1,4 @@
-import {ControlCenter, Identifier, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Transport, AspectCache} from '@openmicrostep/aspects';
+import {ControlCenter, Identifier, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectCache} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -19,7 +19,7 @@ function createContext_C1(publicTransport: (json: string) => Promise<string>) {
     async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
       let req = { to: to.id(), method: method, args: args };
       let res = await coder.encode_transport_decode(ret.cc, req, publicTransport);
-      let inv = new Invocation(res.diagnostics, "result" in res, res.result);
+      let inv = new Result(res);
       return inv;
     }
   });
@@ -72,10 +72,7 @@ function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string,
     let res = coder.decode_handle_encode(cc, json, async (request) => {
       let to = p1.cc.registeredObject(request.to)!;
       let inv = await Invocation.farPromise(to, request.method, request.args[0]);
-      let res = inv.hasResult()
-        ? { result: inv.result(), diagnostics: inv.diagnostics() }
-        : { diagnostics: inv.diagnostics() };
-      return res;
+      return inv.items();
     });
     return res;
   };
@@ -115,7 +112,7 @@ async function distantQuery(flux) {
   await s1.db.farPromise("rawSave", [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]);
   
   let inv = await c1.db.farPromise("query", { id: "s1cars" });
-  let res = inv.result();
+  let res = inv.value();
   c1.cc.registerComponent(c1.component);
   c1.cc.registerObjects(c1.component, res["cars"]);
   assert.sameMembers(

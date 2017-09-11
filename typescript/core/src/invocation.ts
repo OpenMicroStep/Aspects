@@ -1,51 +1,10 @@
-import { VersionedObject, ControlCenter, NotificationCenter, Aspect } from './core';
+import { VersionedObject, ControlCenter, NotificationCenter, Aspect, Result } from './core';
 import {Reporter, AttributePath, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import { Flux } from '@openmicrostep/async';
 
-export enum InvocationState {
-  Terminated = 1,
-  TerminatedWithDiagnostics = 1 | 2,
-  Aborted = 2,
-}
-
 export type Invokable<A, R> = ((a: A) => R) | ((a: A) => Promise<R>) | ((f: Flux<{}>, a: A) => void);
-export class Invocation<R> {
-  _state: InvocationState;
-  _result: R;
-  _diagnostics: Diagnostic[];
-
-  constructor(diagnostics: Diagnostic[], hasResult: boolean, result: R) {
-    this._state = 0;
-    this._result = result;
-    this._diagnostics = diagnostics;
-    if (hasResult)
-      this._state |= InvocationState.Terminated;
-    if (diagnostics.length > 0)
-      this._state |= InvocationState.Aborted;
-  }
-
-  state() { return this._state; }
-
-  hasResult(): boolean {
-    return (this._state & InvocationState.Terminated) === InvocationState.Terminated;
-  }
-
-  result() {
-    if (this.hasResult())
-      return this._result;
-    if (this.hasDiagnostics())
-      throw this.diagnostics();
-    throw new Error(`cannot get result of invocation, state is not Terminated`);
-  }
-
-  hasDiagnostics(): boolean {
-    return (this._state & InvocationState.Aborted) === InvocationState.Aborted;
-  }
-  diagnostics() {
-    return this._diagnostics;
-  }
-
-  static farEvent<O extends VersionedObject, R>(receiver: O, method: string, argument, eventName: string, onObject?: Object) {
+export namespace Invocation {
+  export function farEvent<O extends VersionedObject, R>(receiver: O, method: string, argument, eventName: string, onObject?: Object) {
     Invocation.farCallback(receiver, method, argument, (invocation) => {
       receiver.manager().controlCenter().notificationCenter().postNotification({
         name: eventName,
@@ -54,33 +13,36 @@ export class Invocation<R> {
       })
     });
   }
-  static farPromise<O extends VersionedObject, R>(receiver: O, method: string, argument) : Promise<Invocation<R>> {
+  export function farPromise<O extends VersionedObject, R>(receiver: O, method: string, argument) : Promise<Result<R>> {
     return new Promise((resolve) => { Invocation.farCallback(receiver, method, argument, resolve); });
   }
-  static farAsync<O extends VersionedObject, R>(flux: Flux<{ envelop: Invocation<R> }>, receiver: O, method: string, argument) {
+  export function farAsync<O extends VersionedObject, R>(flux: Flux<{ envelop: Result<R> }>, receiver: O, method: string, argument) {
     Invocation.farCallback<O, R>(receiver, method, argument, (invocation) => {
       flux.context.envelop = invocation;
       flux.continue();
     });
   }
 
-  static farCallback<O extends VersionedObject, R>(receiver: O, method: string, argument, callback: (invocation: Invocation<R>) => void) {
+  export function farCallback<O extends VersionedObject, R>(receiver: O, method: string, argument, callback: (invocation: Result<R>) => void) {
     const reporter = new Reporter();
     let hasResult = false;
     let ret: any = undefined;
     const exit = () => {
-      if (!reporter.failed && ret instanceof Invocation) {
-        if (ret.hasDiagnostics())
-          reporter.diagnostics.push(...ret.diagnostics());
-        if ((hasResult = ret.hasResult()))
-          ret = ret.result();
+      let result: Result | undefined = undefined;
+      if (ret instanceof Result) {
+        result = ret;
+        hasResult = ret.hasValues();
+        ret = ret.hasOneValue() ? ret.value() : ret.values();
       }
       if (hasResult && farMethod && farMethod.returnValidator) {
         let nb = reporter.diagnostics.length;
         ret = farMethod.returnValidator.validate(reporter, new AttributePath(farMethod.name, ":return"), ret);
         hasResult = nb === reporter.diagnostics.length; // no new diagnostic
       }
-      callback(new Invocation<R>(reporter.diagnostics, hasResult, ret));
+      let items: Result.Item[] = reporter.diagnostics.map((d: Result.ItemDiagnostic) => { d.is = "diagnostic"; return d; });
+      if (!reporter.failed && result) // if reporter failed, we can't trust result items
+        items.push(...result.items());
+      callback(new Result<R>(items));
     };
     reporter.transform.push((d) => { d.type = "error"; return d; });
 

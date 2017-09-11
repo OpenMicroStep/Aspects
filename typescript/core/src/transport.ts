@@ -1,4 +1,4 @@
-import {ControlCenter, NotificationCenter, Identifier, VersionedObject, VersionedObjectConstructor, VersionedObjectManager, DataSource, InMemoryDataSource, Invocation, InvocationState} from './core';
+import {ControlCenter, NotificationCenter, Identifier, VersionedObject, VersionedObjectConstructor, VersionedObjectManager, DataSource, InMemoryDataSource} from './core';
 
 export namespace Transport {
 

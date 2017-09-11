@@ -1,4 +1,4 @@
-import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, InvocationState, DataSourceQuery} from '@openmicrostep/aspects';
+import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, DataSourceQuery} from '@openmicrostep/aspects';
 import {SqliteDBConnectorFactory, SqlDataSource, SqlMaker, loadSqlMappers} from '@openmicrostep/aspects.sql';
 import {ExpressTransport} from '@openmicrostep/aspects.express';
 import {Person, DemoApp} from '../shared/index';
@@ -62,8 +62,8 @@ const transport = new ExpressTransport(router, async (cstor, id) => {
   let [name, dbid] = id.toString().split(':');
   return db.farPromise('safeQuery', { name: "q", where: { _id: dbid, $instanceof: name } })
     .then((envelop) => {
-      if (envelop.state() === InvocationState.Terminated)
-        return Promise.resolve(envelop.result()["q"][0]);
+      if (envelop.hasOneValue())
+        return Promise.resolve(envelop.value()["q"][0]);
       return Promise.reject('not found')
     });
 });

@@ -1,4 +1,4 @@
-import {ControlCenter, areEquals, Identifier, Invocation, Invokable, Aspect, addIsEqualSupport, ImmutableMap, AComponent} from './core';
+import {ControlCenter, areEquals, Identifier, Invocation, Result, Invokable, Aspect, addIsEqualSupport, ImmutableMap, AComponent} from './core';
 import { Flux } from '@openmicrostep/async';
 import { Reporter, Diagnostic } from '@openmicrostep/msbuildsystem.shared';
 
@@ -435,17 +435,17 @@ export class VersionedObject {
   manager(): VersionedObjectManager<this> { return this.__manager; }
   controlCenter(): ControlCenter { return this.__manager.controlCenter(); }
 
-  farCallback<O extends VersionedObject, R>(this: O, method: never, argument: any, callback: (envelop: Invocation<R>) => void) {
+  farCallback<O extends VersionedObject, R>(this: O, method: never, argument: any, callback: (envelop: Result<R>) => void) {
     Invocation.farCallback(this, method, argument, callback);
   }
   farEvent<O extends VersionedObject>(this: O, method: never, argument: any, eventName: string, onObject?: Object) {
     Invocation.farEvent(this, method, argument, eventName, onObject);
   }
-  farPromise<O extends VersionedObject, R>(this: O, method: never, argument: any) : Promise<Invocation<R>> {
+  farPromise<O extends VersionedObject, R>(this: O, method: never, argument: any) : Promise<Result<R>> {
     return Invocation.farPromise(this, method, argument, );
   }
-  farAsync<O extends VersionedObject, R>(this: O, method: never, argument: any) : (flux: Flux<{ envelop: Invocation<R> }>) => void {
-    return (flux: Flux<{ envelop: Invocation<R> }>) => {
+  farAsync<O extends VersionedObject, R>(this: O, method: never, argument: any) : (flux: Flux<{ envelop: Result<R> }>) => void {
+    return (flux: Flux<{ envelop: Result<R> }>) => {
       Invocation.farAsync(flux, this, method, argument);
     };
   }

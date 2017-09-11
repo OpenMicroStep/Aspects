@@ -1,4 +1,4 @@
-import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
+import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
 
 export class DataSource extends VersionedObject {
   static readonly definition: Aspect.Definition = <any>{
@@ -660,59 +660,59 @@ export declare namespace DataSource {
       filter(arg0: VersionedObject[], arg1: { [k: string]: any }): VersionedObject[];
     }
     export type client = DataSource & {
-      farCallback(this: DataSource, method: 'query', argument: { [k: string]: any }, callback: (envelop: Invocation<{[k: string]: VersionedObject[]}>) => void);
+      farCallback(this: DataSource, method: 'query', argument: { [k: string]: any }, callback: (envelop: Result<{[k: string]: VersionedObject[]}>) => void);
       farEvent(this: DataSource, method: 'query', argument: { [k: string]: any }, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'query', argument: { [k: string]: any }): Promise<Invocation<{[k: string]: VersionedObject[]}>>;
-      farCallback(this: DataSource, method: 'load', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'query', argument: { [k: string]: any }): Promise<Result<{[k: string]: VersionedObject[]}>>;
+      farCallback(this: DataSource, method: 'load', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'load', argument: {objects: VersionedObject[], scope: string[]}, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'load', argument: {objects: VersionedObject[], scope: string[]}): Promise<Invocation<VersionedObject[]>>;
-      farCallback(this: DataSource, method: 'save', argument: VersionedObject[], callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'load', argument: {objects: VersionedObject[], scope: string[]}): Promise<Result<VersionedObject[]>>;
+      farCallback(this: DataSource, method: 'save', argument: VersionedObject[], callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'save', argument: VersionedObject[], eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'save', argument: VersionedObject[]): Promise<Invocation<VersionedObject[]>>;
+      farPromise(this: DataSource, method: 'save', argument: VersionedObject[]): Promise<Result<VersionedObject[]>>;
     }
     export type server = DataSource & {
-      farCallback(this: DataSource, method: 'distantQuery', argument: { [k: string]: any }, callback: (envelop: Invocation<{[k: string]: VersionedObject[]}>) => void);
+      farCallback(this: DataSource, method: 'distantQuery', argument: { [k: string]: any }, callback: (envelop: Result<{[k: string]: VersionedObject[]}>) => void);
       farEvent(this: DataSource, method: 'distantQuery', argument: { [k: string]: any }, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'distantQuery', argument: { [k: string]: any }): Promise<Invocation<{[k: string]: VersionedObject[]}>>;
-      farCallback(this: DataSource, method: 'distantLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'distantQuery', argument: { [k: string]: any }): Promise<Result<{[k: string]: VersionedObject[]}>>;
+      farCallback(this: DataSource, method: 'distantLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'distantLoad', argument: {objects: VersionedObject[], scope: string[]}, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'distantLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Invocation<VersionedObject[]>>;
-      farCallback(this: DataSource, method: 'distantSave', argument: VersionedObject[], callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'distantLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Result<VersionedObject[]>>;
+      farCallback(this: DataSource, method: 'distantSave', argument: VersionedObject[], callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'distantSave', argument: VersionedObject[], eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'distantSave', argument: VersionedObject[]): Promise<Invocation<VersionedObject[]>>;
+      farPromise(this: DataSource, method: 'distantSave', argument: VersionedObject[]): Promise<Result<VersionedObject[]>>;
     }
     export type safe = DataSource & {
-      farCallback(this: DataSource, method: 'safeQuery', argument: { [k: string]: any }, callback: (envelop: Invocation<{[k: string]: VersionedObject[]}>) => void);
+      farCallback(this: DataSource, method: 'safeQuery', argument: { [k: string]: any }, callback: (envelop: Result<{[k: string]: VersionedObject[]}>) => void);
       farEvent(this: DataSource, method: 'safeQuery', argument: { [k: string]: any }, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'safeQuery', argument: { [k: string]: any }): Promise<Invocation<{[k: string]: VersionedObject[]}>>;
-      farCallback(this: DataSource, method: 'safeLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'safeQuery', argument: { [k: string]: any }): Promise<Result<{[k: string]: VersionedObject[]}>>;
+      farCallback(this: DataSource, method: 'safeLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'safeLoad', argument: {objects: VersionedObject[], scope: string[]}, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'safeLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Invocation<VersionedObject[]>>;
-      farCallback(this: DataSource, method: 'safeSave', argument: VersionedObject[], callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'safeLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Result<VersionedObject[]>>;
+      farCallback(this: DataSource, method: 'safeSave', argument: VersionedObject[], callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'safeSave', argument: VersionedObject[], eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'safeSave', argument: VersionedObject[]): Promise<Invocation<VersionedObject[]>>;
+      farPromise(this: DataSource, method: 'safeSave', argument: VersionedObject[]): Promise<Result<VersionedObject[]>>;
     }
     export type raw = DataSource & {
-      farCallback(this: DataSource, method: 'rawQuery', argument: { [k: string]: any }, callback: (envelop: Invocation<{[k: string]: VersionedObject[]}>) => void);
+      farCallback(this: DataSource, method: 'rawQuery', argument: { [k: string]: any }, callback: (envelop: Result<{[k: string]: VersionedObject[]}>) => void);
       farEvent(this: DataSource, method: 'rawQuery', argument: { [k: string]: any }, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'rawQuery', argument: { [k: string]: any }): Promise<Invocation<{[k: string]: VersionedObject[]}>>;
-      farCallback(this: DataSource, method: 'rawLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'rawQuery', argument: { [k: string]: any }): Promise<Result<{[k: string]: VersionedObject[]}>>;
+      farCallback(this: DataSource, method: 'rawLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'rawLoad', argument: {objects: VersionedObject[], scope: string[]}, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'rawLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Invocation<VersionedObject[]>>;
-      farCallback(this: DataSource, method: 'rawSave', argument: VersionedObject[], callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'rawLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Result<VersionedObject[]>>;
+      farCallback(this: DataSource, method: 'rawSave', argument: VersionedObject[], callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'rawSave', argument: VersionedObject[], eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'rawSave', argument: VersionedObject[]): Promise<Invocation<VersionedObject[]>>;
+      farPromise(this: DataSource, method: 'rawSave', argument: VersionedObject[]): Promise<Result<VersionedObject[]>>;
     }
     export type implementation = DataSource & {
-      farCallback(this: DataSource, method: 'implQuery', argument: ObjectSet[], callback: (envelop: Invocation<{[k: string]: VersionedObject[]}>) => void);
+      farCallback(this: DataSource, method: 'implQuery', argument: ObjectSet[], callback: (envelop: Result<{[k: string]: VersionedObject[]}>) => void);
       farEvent(this: DataSource, method: 'implQuery', argument: ObjectSet[], eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'implQuery', argument: ObjectSet[]): Promise<Invocation<{[k: string]: VersionedObject[]}>>;
-      farCallback(this: DataSource, method: 'implLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'implQuery', argument: ObjectSet[]): Promise<Result<{[k: string]: VersionedObject[]}>>;
+      farCallback(this: DataSource, method: 'implLoad', argument: {objects: VersionedObject[], scope: string[]}, callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'implLoad', argument: {objects: VersionedObject[], scope: string[]}, eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'implLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Invocation<VersionedObject[]>>;
-      farCallback(this: DataSource, method: 'implSave', argument: VersionedObject[], callback: (envelop: Invocation<VersionedObject[]>) => void);
+      farPromise(this: DataSource, method: 'implLoad', argument: {objects: VersionedObject[], scope: string[]}): Promise<Result<VersionedObject[]>>;
+      farCallback(this: DataSource, method: 'implSave', argument: VersionedObject[], callback: (envelop: Result<VersionedObject[]>) => void);
       farEvent(this: DataSource, method: 'implSave', argument: VersionedObject[], eventName: string, onObject?: Object);
-      farPromise(this: DataSource, method: 'implSave', argument: VersionedObject[]): Promise<Invocation<VersionedObject[]>>;
+      farPromise(this: DataSource, method: 'implSave', argument: VersionedObject[]): Promise<Result<VersionedObject[]>>;
     }
   }
   export namespace ImplCategories {

@@ -23,13 +23,13 @@ dataSource.manager().setId('__dataSource');
 
 app
     .farPromise('giveMeANumber', void 0)
-    .then(n => console.info(n.result()));
+    .then(n => console.info(n.value()));
 
 
 app
     .farPromise('pass', { date: new Date() })
-    .then(n => console.info(n.result()));
+    .then(n => console.info(n.value()));
 
 app
     .farPromise('p0', void 0)
-    .then(n => console.info(n.result()));
+    .then(n => console.info(n.value()));

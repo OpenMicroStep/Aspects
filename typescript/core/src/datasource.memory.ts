@@ -1,4 +1,4 @@
-import {DataSource, areEquals, VersionedObject, VersionedObjectManager, Invocation, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect, ImmutableMap} from './core';
+import {DataSource, areEquals, VersionedObject, VersionedObjectManager, Result, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect, ImmutableMap} from './core';
 import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
@@ -139,7 +139,7 @@ export class InMemoryDataSource extends DataSource
     return this.ds.beginTransaction();
   }
 
-  implSave({tr, objects} : { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Invocation<void>> {
+  implSave({tr, objects} : { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
     let saved = new Set<VersionedObject>();
     const save = (lObject: VersionedObject): InMemoryDataSource.DataStoreObject | undefined => {
       let dbId = this.ds.toDSId(lObject.id());

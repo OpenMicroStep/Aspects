@@ -1,8 +1,8 @@
-import { FarTransport, VersionedObject, ControlCenter, Transport, Invocation } from '@openmicrostep/aspects';
+import { FarTransport, VersionedObject, ControlCenter, Transport, Invocation, Result } from '@openmicrostep/aspects';
 
 const coder = new Transport.JSONCoder();
 export class XHRTransport implements FarTransport {
-  async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<Invocation<any>> {
+  async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<Result<any>> {
     let res = await coder.encode_transport_decode(to.controlCenter(), args[0], (arg0) => {
       return new Promise((resolve, reject) => {
         let isVoid = args.length === 0;
@@ -22,7 +22,8 @@ export class XHRTransport implements FarTransport {
           xhr.send();
       });
     });
-    let inv = new Invocation(res.diagnostics, "result" in res, res.result);
+    // TODO: validate res data
+    let inv = new Result(res);
     return inv;
   }
 

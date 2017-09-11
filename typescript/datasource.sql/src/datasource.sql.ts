@@ -1,4 +1,4 @@
-import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Invocation} from '@openmicrostep/aspects';
+import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
 import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
@@ -249,7 +249,7 @@ export class SqlDataSource extends DataSource
     return { tr: tr, versions: new Map<VersionedObject, { _id: Identifier, _version: number }>() };
   }
 
-  async implSave({tr, objects}: { tr: SqlDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Invocation<void>> {
+  async implSave({tr, objects}: { tr: SqlDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
     let reporter = new Reporter();
     for (let obj of objects) {
       try {
@@ -259,7 +259,7 @@ export class SqlDataSource extends DataSource
         reporter.error(e || `unknown error`);
       }
     }
-    return new Invocation(reporter.diagnostics, false, undefined);
+    return Result.fromDiagnostics(reporter.diagnostics);
   }
 
   async implEndTransaction({tr, commit}: { tr: SqlDataSourceTransaction, commit: boolean }) : Promise<void> {

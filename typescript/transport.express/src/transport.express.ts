@@ -1,4 +1,4 @@
-import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, Invocation, InvocationState, Transport } from '@openmicrostep/aspects';
+import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstructor, Identifier, Aspect, Invocation, Result, Transport } from '@openmicrostep/aspects';
 import { Router, Request } from 'express';
 import * as bodyparser from 'body-parser';
 
@@ -21,13 +21,10 @@ export class ExpressTransport implements PublicTransport {
       let id = req.params.id;
       this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id, req).then(async (entity) => {
         let cc = entity.controlCenter();
-        let inv: Invocation<any> | undefined;
+        let inv: Result<any> | undefined;
         let json = await coder.decode_handle_encode(cc, isA0Void ? undefined : req.body, async (decoded) => {
           inv = await Invocation.farPromise(entity, method.name, decoded);
-          let ret = inv.hasResult() 
-          ? { result: inv.result(), diagnostics: inv.diagnostics() }
-          : { diagnostics: inv.diagnostics() };
-          return ret;
+          return inv.items();
         });
         res.set('Content-Type', 'application/json');
         res.status(inv && inv.hasDiagnostics() ? 400 : 200);

@@ -1,4 +1,4 @@
-import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
+import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
 
 export class Person extends VersionedObject {
   _firstName: string | undefined;
@@ -185,9 +185,9 @@ export declare namespace Person {
       birthDate(): Date;
     }
     export type calculation = Person & {
-      farCallback(this: Person, method: 'age', argument: undefined, callback: (envelop: Invocation<number>) => void);
+      farCallback(this: Person, method: 'age', argument: undefined, callback: (envelop: Result<number>) => void);
       farEvent(this: Person, method: 'age', argument: undefined, eventName: string, onObject?: Object);
-      farPromise(this: Person, method: 'age', argument: undefined): Promise<Invocation<number>>;
+      farPromise(this: Person, method: 'age', argument: undefined): Promise<Result<number>>;
     }
   }
   export namespace ImplCategories {

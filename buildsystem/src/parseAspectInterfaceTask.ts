@@ -39,7 +39,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
         });
       }),
       (step: Step<{}>) => {
-        let r = this.src.customHeader || `import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Invocation, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
+        let r = this.src.customHeader || `import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
         r += `\n${this.src.header}\n`;
         root.__classes.forEach(cls => {
           r += cls.__decl();

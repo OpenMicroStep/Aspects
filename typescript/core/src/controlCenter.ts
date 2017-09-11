@@ -1,10 +1,10 @@
 import {
-  FarTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Invocation, InvocationState, DataSource, 
+  FarTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Result, DataSource,
   Aspect, AspectCache,
 } from './core';
 
 export type Identifier = string | number;
-export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, arg: A) => R | Invocation<R> | Promise<R | Invocation<R>>);
+export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, arg: A) => R | Result<R> | Promise<R | Result<R>>);
 
 export interface AComponent {
 
