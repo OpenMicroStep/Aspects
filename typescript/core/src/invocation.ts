@@ -42,6 +42,8 @@ export namespace Invocation {
       let items: Result.Item[] = reporter.diagnostics.map((d: Result.ItemDiagnostic) => { d.is = "diagnostic"; return d; });
       if (!reporter.failed && result) // if reporter failed, we can't trust result items
         items.push(...result.items());
+      else if (!reporter.failed && hasResult)
+        items.push({ is: "value", value: ret });
       callback(new Result<R>(items));
     };
     reporter.transform.push((d) => { d.type = "error"; return d; });

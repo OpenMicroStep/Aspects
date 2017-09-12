@@ -206,7 +206,7 @@ export class InMemoryDataSource extends DataSource
       save(lObject);
     }
     cc.unregisterComponent(component);
-    return Promise.resolve(new Invocation(diags, false, undefined));
+    return Promise.resolve(Result.fromDiagnostics(diags));
   }
 
   async implEndTransaction({tr, commit}: { tr: InMemoryDataSource.DataStoreTransaction, commit: boolean }) : Promise<void> {

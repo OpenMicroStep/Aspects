@@ -89,7 +89,7 @@ async function distantSave(flux) {
   c1.cc.registerObjects(c1.component, [c1_c4]);
 
   let inv = await c1.db.farPromise("save", [c1_c4]);
-  assert.deepEqual(inv.result(), [c1_c4]);
+  assert.deepEqual(inv.value(), [c1_c4]);
 
   c1.cc.unregisterComponent(c1.component);
   flux.continue();
