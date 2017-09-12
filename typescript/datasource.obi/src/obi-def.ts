@@ -2,14 +2,14 @@ export const StdDefinition = `
 ENT // ENT-ENT
 _id: 1
 system name: ENT
-pattern: 
+pattern:
   Gab
   _id: 1002
   characteristic: system name
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1004
   characteristic: pattern
@@ -21,33 +21,33 @@ _end:
 ENT // ENT-Car
 _id: 3
 system name: Car
-pattern: 
+pattern:
   Gab
   _id: 1032
   characteristic: system name
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1034
   characteristic: type
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1036
   characteristic: domain entity
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1038
   characteristic: domain list
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1046
   characteristic: unique
@@ -58,14 +58,14 @@ _end:
 ENT // ENT-Typ
 _id: 5
 system name: Typ
-pattern: 
+pattern:
   Gab
   _id: 1052
   characteristic: system name
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1054
   characteristic: table
@@ -76,26 +76,26 @@ _end:
 ENT // ENT-Gab
 _id: 7
 system name: Gab
-pattern: 
+pattern:
   Gab
   _id: 1072
   characteristic: characteristic
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1074
   characteristic: cardinality
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1076
   characteristic: mandatory
   cardinality: one
   _end:
-//pattern: 
+//pattern:
 //  Gab
 //  _id: 1078
 //  characteristic: subobject
@@ -106,19 +106,19 @@ _end:
 ENT // ENT-Lst
 _id: 15
 system name: Lst
-pattern: 
+pattern:
   Gab
   _id: 1152
   characteristic: system name
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1154
   characteristic: element entity
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1156
   characteristic: element
@@ -129,25 +129,25 @@ _end:
 ENT // ENT-Element
 _id: 23
 system name: Element
-pattern: 
+pattern:
   Gab
   _id: 1232
   characteristic: system name
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1234
   characteristic: order
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1236
   characteristic: label
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1238
   characteristic: parameter
@@ -159,54 +159,54 @@ _end:
 ENT // ENT-Parameter
 _id: 25
 system name: Parameter
-pattern: 
+pattern:
   Gab
   _id: 1252
   characteristic: entity
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1254
   characteristic: label
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1256
   characteristic: string
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1260
   characteristic: int
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1262
   characteristic: bool
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1266
   characteristic: gmt
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1268
   characteristic: date
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1270
   characteristic: date & time
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1272
   characteristic: duration
@@ -467,7 +467,7 @@ Element
 _id: 9000
 system name: database
 next oid: 500001
-parameter: 
+parameter:
   Parameter
   _id: 9010
   label: obi version

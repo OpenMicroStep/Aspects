@@ -129,8 +129,8 @@ export class OuiDB {
   async raw_delete_obi(tr: DBConnectorTransaction, reporter: Reporter, oid: number)  {
     let maker = this.maker;
     let sql_select = maker.select(
-      [maker.column("TJ_VAL_ID", "VAL_INST")], 
-      [maker.from("TJ_VAL_ID")], [], 
+      [maker.column("TJ_VAL_ID", "VAL_INST")],
+      [maker.from("TJ_VAL_ID")], [],
       maker.or([
         maker.op(this.maker.column("TJ_VAL_ID", "VAL")    , ConstraintType.Equal, oid),
         maker.op(this.maker.column("TJ_VAL_ID", "VAL_CAR"), ConstraintType.Equal, oid),
@@ -138,7 +138,7 @@ export class OuiDB {
     let rows = await tr.select(sql_select);
     for (let row of rows)
       reporter.diagnostic({ type: "error", msg: `cannot delete (${row["VAL_INST"]} is still linked to ${oid})` });
-    
+
     for (let table of this._valTables) {
       let sql_delete = maker.delete(table, maker.op(this.maker.column(table, "VAL_INST"), ConstraintType.Equal, oid));
       await tr.delete(sql_delete);
@@ -207,7 +207,7 @@ export class OuiDB {
         let tmp_obi_is = await injectObi(new_obi.is);
         await this.raw_insert(tr, "ID", tmp_obi._id, this.config.CarEntityId, tmp_obi_is._id);
       }
-      
+
       for (let [new_car, new_set] of new_obi.attributes) {
         let tmp_car = await injectObi(new_car);
         let new_type = getOne(new_car, new_car_type) as ObiDefinition;
@@ -285,7 +285,7 @@ export class OuiDB {
       for (let [cur_car, cur_set] of tmp_obi.del_attributes) {
         for (let cur_value of cur_set)
           del_from(ret_obi.attributes, cur_car, cur_value);
-      }        
+      }
 
       return ret_obi;
     };
@@ -294,7 +294,7 @@ export class OuiDB {
     for (let new_obi of defs)
       await injectObi(new_obi);
     await tr.commit();
-    
+
     const merged = new Map<ObiDefinition, ObiDefinition>();
     let ret: ObiDefinition[] = [];
     for (let [new_obi, tmp_obi] of injected)
@@ -309,7 +309,7 @@ export class OuiDB {
     let rows = await this.connector.select(sql_systemObis);
     let ids: number[] = [];
     for (let row of rows as { VAL_INST: number, VAL: string }[]) {
-      let obi: ObiDefinition = mk_obi(row.VAL_INST, row.VAL); 
+      let obi: ObiDefinition = mk_obi(row.VAL_INST, row.VAL);
       ids.push(obi._id!);
       this.systemObiById.set(obi._id!, obi as SysObiDefinition);
       this.systemObiByName.set(obi.system_name!, obi as SysObiDefinition);
@@ -320,7 +320,7 @@ export class OuiDB {
   async loadObis(ids: number[], cache: Map<number, ObiDefinition> = this.systemObiById, db: DBConnectorTransaction | DBConnector = this.connector) {
     let ret = new Map<number, ObiDefinition>();
     for (let id of ids) {
-      let obi: ObiDefinition = cache.get(id) || mk_obi(id, undefined); 
+      let obi: ObiDefinition = cache.get(id) || mk_obi(id, undefined);
       ret.set(obi._id!, obi);
     }
     await this._loadObis(db, ids, ret);

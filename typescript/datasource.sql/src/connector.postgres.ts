@@ -4,7 +4,7 @@ class PostgresSqlMaker extends SqlMaker {
   quote(value: string) {
     return `"${value.replace(/"/g, '""')}"`;
   }
-  
+
   value_null_typed(type: SqlMaker.NullType) : string {
     switch (type) {
       case "string": return "NULL::text";
@@ -24,7 +24,7 @@ class PostgresSqlMaker extends SqlMaker {
     };
   }
 }
-export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { new(o: object): any } }, { 
+export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { new(o: object): any } }, {
   host: string, port?: number, ssl?: boolean,
   user: string, password?: string, database: string,
   application_name?: string

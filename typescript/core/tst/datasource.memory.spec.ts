@@ -3,7 +3,7 @@ import {assert} from 'chai';
 import {createTests} from './datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
-export const tests = { name: 'InMemoryDataSource', tests: 
+export const tests = { name: 'InMemoryDataSource', tests:
   createTests(function createControlCenter(flux) {
     let cc = new ControlCenter();
     let C = Car.installAspect(cc, 'test1');

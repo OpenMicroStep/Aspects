@@ -45,26 +45,26 @@ module.exports =  {
       dependencies: { is: "component",
         "chai": "^3.5.0"
       },
-      devDependencies: { is: "component", 
+      devDependencies: { is: "component",
         "@types/chai": "^3.4.29",
         "@openmicrostep/tests": "^0.1.0"
       }
     }
   },
   "node=": {
-    is: 'component', 
+    is: 'component',
     tsConfig: { is: "component",
       "module": "commonjs",
       "types": ["node"]
     },
     npmPackage: { is: "component",
-      devDependencies: { is: "component", 
+      devDependencies: { is: "component",
         "@types/node": "^6.0.78"
       }
     },
   },
-  "browser=": { 
-    is: 'component', 
+  "browser=": {
+    is: 'component',
     tsConfig: { is: "component",
       "module": "commonjs",
       "lib": ["dom"]
@@ -72,7 +72,7 @@ module.exports =  {
   },
   "envs=": { is: 'group',
     "js=": {
-      is: 'environment', 
+      is: 'environment',
       packager: "npm",
       components: ["=ts base"]
     },
@@ -117,9 +117,9 @@ module.exports =  {
       outputName: "@openmicrostep/aspects",
       environments: ["=envs:js"],
       files: ["=Files:core:src ? tsc"],
-      interfaces: [{ 
+      interfaces: [{
         is: "group",
-        elements: ["=Files:core:src ? interface"], 
+        elements: ["=Files:core:src ? interface"],
         customHeader: "import {Aspect, ControlCenter, DataSourceQueries, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, DataSourceInternal, ImmutableList, ImmutableSet, ImmutableObject, SafeValidators, DataSourceTransaction, DataSourceOptionalTransaction} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"
       }],
       npmPackage: { is: "component",
@@ -271,13 +271,13 @@ module.exports =  {
       "mstests", "-c", "-t", "5000", ...tests_buildsystem("dist/bs-aspects")
     ]) },
     "build-aspects=": { is: "task", components: ["=cmd"], cmd: Value([
-      "node", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.cli/index.js", "build", "-w", "dist/aspects/", 
-      "-p", ".", 
+      "node", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.cli/index.js", "build", "-w", "dist/aspects/",
+      "-p", ".",
       "-p", "typescript/examples/angular2/",
       "--env", "js",
     ]) },
     "tests-aspects=": { is: "task", components: ["=cmd"],
-      env: { is: "component", "OCI_LIB_DIR": "/opt/oracle/instantclient", "OCI_INC_DIR": "/opt/oracle/instantclient/sdk/include" }, 
+      env: { is: "component", "OCI_LIB_DIR": "/opt/oracle/instantclient", "OCI_INC_DIR": "/opt/oracle/instantclient/sdk/include" },
       cmd: Value(["mstests", "-c", ...tests_aspects("dist/aspects")]),
     },
 

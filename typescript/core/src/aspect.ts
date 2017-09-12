@@ -60,7 +60,7 @@ export namespace Aspect {
   export function typeToAspectNames(type: Type) : string[] {
     if (type.type === "class")
       return [type.name];
-      
+
     if(type.type === "array" || type.type === "set")
       return typeToAspectNames(type.itemType);
 
@@ -211,7 +211,7 @@ export class AspectCache {
     let attr = installedAttributesOnImpl.get(from.definition.name);
     if (!attr)
       throw new Error(`cannot extends a non installed aspect`);
-    
+
     definition.attributesToAdd.forEach(attribute => {
       const data = this.installAttribute(from, attribute);
       attr!.impls.forEach(impl => this.installAttributeData(impl, data));
@@ -306,7 +306,7 @@ export class AspectCache {
           let localImpl = from.prototype[i.name];
           if (typeof localImpl !== "function")
             throw new Error(`implementation of local method ${i.name} must be a function, got ${typeof localImpl}`);
-          if (localImpl.length !== i.argumentTypes.length && localImpl.name) 
+          if (localImpl.length !== i.argumentTypes.length && localImpl.name)
             throw new Error(`arguments count in implementation of local method ${i.name} doesn't match interface definition: ${localImpl.length} !== ${i.argumentTypes.length}`);
             on.prototype[i.name] = localImpl; // TODO: protect localImpl;
         }
@@ -320,7 +320,7 @@ export class AspectCache {
     });
   }
 
-  
+
   private uninstallAttribute(from: VersionedObjectConstructor<VersionedObject>, data: Aspect.InstalledAttribute) {
     findReferences(data.type, (ref) => {
       let attr = installedAttributesOnImpl.get(ref);
@@ -371,8 +371,8 @@ export class AspectCache {
   private installAttributes(from: VersionedObjectConstructor<VersionedObject>): { references: Aspect.Reference[], attributes: Map<string, Aspect.InstalledAttribute> } {
     let ret = installedAttributesOnImpl.get(from.definition.name);
     if (!ret) {
-      ret = { 
-        attributes: from.parent ? new Map(this.installAttributes(from.parent).attributes) : new Map(), 
+      ret = {
+        attributes: from.parent ? new Map(this.installAttributes(from.parent).attributes) : new Map(),
         references: [],
         impls: new Set<VersionedObjectConstructor<VersionedObject>>(),
       };
@@ -402,7 +402,7 @@ export class AspectCache {
     aspect.categories.forEach(c => { categories.add(c); this.installCategoryCache(this.cachedCategory(c, from), on, from, true); });
     aspect.farCategories.forEach(c => { categories.add(c); this.installCategoryCache(this.cachedCategory(c, from), on, from, false); });
   }
-  
+
   private arrayValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*') : Aspect.TypeValidator {
     let validateItem = this.createValidator(forAttribute, itemType, lvl + 1);
     return { validate: function validateArray(reporter: Reporter, path: AttributePath, value: any) {
@@ -454,7 +454,7 @@ export class AspectCache {
     throw new Error(`cannot create ${type.type} type validator`);
   }
 }
-  
+
 function findReferences(type: Aspect.Type, apply: (ref: string) => void) {
   switch (type.type) {
     case 'array': findReferences(type.itemType, apply); break;
@@ -471,7 +471,7 @@ function installPublicMethod(cc: ControlCenter, aspect: Aspect.Installed, public
 }*/
 function validate(
   reporter: Reporter, path: AttributePath,
-  collection: any, validateItem: Aspect.TypeValidator, 
+  collection: any, validateItem: Aspect.TypeValidator,
   min: number, max: number | '*'
 ) {
   path.pushArray();

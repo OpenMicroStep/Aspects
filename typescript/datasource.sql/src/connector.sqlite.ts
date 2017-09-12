@@ -17,9 +17,9 @@ export const SqliteDBConnectorFactory = DBConnector.createSimple<{
   OPEN_READWRITE: number,
   OPEN_CREATE: number,
   Database: { new(filename: string, mode: number, cb: (err) => void) }
-}, { 
-  filename: string, 
-  mode?: any 
+}, {
+  filename: string,
+  mode?: any
 }, {
   exec(sql: string, cb: (err) => void): void
   all(sql: string, bind: ReadonlyArray<any>, cb: (err, rows) => void): void

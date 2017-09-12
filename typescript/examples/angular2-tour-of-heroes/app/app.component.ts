@@ -6,38 +6,38 @@ import {Heroe} from '../shared/index';
 import {Notification, Invocation, DataSource} from '@openmicrostep/aspects';
 
 @Component({
-    selector: 'my-app',
-    template: 
-        `
-        <div class="container">
-            <div class="row">
-                <h1>{{title}}</h1>
-            </div>
-            <nav class="navbar" style="font-size:20px;">
-                <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
-                <a routerLink="/heroes" routerLinkActive="active">Heroes</a>
-            </nav>
-            <router-outlet></router-outlet>
-        </div>
-        `
+  selector: 'my-app',
+  template:
+    `
+    <div class="container">
+      <div class="row">
+        <h1>{{title}}</h1>
+      </div>
+      <nav class="navbar" style="font-size:20px;">
+        <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+        <a routerLink="/heroes" routerLinkActive="active">Heroes</a>
+      </nav>
+      <router-outlet></router-outlet>
+    </div>
+    `
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
-    private title = 'Tour of Heroes';
-    
+  private title = 'Tour of Heroes';
+
 /*    @ViewChild(HeroDetailComponent) heroDetailComponent: HeroDetailComponent;
-    @ViewChild(ListeHerosComponent) listeHerosComponent: ListeHerosComponent;*/
+  @ViewChild(ListeHerosComponent) listeHerosComponent: ListeHerosComponent;*/
 
-    ngAfterViewInit() {
-        controlCenter.registerComponent(this);/*
-        controlCenter.notificationCenter().addObserver(this, 'heroSelected', 'selectHero', this.listeHerosComponent);*/
-    }
+  ngAfterViewInit() {
+    controlCenter.registerComponent(this);/*
+    controlCenter.notificationCenter().addObserver(this, 'heroSelected', 'selectHero', this.listeHerosComponent);*/
+  }
 
-    ngOnDestroy() {
-        /*controlCenter.notificationCenter().removeObserver(this);*/
-        controlCenter.unregisterComponent(this);
-    }
+  ngOnDestroy() {
+    /*controlCenter.notificationCenter().removeObserver(this);*/
+    controlCenter.unregisterComponent(this);
+  }
 
 /*    heroSelected(notification: Notification) {
-        this.heroDetailComponent.setHero(notification.info.selected);
-    }*/
+    this.heroDetailComponent.setHero(notification.info.selected);
+  }*/
 }

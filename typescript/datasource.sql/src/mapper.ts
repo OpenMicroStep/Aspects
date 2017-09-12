@@ -79,11 +79,11 @@ export class SqlMappedObject extends Element {
   fromDbKey: (value) => any = pass;
   toDbKey: (value) => any = pass;
   attributes: SqlMappedAttribute[] = [];
-  
+
   attribute_id() : SqlMappedAttribute {
     return this.get("_id")!;
   }
-  
+
   attribute_version() : SqlMappedAttribute {
     return this.get("_version")!;
   }

@@ -7,7 +7,7 @@ const text_middleware = bodyparser.text({type: () => true });
 const coder = new Transport.JSONCoder();
 export class ExpressTransport implements PublicTransport {
   constructor(
-    public app: Router, 
+    public app: Router,
     public findObject: (cstor: VersionedObjectConstructor<VersionedObject>, id: Identifier, req: Request) => Promise<VersionedObject>) {}
 
   installMethod(cstor: VersionedObjectConstructor<VersionedObject>, method: Aspect.InstalledMethod) {

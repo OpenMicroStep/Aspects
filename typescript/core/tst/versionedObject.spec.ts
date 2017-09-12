@@ -17,7 +17,7 @@ function basics() {
   assert.typeOf(v1.id(), 'string');
   assert(VersionedObjectManager.isLocalId(v1.id()));
   assert.equal(v1.manager().controlCenter(), cc);
-  
+
   let v2 = new R();
   assert.instanceOf(v2, R);
   assert.instanceOf(v2, Resource);

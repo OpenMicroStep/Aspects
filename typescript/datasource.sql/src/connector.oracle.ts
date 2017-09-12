@@ -4,7 +4,7 @@ class OracleSqlMaker extends SqlMaker {
   quote(value: string) {
     return `"${value.replace(/"/g, '""')}"`;
   }
-  
+
   insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
     let sql =`INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')}) VALUES (${this.join_sqls(sql_values, ',')})`;
     if (output_columns.length > 0)
@@ -15,7 +15,7 @@ class OracleSqlMaker extends SqlMaker {
     };
   }
 }
-export const OracleDBConnectorFactory = DBConnector.createSimple<any, { 
+export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   connectString: string,
   user: string, password?: string
 }, any>({
@@ -28,7 +28,7 @@ export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   },
   select(oracledb, db, sql_select: SqlBinding) : Promise<object[]> {
     return new Promise<any>((resolve, reject) => {
-      db.execute(sql_select.sql, sql_select.bind, (err, result) => { 
+      db.execute(sql_select.sql, sql_select.bind, (err, result) => {
         if (err) return reject(err);
         let rows = result.rows.map(row => {
           let r = {};

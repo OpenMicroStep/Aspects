@@ -91,11 +91,11 @@ export class ControlCenter {
     this.swapObjects(component, oldObject ? [oldObject] : [], newObject ? [newObject] : []);
     return newObject;
   }
-  
+
   registeredObject(id: Identifier) : VersionedObject | undefined {
     return this._objects.get(id);
   }
-  
+
   registeredObjects(component: AComponent) : VersionedObject[] {
     let ret = <VersionedObject[]>[];
     this._objects.forEach((o, k) => {

@@ -7,14 +7,14 @@ var sqlite3 = require('sqlite3').verbose();
 require('source-map-support').install();
 
 const mappers = loadSqlMappers({
-  "Person=": { 
+  "Person=": {
     is: "sql-mapped-object",
     fromDbKey: id => `${id}:Person`,
     toDbKey: id => +id.split(':')[0],
     inserts: [
-      { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+      { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
                                                                   { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
-      { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+      { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
                                                                   { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id" }] },
       { is: "sql-insert", name: "P", table: "People"  , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id" }] },
     ],
@@ -38,7 +38,7 @@ let queries = new Map<string, DataSourceQuery>();
 queries.set("allpersons", (reporter, query) => {
   return {
     name: 'persons',
-    where: { $instanceOf: Person, $text: query.text }, 
+    where: { $instanceOf: Person, $text: query.text },
     scope: ['_firstName', '_lastName']
   }
 });

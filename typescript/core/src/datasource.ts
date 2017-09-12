@@ -4,7 +4,7 @@ import {DataSource} from '../../../generated/aspects.interfaces';
 export {DataSource} from '../../../generated/aspects.interfaces';
 
 DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
-  /// category core 
+  /// category core
   filter(objects: VersionedObject[], arg1) {
     return DataSourceInternal.applyWhere(arg1, objects, this.controlCenter());
   }
@@ -177,7 +177,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     }
     for (let [validator, objects] of domainValidators)
       await validator(reporter, changed, objects);
-    
+
     if (reporter.diagnostics.length === 0) {
       let save = await this.farPromise('implSave', { tr: tr, objects: changed });
       reporter.diagnostics.push(...save.diagnostics());

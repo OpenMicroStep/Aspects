@@ -84,7 +84,7 @@ export namespace DBConnector {
       insert(sql_insert: SqlBinding, out: string[])      { return this.pool.scoped(db => definition.insert(this.lib, db, definition.transform(this._t(sql_insert)), out)); }
       update(sql_update: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.update(this.lib, db, definition.transform(this._t(sql_update)))); }
       delete(sql_delete: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.delete(this.lib, db, definition.transform(this._t(sql_delete)))); }
-      
+
       close() {
         this.pool.close();
       }

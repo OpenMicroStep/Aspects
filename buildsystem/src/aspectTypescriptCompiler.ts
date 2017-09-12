@@ -30,5 +30,5 @@ JSCompilers.register(['aspects'], AspectTypescriptCompiler, {
       header:       V.defaultsTo(V.validateString , ""),
       customHeader: V.defaultsTo(V.validateString , ""),
     }), []),
-    
+
 });

@@ -26,11 +26,11 @@ function createContext_C1(publicTransport: (json: string) => Promise<string>) {
   return ret;
 }
 
-type ContextS1 = { 
-  Resource: { new(): Car.Aspects.s1 }, 
-  Car: { new(): Car.Aspects.s1 }, 
-  People: { new(): People.Aspects.s1 }, 
-  db: DataSource.Aspects.server, 
+type ContextS1 = {
+  Resource: { new(): Car.Aspects.s1 },
+  Car: { new(): Car.Aspects.s1 },
+  People: { new(): People.Aspects.s1 },
+  db: DataSource.Aspects.server,
   cc: ControlCenter,
   c0: Car.Aspects.s1,
   c1: Car.Aspects.s1,
@@ -110,13 +110,13 @@ async function distantQuery(flux) {
   s1.cc.registerComponent(s1.component);
   s1.cc.registerObjects(s1.component, [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]);
   await s1.db.farPromise("rawSave", [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]);
-  
+
   let inv = await c1.db.farPromise("query", { id: "s1cars" });
   let res = inv.value();
   c1.cc.registerComponent(c1.component);
   c1.cc.registerObjects(c1.component, res["cars"]);
   assert.sameMembers(
-    res["cars"].map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`), 
+    res["cars"].map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`),
     [s1.c0, s1.c1, s1.c2, s1.c3].map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`));
   flux.continue();
 }

@@ -8,10 +8,10 @@ interface Flux<T> {
   context: T;
   continue(): void;
 }
-type Context = { 
-  Car: { new(): Car.Aspects.test1 }, 
-  People: { new(): People.Aspects.test1 }, 
-  db: DataSource.Aspects.server, 
+type Context = {
+  Car: { new(): Car.Aspects.test1 },
+  People: { new(): People.Aspects.test1 },
+  db: DataSource.Aspects.server,
   cc: ControlCenter,
   c0: Car.Aspects.test1,
   c1: Car.Aspects.test1,
@@ -531,7 +531,7 @@ async function query_cars_sub_scope(f: Flux<Context>) {
   deepEqual(lc0, {_id: c0.id(), _name: "Renault", _model: "Clio 3", _owner: lc0._owner }, ["_id", "_name", "_owner", "_model"]);
   deepEqual(lc0._owner, {_id: p0.id(), _firstname: "Lisa", _lastname: "Simpson" }, ["_id", "_firstname", "_lastname"]);
   cc.unregisterObjects(component, [lc0, lc0._owner!]);
-  
+
   cc.registerObjects(component, [c0, p0]);
   f.continue();
 }
@@ -629,7 +629,7 @@ function insert1by1SeqWithCC(flux, nb) {
 }
 
 export function createTests(createControlCenter: (flux) => void, destroyControlCenter: (flux) => void = (f) => f.continue()) : any[] {
-  
+
   /*function create1k(flux) { runWithNewCC(flux, f => createWithCC(f, 1000)); }
   function insert100(flux) { runWithNewCC(flux, f => insertWithCC(f, 100)); }
   function insert1k(flux) { runWithNewCC(flux, f => insertWithCC(f, 1000)); }

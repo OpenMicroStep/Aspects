@@ -54,12 +54,12 @@ function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
   return request;
 }
 
-export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, { 
+export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
   server: string, domain?: string,
   userName: string, password?: string,
-  options?: { 
-    port?: number, 
-    instanceName?: string, 
+  options?: {
+    port?: number,
+    instanceName?: string,
     database?: string,
     encrypt?: boolean,
     useColumnNames?: false

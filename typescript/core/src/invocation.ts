@@ -63,7 +63,7 @@ export namespace Invocation {
               reporter.error(err);
             else
               reporter.diagnostic({ type: "error", msg: `unknown error` });
-            exit(); 
+            exit();
           })
         return;
       }

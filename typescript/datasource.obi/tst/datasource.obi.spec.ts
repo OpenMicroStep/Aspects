@@ -318,27 +318,27 @@ _end:
 ENT
 _id: 3
 system name: Car
-pattern: 
+pattern:
   Gab
   _id: 1032
   characteristic: system name
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1034
   characteristic: type
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1036
   characteristic: domain entity
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1038
   characteristic: domain list
@@ -349,7 +349,7 @@ _end:
 ENT
 _id: 5
 system name: Typ
-pattern: 
+pattern:
   Gab
   _id: 1052
   characteristic: system name
@@ -361,20 +361,20 @@ _end:
 ENT
 _id: 7
 system name: Gab
-pattern: 
+pattern:
   Gab
   _id: 1072
   characteristic: characteristic
   cardinality: one
   mandatory: 1
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1074
   characteristic: cardinality
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 1076
   characteristic: mandatory
@@ -459,7 +459,7 @@ _end:
 
   let e = ENT_Car_Gab_Typ();
   testDecode(def, [
-    e.ENT, e.Car, e.Typ, e.Gab, 
+    e.ENT, e.Car, e.Typ, e.Gab,
     e.system_name, e.characteristic, e.type, e.pattern, e.domain_entity, e.domain_list, e.cardinality, e.mandatory,
     e.ID, e.SID, e.STR, e.BOOL,
   ]);
@@ -468,14 +468,14 @@ _end:
 async function load_std(flux) {
   let trace = false;
   const sqlite3 = require('sqlite3').verbose();
-  const connector = SqliteDBConnectorFactory(sqlite3, { 
+  const connector = SqliteDBConnectorFactory(sqlite3, {
     filename: ":memory:",
     trace: sql => trace && console.info(sql),
   }, { max: 1 });
   await connector.unsafeRun({ sql: 'CREATE TABLE `TJ_VAL_ID`  (`VAL_INST` bigint(20) NOT NULL, `VAL_CAR` bigint(20) NOT NULL, `VAL` bigint(20) NOT NULL  , PRIMARY KEY (`VAL_INST`,`VAL_CAR`,`VAL`))', bind: []})
   await connector.unsafeRun({ sql: 'CREATE TABLE `TJ_VAL_INT` (`VAL_INST` bigint(20) NOT NULL, `VAL_CAR` bigint(20) NOT NULL, `VAL` bigint(20) NOT NULL  , PRIMARY KEY (`VAL_INST`,`VAL_CAR`,`VAL`))', bind: []})
   await connector.unsafeRun({ sql: 'CREATE TABLE `TJ_VAL_STR` (`VAL_INST` bigint(20) NOT NULL, `VAL_CAR` bigint(20) NOT NULL, `VAL` varchar(144) NOT NULL, PRIMARY KEY (`VAL_INST`,`VAL_CAR`,`VAL`))', bind: []})
-  
+
   const ouiDb = new OuiDB(connector);
   await ouiDb.injectObis(ouiDb.parseObis(new Parser(new Reporter(), StdDefinition)));
   await ouiDb.loadSystemObis();
@@ -483,7 +483,7 @@ async function load_std(flux) {
   const test_obis = ouiDb.parseObis(new Parser(new Reporter(), `
 ENT // ENT-Gab
 _id: 7
-pattern: 
+pattern:
   Gab
   _id: 1089
   characteristic: urn
@@ -500,13 +500,13 @@ _end:
 ENT // ENT-R_Element
 _id: 10011
 system name: R_Element
-pattern: 
+pattern:
   Gab
   _id: 10013
   characteristic: system name
   cardinality: one
   _end:
-pattern: 
+pattern:
   Gab
   _id: 10015
   characteristic: order
@@ -658,14 +658,14 @@ _end:
 async function createObiControlCenter(flux) {
   let trace = false;
   const sqlite3 = require('sqlite3').verbose();
-  const connector = SqliteDBConnectorFactory(sqlite3, { 
+  const connector = SqliteDBConnectorFactory(sqlite3, {
     filename: ":memory:",
     trace: sql => trace && console.info(sql),
   }, { max: 1 });
   await connector.unsafeRun({ sql: 'CREATE TABLE `TJ_VAL_ID`  (`VAL_INST` bigint(20) NOT NULL, `VAL_CAR` bigint(20) NOT NULL, `VAL` bigint(20) NOT NULL  , PRIMARY KEY (`VAL_INST`,`VAL_CAR`,`VAL`))', bind: []})
   await connector.unsafeRun({ sql: 'CREATE TABLE `TJ_VAL_INT` (`VAL_INST` bigint(20) NOT NULL, `VAL_CAR` bigint(20) NOT NULL, `VAL` bigint(20) NOT NULL  , PRIMARY KEY (`VAL_INST`,`VAL_CAR`,`VAL`))', bind: []})
   await connector.unsafeRun({ sql: 'CREATE TABLE `TJ_VAL_STR` (`VAL_INST` bigint(20) NOT NULL, `VAL_CAR` bigint(20) NOT NULL, `VAL` varchar(144) NOT NULL, PRIMARY KEY (`VAL_INST`,`VAL_CAR`,`VAL`))', bind: []})
-  
+
   const ouiDb = new OuiDB(connector);
   await ouiDb.injectObis(ouiDb.parseObis(new Parser(new Reporter(), StdDefinition)));
   await ouiDb.loadSystemObis();
@@ -693,7 +693,7 @@ async function createObiControlCenter(flux) {
     },
   });
   //trace = true;
-  
+
   Object.assign(flux.context, {
     connector: connector,
     Car: C,
@@ -709,7 +709,7 @@ function destroy(flux) {
 }
 
 export const name = "obi";
-export const tests = 
+export const tests =
 [
   { name: "decode", tests: [
     decode_ENT,

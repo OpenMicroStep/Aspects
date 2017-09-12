@@ -63,7 +63,7 @@ export class SqlMaker {
       bind: [...([] as any[]).concat(...sql_set.map(s => s.bind)), ...sql_where.bind]
     }
   }
-  
+
   delete(table: string, sql_where: SqlBinding) : SqlBinding {
     return {
       sql: `DELETE FROM ${this.quote(table)} ${this._where(sql_where)}`,
@@ -100,7 +100,7 @@ export class SqlMaker {
   left_join(table: string, alias: string, on: SqlBinding) {
     return { sql: `LEFT OUTER JOIN ${this.quote(table)} ${this.quote(alias)} ON ${on.sql}`, bind: on.bind };
   }
-  
+
   inner_join(table: string, alias: string, on: SqlBinding) {
     return { sql: `INNER JOIN ${this.quote(table)} ${this.quote(alias)} ON ${on.sql}`, bind: on.bind };
   }

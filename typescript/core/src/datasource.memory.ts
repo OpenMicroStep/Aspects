@@ -4,7 +4,7 @@ import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
 
 export type MemoryDataSourceTransaction = { tr: InMemoryDataSource.DataStoreTransaction };
-export class InMemoryDataSource extends DataSource 
+export class InMemoryDataSource extends DataSource
 {
   constructor(manager: VersionedObjectManager<InMemoryDataSource>, private ds: InMemoryDataSource.DataStore) {
     super(manager);
@@ -23,14 +23,14 @@ export class InMemoryDataSource extends DataSource
   }
 
   private _loads(
-    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
+    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD,
     scope: DataSourceInternal.ResolvedScope, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
     this._load(component, ds, scope, '.', '', lObject, dObject);
   }
 
   private _load(
-    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD, 
+    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD,
     scope: DataSourceInternal.ResolvedScope, path: string, npath: string, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
     let cc = this.controlCenter();
@@ -40,9 +40,9 @@ export class InMemoryDataSource extends DataSource
     cc.registerObjects(component, [lObject]);
     function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
       let cls_scope = scope[aspect.name];
-      if (!cls_scope) 
+      if (!cls_scope)
         return
-      let attributes = cls_scope[path] || cls_scope['_'];      
+      let attributes = cls_scope[path] || cls_scope['_'];
       if (!attributes)
         return;
       yield* attributes;
@@ -251,7 +251,7 @@ export namespace InMemoryDataSource {
   export interface DataStoreCRUD {
     objectsAsArray(): DataStoreObject[];
     delete(id: Identifier);
-    add(obj: DataStoreObject): void;    
+    add(obj: DataStoreObject): void;
     get(id: Identifier) : DataStoreObject | undefined;
     fixValue(value): any;
     toDSValue(value, create?: (o: VersionedObject) => DataStoreObject | undefined): any;
@@ -335,7 +335,7 @@ export namespace InMemoryDataSource {
     add(object: DataStoreObject) {
       this._objects.set(object.id, object);
     }
-    
+
     get(id: Identifier) {
       return this._objects.get(id);
     }
@@ -366,7 +366,7 @@ export namespace InMemoryDataSource {
     nextId() { return this.ds.nextId(); }
     toDSId(id: Identifier) { return this.ds.toDSId(id); }
     fromDSId(id: Identifier) { return this.ds.fromDSId(id); }
-    
+
     delete(id: Identifier) : boolean {
       let can = this.ds.get(id) !== undefined;
       if (can)
@@ -382,7 +382,7 @@ export namespace InMemoryDataSource {
       this.edt_objects.set(object.id, object);
       return object;
     }
-    
+
     get(id: Identifier) {
       return this.del_objects.has(id) ? undefined : (this.edt_objects.get(id) || this.ds.get(id));
     }

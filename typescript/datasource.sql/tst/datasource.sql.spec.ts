@@ -1,6 +1,6 @@
 import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
 import {
-  SqlDataSource, SqlMappedObject, SqlMappedAttribute, DBConnector, loadSqlMappers, 
+  SqlDataSource, SqlMappedObject, SqlMappedAttribute, DBConnector, loadSqlMappers,
   SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory, OracleDBConnectorFactory,
 } from '@openmicrostep/aspects.sql';
 import {assert} from 'chai';
@@ -13,20 +13,20 @@ function toDBKey(id) { return +id.split(':')[0]; }
 
 function createSqlControlCenter(flux) {
   const mappers = loadSqlMappers({
-    "People=": { 
+    "People=": {
       is: "sql-mapped-object",
       fromDbKey: (id) => `${id}:People`,
       toDbKey: toDBKey,
       inserts: [
-        { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+        { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
                                                                     { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
-        { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+        { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
                                                                     { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id" }] },
         { is: "sql-insert", name: "P", table: "People"  , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id" }] },
       ],
       attributes: [
           { is: "sql-mapped-attribute", name: "_id"        , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "id"        }] },
-          { is: "sql-mapped-attribute", name: "_version"   , insert: "=V", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "idVersion" }, 
+          { is: "sql-mapped-attribute", name: "_version"   , insert: "=V", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "idVersion" },
                                                                                   { is: "sql-path", table: "Version" , key: "id"    , value: "version"   , where: { type: "Resource" } }]
           , fromDb: v => v - 100      , toDb: v => v + 100 },
           { is: "sql-mapped-attribute", name: "_name"      , insert: "=R", path: [{ is: "sql-path", table: "Resource", key: "id"    , value: "name"      }] },
@@ -40,14 +40,14 @@ function createSqlControlCenter(flux) {
           { is: "sql-mapped-attribute", name: "_drivenCars"              , path: [{ is: "sql-path", table: "Drivers" , key: "people", value: "car"       }] },
       ]
     },
-    "Car=": { 
+    "Car=": {
       is: "sql-mapped-object",
       fromDbKey: (id) => `${id}:Car`,
       toDbKey: toDBKey,
       inserts: [
-        { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+        { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
                                                                     { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
-        { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" }, 
+        { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
                                                                     { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id" }] },
         { is: "sql-insert", name: "C", table: "Car"     , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id" }] },
       ],
@@ -82,7 +82,7 @@ function destroy(flux) {
 }
 
 export const name = "SqlDataSource";
-export const tests = 
+export const tests =
 [
   { name: "sqlite (npm sqlite3)", tests: createTests(async function sqliteCC(flux) {
     const sqlite3 = require('sqlite3').verbose();

@@ -74,26 +74,26 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   hasChanges(scope?: string[]) : boolean;
   hasChanges(scope?: (keyof T)[]) : boolean;
-  hasChanges(scope?: (keyof T)[]) { 
+  hasChanges(scope?: (keyof T)[]) {
     if (this._localAttributes.size === 0)
       return false;
     return scope ? scope.some(attribute => this._localAttributes.has(attribute)) : true;
   }
   localVersion(): number { return this._localAttributes.size > 0 ? VersionedObjectManager.NextVersion : this._version; }
   localAttributes(): VersionedObjectManager.ROAttributes<T> { return this._localAttributes; }
-  
+
   clear(scope?: string[]) : void;
   clear(scope?: (keyof T)[]) : void;
-  clear(scope?: (keyof T)[]) { 
+  clear(scope?: (keyof T)[]) {
     if (!scope)
-      this._localAttributes.clear(); 
+      this._localAttributes.clear();
     else
       scope.forEach(attribute => this._localAttributes.delete(attribute));
   }
 
   unload(scope?: string[]) : void;
   unload(scope?: (keyof T)[]) : void;
-  unload(scope?: (keyof T)[]) { 
+  unload(scope?: (keyof T)[]) {
     if (!scope) {
       this._localAttributes.clear();
       this._versionAttributes.clear();
@@ -105,7 +105,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       });
     }
   }
-  
+
   versionVersion(): number { return this._version; }
   versionAttributes(): VersionedObjectManager.ROAttributes<T> { return this._versionAttributes; }
 
@@ -134,13 +134,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return VersionedObjectManager.AttributeState.NOTLOADED;
     // TODO INCONFLICT
   }
-  
+
   hasAttributeValue(attributes: string) : boolean;
   hasAttributeValue(attributes: keyof T) : boolean;
   hasAttributeValue(attribute: keyof T) : boolean {
-    return attribute === '_id' 
-        || attribute === '_version' 
-        || this._localAttributes.has(attribute) 
+    return attribute === '_id'
+        || attribute === '_version'
+        || this._localAttributes.has(attribute)
         || this._versionAttributes.has(attribute)
         || (this._version === VersionedObjectManager.NoVersion && this._aspect.attributes.has(attribute));
   }
@@ -188,13 +188,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._localAttributes.clear();
     this._version = VersionedObjectManager.DeletedVersion;
   }
-  
+
   setId(id: Identifier) {
     if (this._id === id)
       return;
     if (VersionedObjectManager.isLocalId(id))
       throw new Error(`cannot change identifier to a local identifier`);
-    if (!VersionedObjectManager.isLocalId(this._id)) 
+    if (!VersionedObjectManager.isLocalId(this._id))
       throw new Error(`id can't be modified once assigned (not local)`);
     this._controlCenter.changeObjectId(this._id, id);
     this._id = id; // local -> real id (ie. object _id attribute got loaded)
@@ -203,7 +203,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   }
 
   setVersion(version: number) {
-    if (VersionedObjectManager.isLocalId(this._id)) 
+    if (VersionedObjectManager.isLocalId(this._id))
       throw new Error(`version can't be set on a locally identifier object`);
     this._localAttributes.forEach((v, k) => this._versionAttributes.set(k, v));
     this._localAttributes.clear();
@@ -355,28 +355,28 @@ export namespace VersionedObjectManager {
     }
     return [...s];
   }
-  /** @internal */ 
+  /** @internal */
   export function UnregisteredVersionedObjectManager<T extends VersionedObject>(this: any, manager: VersionedObjectManager<T>) {
     this._manager = manager;
   }
-  function isRegisteredCheck(this: any) { 
-    throw new Error(`you must register this object (${this.id()}) before using it`); 
+  function isRegisteredCheck(this: any) {
+    throw new Error(`you must register this object (${this.id()}) before using it`);
   }
   for (let k of Object.getOwnPropertyNames(VersionedObjectManager.prototype)) {
     let prop = { ...Object.getOwnPropertyDescriptor(VersionedObjectManager.prototype, k) };
     prop.value = isRegisteredCheck;
     Object.defineProperty(UnregisteredVersionedObjectManager.prototype, k, prop);
   }
-  UnregisteredVersionedObjectManager.prototype.id = function() { 
+  UnregisteredVersionedObjectManager.prototype.id = function() {
     return this._manager.id();
   }
-  UnregisteredVersionedObjectManager.prototype.controlCenter = function() { 
+  UnregisteredVersionedObjectManager.prototype.controlCenter = function() {
     return this._manager.controlCenter();
   }
-  UnregisteredVersionedObjectManager.prototype.aspect = function() { 
+  UnregisteredVersionedObjectManager.prototype.aspect = function() {
     return this._manager.aspect();
   }
-  UnregisteredVersionedObjectManager.prototype.name = function() { 
+  UnregisteredVersionedObjectManager.prototype.name = function() {
     return this._manager.name();
   }
   UnregisteredVersionedObjectManager.prototype.registerComponent = function(component: AComponent) {
@@ -407,7 +407,7 @@ export class VersionedObject {
       is: "category",
       name: "validation",
       methods: [
-        { is: "method", 
+        { is: "method",
           name: "validate",
           argumentTypes: [{ is: "type", type: "class", name: "Reporter"} as Aspect.Type],
           returnType: { is: "type", type: "void" } as Aspect.Type,

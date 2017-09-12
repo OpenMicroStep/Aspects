@@ -6,7 +6,7 @@ import {Notification} from '@openmicrostep/aspects';
 
 @Component({
     selector: 'my-app',
-    template: 
+    template:
 `
 <div class="container">
   <div class="row">

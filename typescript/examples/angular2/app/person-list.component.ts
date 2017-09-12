@@ -6,7 +6,7 @@ import {Notification, Invocation, DataSource} from '@openmicrostep/aspects';
 
 @Component({
     selector: 'person-list',
-    template: 
+    template:
 `
     <div class="input-group input-group-lg">
         <span class="input-group-addon" id="sizing-addon1"><span class="glyphicon glyphicon-search" aria-hidden="true"></span></span>
@@ -33,7 +33,7 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
         this._query = value;
         dataSource.farEvent('query', { id: "allpersons", text: value }, 'queryResults', this);
     }
-    
+
     ngAfterViewInit() {
         controlCenter.registerComponent(this);
         controlCenter.notificationCenter().addObserver(this, 'queryResults', 'queryResults', this);

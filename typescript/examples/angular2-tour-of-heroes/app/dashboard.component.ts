@@ -8,7 +8,7 @@ import {Invocation, DataSource, Notification} from '@openmicrostep/aspects';
   template: `
         <h3>Top Heroes</h3>
         <div class="grid grid-pad">
-            <a *ngFor="let hero of heroes"  [routerLink]="['/detail', hero.id()]"  class="col-1-4"> 
+            <a *ngFor="let hero of heroes"  [routerLink]="['/detail', hero.id()]"  class="col-1-4">
                 <div class="module hero">
                     <h4>{{hero.name()}}</h4>
                 </div>
@@ -76,7 +76,7 @@ import {Invocation, DataSource, Notification} from '@openmicrostep/aspects';
                 min-width: 60px;
             }
         }`]
-}) 
+})
 export class DashboardComponent implements AfterViewInit, OnDestroy {
 
   heroes: Heroe[] = [];
@@ -89,8 +89,8 @@ export class DashboardComponent implements AfterViewInit, OnDestroy {
     }
     set query(value) {
             this._query = value;
-            dataSource.farEvent('query', { 
-                conditions:{ $text: { $search: value } }, 
+            dataSource.farEvent('query', {
+                conditions:{ $text: { $search: value } },
                 scope: ['_nom']
             }, 'queryResults', this);
     }

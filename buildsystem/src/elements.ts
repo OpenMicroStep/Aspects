@@ -24,7 +24,7 @@ function appendUndefined(type: string, allowUndefined: boolean) {
 }
 
 function embedType(condition: boolean, prefix: [string, string], type: string, suffix: [string, string]) {
-  return condition ? `${prefix[0]}${type}${suffix[0]}` : `${prefix[1]}${type}${suffix[1]}`; 
+  return condition ? `${prefix[0]}${type}${suffix[0]}` : `${prefix[1]}${type}${suffix[1]}`;
 }
 
 elementFactories.registerSimple('type', (reporter, name, definition, attrPath, parent: AspectBaseElement) => {
@@ -107,7 +107,7 @@ export class ClassElement extends Element {
       let type = attribute.type.__decl(true, true, attribute instanceof AttributeElement && !!attribute.relation);
       decl += `\n  ${attribute instanceof QueryElement ? 'readonly ' : ''}${attribute.name}: ${type};`;
     }
-    if (attributes.length) 
+    if (attributes.length)
       decl += `\n`;
     decl += `\n  static readonly definition: Aspect.Definition = <any>${JSON.stringify(this, null, 2).replace(/\n/g, '\n  ')};`;
     decl += `\n  static readonly parent = ${parent};`;
@@ -124,7 +124,7 @@ export class ClassElement extends Element {
     decl += `\nexport declare namespace ${this.name} {`;
     for (let aspect of this.aspects)
       decl += `\n  function installAspect(on: ControlCenter, name: '${aspect.name}'): { new(): ${this.name}.Aspects.${aspect.name} };`;
-    if (this.aspects.length) 
+    if (this.aspects.length)
       decl += `\n`;
 
     decl += `\n  function __${this.name}_c(name: string): {};`;

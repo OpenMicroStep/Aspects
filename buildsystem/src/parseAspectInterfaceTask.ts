@@ -15,7 +15,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
   uniqueKey() {
     return { ...super.uniqueKey(), customHeader: this.src.customHeader, header: this.src.header };
   }
-  
+
   do_build(step: Step<{}>) {
     let root = new AspectRootElement('root', 'root', null);
     step.setFirstElements([
