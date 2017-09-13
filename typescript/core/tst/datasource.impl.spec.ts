@@ -405,6 +405,24 @@ function query_elementof_c1c2(f: Flux<Context>) {
   });
 }
 
+function query_mother_father_peoples(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
+  cc.registeredObjects(component).map(vo => vo.manager().unload());
+  db.farPromise('rawQuery', { name: "peoples", where: { $instanceOf: "People" }, scope: {
+    People: {
+      _: ['_firstname', '_lastname'],
+      '.': ['+_firstname', '+_lastname', '_father', '_mother', '_cars'],
+    },
+    Car: {
+      _: ['_name'],
+    },
+  }}).then((envelop) => {
+    let { peoples } = envelop.value();
+    assert.deepEqual(peoples, [p4, p1, p2, p0, p3]);
+    f.continue();
+  });
+}
+
 function select(vo: object, attr: string[]) {
   let ret = {};
   for (let a of attr)
@@ -670,6 +688,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_elementof_intersection,
       query_elementof_sub,
       query_elementof_c1c2,
+      query_mother_father_peoples,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]},
     { name: "mixed", tests: [
