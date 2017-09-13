@@ -4,6 +4,11 @@ export type Scope = {
   [s: string]: {
     [s: string]: string[]
   }
+} | string[];
+export type WillResolveScope = {
+  [s: string]: {
+    [s: string]: string[]
+  }
 };
 export type ResolvedScope = {
   [s: string]: {
@@ -23,7 +28,7 @@ export namespace ResolvedScope {
 export type ResolvedSort = { asc: boolean, path: Aspect.InstalledAttribute[] }[];
 
 type ParseScopeContext = {
-  unsafe_scope: Scope,
+  unsafe_scope: WillResolveScope,
   unsafe_path_count: number,
   safe_path_count: number,
   safe_aspect_path_abs: number;
@@ -179,7 +184,7 @@ function parseScopePath(ctx: ParseScopeContext, iter: IterableIterator<void>) {
 }
 
 export function parseScope(
-  unsafe_scope: Scope | string[],
+  unsafe_scope: Scope,
   aspectsForType: (type: string | "_") => Iterable<Aspect.Installed>
 ) : { scope: ResolvedScope, sort: ResolvedSort } {
   if (Array.isArray(unsafe_scope))

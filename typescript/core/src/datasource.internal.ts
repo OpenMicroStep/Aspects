@@ -683,7 +683,7 @@ export namespace DataSourceInternal {
   export type Result = {
     name: string;
     where: Instance<ObjectSetDefinition>;
-    scope?: string[] | Scope;
+    scope?: Scope;
   }
   export type Request = Result | { results: (Result& { [s: string]: Instance<ObjectSetDefinition> })[], [s: string]: Instance<ObjectSetDefinition> };
 
@@ -1041,7 +1041,7 @@ export namespace DataSourceInternal {
     return set;
   }
 
-  export function resolveScopeForObjects(unsafe_scope: Scope | string[], cc: ControlCenter, objects: Iterable<VersionedObject>) : ResolvedScope {
+  export function resolveScopeForObjects(unsafe_scope: Scope, cc: ControlCenter, objects: Iterable<VersionedObject>) : ResolvedScope {
     return parseScope(unsafe_scope, function *(type) {
       if (type !== '_') {
         yield cc.aspectChecked(type);
