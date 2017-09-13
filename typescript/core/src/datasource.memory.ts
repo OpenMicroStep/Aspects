@@ -142,17 +142,21 @@ export class InMemoryDataSource extends DataSource
   implSave({tr, objects} : { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
     let saved = new Set<VersionedObject>();
     const save = (lObject: VersionedObject): InMemoryDataSource.DataStoreObject | undefined => {
-      let dbId = this.ds.toDSId(lObject.id());
-      if (tr.versions.has(lObject))
+      let dVersion = tr.versions.get(lObject);
+      if (dVersion) {
+        let dbId = this.ds.toDSId(dVersion._id);
         return tr.get(dbId);
+      }
 
       let lVersion = lObject.manager().versionVersion();
       if (lVersion === VersionedObjectManager.DeletedVersion) {
+        let dbId = this.ds.toDSId(lObject.id());
         if (!tr.delete(dbId))
           diags.push({ type: "error", msg: `cannot delete ${lObject.id()}: object not found` });
         return undefined;
       }
       else if (lVersion !== VersionedObjectManager.NoVersion) { // Update
+        let dbId = this.ds.toDSId(lObject.id());
         let dObject = tr.get(dbId);
         if (!dObject)
           diags.push({ type: "error", msg: `cannot update ${lObject.id()}: object not found` });
