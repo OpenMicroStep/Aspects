@@ -1,5 +1,5 @@
 import { Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, ImmutableSet, ImmutableList } from '@openmicrostep/aspects';
-import { SqlBinding, SqlMaker } from './index';
+import { SqlBinding, SqlBindingW, SqlMaker } from './index';
 import { SqlInsert, SqlValue, SqlPath, SqlMappedAttribute, SqlMappedObject } from './mapper';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
@@ -49,13 +49,14 @@ export interface SqlQuerySharedContext<C extends SqlQuerySharedContext<C, Q>, Q 
 export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<SharedContext, SqlQuery<SharedContext>>> {
   variables: Set<SqlQuery<SharedContext>> = new Set();
   subs = new Map<SqlQuery<SharedContext>, string>();
+  inner_join = true;
 
   initialFromTable: string | undefined = undefined;
   initialFromKeys: string[] = [];
   initialFromKeyColumns: SqlBinding[] = [];
   columns = new Map<string, string>();
   columns_ordered: string[] = [];
-  from: SqlBinding[] = [];
+  from: SqlBindingW = { sql: '', bind: [] };
   fromConditions: SqlBinding[] =  [];
   joins: SqlBinding[] = [];
   where: SqlBinding[] = [];
@@ -114,32 +115,44 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       let q_n = new this.ctx.cstor(this.ctx, u_n);
       q_n.initialFromTable = this.nextAlias();
       q_n.initialFromKeys = q_0.initialFromKeys;
-      q_n.from.push(this.ctx.maker.from(q_n.initialFromTable!));
+      q_n.from = this.ctx.maker.from(q_n.initialFromTable!);
       this.ctx.queries.set(u_n, q_n);
       return q_n;
   }
   setInitialRecursion(q_n: SqlQuery<SharedContext>) {
     let maker = this.ctx.maker;
     let c = q_n.initialFromKeys.map(k => ({ sql: this.ctx.maker.column(q_n.initialFromTable!, k), bind: [] }));
-    this.addInitialFrom(q_n.from[0], q_n.initialFromTable!, q_n.initialFromKeys, c);
+    this.addInitialFrom(q_n.from, q_n.initialFromTable!, q_n.initialFromKeys, c);
   }
 
-  addInitialFrom(sql_from: SqlBinding, table: string, keys: string[], sql_key_columns: SqlBinding[]) {
-    this.from.push(sql_from);
+  addInitialFrom(sql_from: SqlBinding, table: string, keys: string[], sql_key_columns: SqlBinding[], left_join?: { query: SqlQuery<SharedContext>, attribute: string }) {
+    let maker = this.ctx.maker;
+    let constraints: SqlBinding[] = [];
+    if (left_join)
+      this.inner_join = false;
     if (!this.initialFromTable) {
       this.initialFromTable = table;
       this.initialFromKeys = keys;
       this.initialFromKeyColumns = sql_key_columns;
     }
     else if (this.initialFromKeys.length === sql_key_columns.length) {
-      let maker = this.ctx.maker;
       this.initialFromKeys.forEach((lkey, idx) => {
         let lc = { sql: this.addAttribute(lkey), bind: [] };
         let rc = sql_key_columns[idx];
-        this.addConstraint(this.ctx.maker.compare_bind(lc, ConstraintType.Equal, rc));
+        constraints.push(maker.compare_bind(lc, ConstraintType.Equal, rc));
       });
     }
     else throw new Error(`internal error: initialFromKeys length mismatch`);
+
+    if (left_join) {
+      constraints.push(maker.compare(
+        this.sql_column("_id"), ConstraintType.Equal, left_join.query.sql_column(left_join.attribute)
+      ));
+    }
+    if (constraints.length > 0)
+      this.joins.push(maker.join_from(left_join ? "left" : "inner", sql_from, maker.and(constraints)));
+    else
+      this.from = sql_from;
   }
 
   addConstraint(constraint: SqlBinding) {
@@ -336,34 +349,28 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     );
   }
 
-  sql_join() {
-    let sql_join: SqlBinding[] = [];
-    sql_join.push(...this.joins);
-    for (let variable of this.variables) {
-      if (variable !== this)
-        sql_join.push(...variable.sql_join());
-    }
-    return sql_join;
-  }
-
-  sql_from() {
-    let sql_from: SqlBinding[] = [];
-    sql_from.push(...this.from);
-    for (let variable of this.variables) {
-      if (variable !== this)
-        sql_from.push(...variable.sql_from());
-    }
-    for (let [sub, desc] of this.subs) {
-      sql_from.push(this.ctx.maker.from_sub(sub.sql_select(), desc));
-    }
-    return sql_from;
-  }
-
   sql_columns(): (string | SqlBinding)[] {
     let sql_columns: (string | SqlBinding)[] = [];
     for (let attribute of this.columns_ordered)
       sql_columns.push(this.ctx.maker.column_alias(this.columns.get(attribute)!, attribute));
     return sql_columns;
+  }
+
+  sql_from() : SqlBinding {
+    return this.from;
+  }
+
+  sql_join() {
+    let sql_join: SqlBinding[] = [];
+    sql_join.push(...this.joins);
+    for (let variable of this.variables) {
+      if (variable !== this) {
+        if (variable.from.sql)
+          sql_join.push(this.ctx.maker.join_from('', variable.from))
+        sql_join.push(...variable.sql_join());
+      }
+    }
+    return sql_join;
   }
 
   sql_where(): SqlBinding {
@@ -395,7 +402,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   tables = new Map<string, string>();
   hasSub = false;
 
-  setInitialType(name: string, instanceOf: boolean): void {
+  setInitialType(name: string, instanceOf: boolean, left_join?: { query: SqlMappedQuery, attribute: string }): void {
     let mapper = this.ctx.mappers[name];
     if (!mapper)
       throw new Error(`mapper for '${name}' not found`);
@@ -408,7 +415,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let keys = ["__is", "_id"];
     let sql_key_columns = [this.ctx.maker.value(mapper.name), { sql: this.ctx.maker.column(alias, key), bind: [] }];
     this.tables.set(JSON.stringify([table, key]), alias);
-    this.addInitialFrom(sql_from, alias, keys, sql_key_columns);
+    this.addInitialFrom(sql_from, alias, keys, sql_key_columns, left_join);
   }
 
   aspect(name: string) {
@@ -466,8 +473,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let q = await SqlQuery.build(this.ctx, s);
         q.addLazyAttributes(info.attributes.values());
         let from: SqlBinding = maker.from_sub(q.sql_select(), q_n.initialFromTable!);
-        (q_n.from[0] as any).sql = from.sql;
-        (q_n.from[0] as any).bind = from.bind;
+        q_n.from.sql = from.sql;
+        q_n.from.bind = from.bind;
         nids = await q_np1.execute_ids();
         for (let [k, id] of nids)
           ids.set(k, id);
@@ -516,17 +523,22 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   table(path: SqlPath[]): string {
     let key = "";
     let ret: string | undefined = "";
+    let maker = this.ctx.maker;
     let prev = this.initialFromKeyColumns[1].sql;
     for (let p of path) {
       key += JSON.stringify([p.table, p.key]);
       ret = this.tables.get(key);
       if (!ret) {
         ret = this.nextAlias();
-        this.from.push(this.ctx.maker.from(p.table, ret));
-        this.fromConditions.push(this.ctx.maker.compare(prev, ConstraintType.Equal, this.ctx.maker.column(ret, p.key)));
+        let sql_join = maker.join(
+          this.inner_join ? "inner" : "left",
+          p.table, ret,
+          maker.compare(prev, ConstraintType.Equal, maker.column(ret, p.key))
+        );
+        this.joins.push(sql_join);
         this.tables.set(key, ret);
       }
-      prev = this.ctx.maker.column(ret, p.value);
+      prev = maker.column(ret, p.value);
       key += JSON.stringify(p.value);
     }
     return ret;
@@ -613,6 +625,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     }
     return sql_columns;
   }
+
   async execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>> {
     let ret = new Map<Identifier, { __is: string, _id: any, _version: number }>();
     let mono_query = this.sql_select();
@@ -738,9 +751,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
                 let q_r = new SqlMappedQuery(this.ctx, s_r);
                 let relation_idx = relation_11_paths.length;
                 relation_11_paths.push(path_r);
-                q_r.setInitialType(type_r, false);
+                q_r.setInitialType(type_r, false, { query: query, attribute: a.name });
                 query.variables.add(q_r);
-                query.addConstraint(maker.compare(query.sql_column(a.name), ConstraintType.Equal, q_r.sql_column("_id")));
                 sql_columns.push(maker.column_alias_bind(maker.value(type_r), `${relation_idx}:__is`));
                 sql_columns.push(maker.column_alias(q_r.sql_column("_id"), `${relation_idx}:_id`));
                 sql_columns.push(maker.column_alias(q_r.sql_column("_version"), `${relation_idx}:_version`));
@@ -761,16 +773,16 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       );
       let mono_rows = await this.ctx.db.select(mono_query);
       let mult_items = [new Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>()];
+      for (let [idx, path] of relation_11_paths.entries())
+        mult_items[idx + 1] = new Map();
       for (let row of mono_rows) {
         loadMonoRow(row, '', path, mult_items[0]);
-        for (let [idx, path] of relation_11_paths.entries()) {
-          loadMonoRow(row, `${idx}:`, path, mult_items[idx + 1] = new Map());
-        }
+        for (let [idx, path] of relation_11_paths.entries())
+          loadMonoRow(row, `${idx}:`, path, mult_items[idx + 1]);
       }
       await loadMultRows(mult_items[0], mult_path);
-      for (let [idx, path] of relation_11_paths.entries()) {
+      for (let [idx, path] of relation_11_paths.entries())
         await loadMultRows(mult_items[idx + 1], path);
-      }
     };
     await doQuery(this, this.sql_columns(), [...this.mappers].map(m => m.name), '.', '');
     this.mergeRemotes(remotes);

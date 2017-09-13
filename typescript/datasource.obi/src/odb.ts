@@ -130,7 +130,7 @@ export class OuiDB {
     let maker = this.maker;
     let sql_select = maker.select(
       [maker.column("TJ_VAL_ID", "VAL_INST")],
-      [maker.from("TJ_VAL_ID")], [],
+      maker.from("TJ_VAL_ID"), [],
       maker.or([
         maker.op(this.maker.column("TJ_VAL_ID", "VAL")    , ConstraintType.Equal, oid),
         maker.op(this.maker.column("TJ_VAL_ID", "VAL_CAR"), ConstraintType.Equal, oid),
@@ -305,7 +305,7 @@ export class OuiDB {
   async loadSystemObis() {
     this.systemObiById.clear();
     this.systemObiByName.clear();
-    let sql_systemObis = this.maker.select(["VAL_INST", "VAL"], [this.maker.from("TJ_VAL_STR")], [], this.maker.op(this.maker.quote("VAL_CAR"), ConstraintType.Equal, this.config.CarSystemNameId));
+    let sql_systemObis = this.maker.select(["VAL_INST", "VAL"], this.maker.from("TJ_VAL_STR"), [], this.maker.op(this.maker.quote("VAL_CAR"), ConstraintType.Equal, this.config.CarSystemNameId));
     let rows = await this.connector.select(sql_systemObis);
     let ids: number[] = [];
     for (let row of rows as { VAL_INST: number, VAL: string }[]) {
@@ -340,7 +340,7 @@ export class OuiDB {
   private async _loadObis(db: DBConnectorTransaction | DBConnector, ids: number[], into: Map<number, ObiDefinition>, unresolved = new Map<number, ObiDefinition>()) {
     let unresolved_ids: number[] = [];
     for (let table of this._valTables) {
-      let sql_car = this.maker.select(["VAL_INST", "VAL_CAR", "VAL"], [this.maker.from(table)], [], this.maker.op(this.maker.quote("VAL_INST"), ConstraintType.In, ids));
+      let sql_car = this.maker.select(["VAL_INST", "VAL_CAR", "VAL"], this.maker.from(table), [], this.maker.op(this.maker.quote("VAL_INST"), ConstraintType.In, ids));
       let rows = await db.select(sql_car);
       for (let row of rows as { VAL_INST: number, VAL_CAR: number, VAL: any }[]) {
         let obi = into.get(row.VAL_INST)!;

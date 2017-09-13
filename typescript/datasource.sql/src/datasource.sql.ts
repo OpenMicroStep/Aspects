@@ -65,20 +65,21 @@ export class SqlDataSource extends DataSource
         if (!values) {
           valuesByPath.set(key, values = { table: last.table, sets: [], checks: [], where: { sql: "", bind: [] } });
           if (attribute.path.length > 1) {
-            let from: SqlBinding[] = [];
-            let where: SqlBinding[] = [];
             let p: SqlPath;
             let l: SqlPath = attribute.path[0];
             let i = 1, len = attribute.path.length - 1;
-            from.push(this.maker.from(l.table, `U0`));
-            where.push(this.maker.op(this.maker.column(`U0`, l.key), ConstraintType.Equal, iddb));
+            let from = this.maker.from(l.table, `U0`);
+            let joins: SqlBinding[] = [];
+            let where = this.maker.op(this.maker.column(`U0`, l.key), ConstraintType.Equal, iddb);
             for (; i < len; i++) {
               p = attribute.path[i];
-              from.push(this.maker.from(p.table, `U${i}`));
-              where.push(this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key)))
+              joins.push(this.maker.join('inner',
+                p.table, `U${i}`,
+                this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key))
+              ));
               l = p;
             }
-            let select = this.maker.sub(this.maker.select([this.maker.column(`U0`, l.value)], from, [], this.maker.and(where)));
+            let select = this.maker.sub(this.maker.select([this.maker.column(`U0`, l.value)], from, joins, where));
             values.where = this.maker.compare_bind({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
           }
           else {

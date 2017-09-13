@@ -75,7 +75,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     let maker = this.ctx.maker;
     let c = q_n.initialFromKeys.map(k => ({ sql: this.ctx.maker.column(q_n.initialFromTable!, k), bind: [] }));
     this.addDefaultInitialFrom();
-    this.addInitialFrom(q_n.from[0], q_n.initialFromTable!, q_n.initialFromKeys, c);
+    this.addInitialFrom(q_n.from, q_n.initialFromTable!, q_n.initialFromKeys, c);
   }
 
   async setInitialUnionOfAlln(q_0: ObiQuery, q_n: ObiQuery, q_np1: ObiQuery): Promise<void> {
@@ -102,8 +102,8 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", sids));
         let q = await SqlQuery.build(this.ctx, s) as ObiQuery;
         let from: SqlBinding = maker.from_sub(q.sql_select_id(), q_n.initialFromTable!);
-        (q_n.from[0] as any).sql = from.sql;
-        (q_n.from[0] as any).bind = from.bind;
+        q_n.from.sql = from.sql;
+        q_n.from.bind = from.bind;
         nids = await q_np1.execute_ids();
         for (let [k, id] of nids)
           ids.set(k, id);
@@ -220,7 +220,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       if (!table) {
         table = this.nextAlias();
         this.tables.set(attribute, table);
-        this.joins.push(maker.left_join(car_info.table, table, maker.and([
+        this.joins.push(maker.join("left", car_info.table, table, maker.and([
           maker.compare(maker.column(table, column_id(car_info.direct)), ConstraintType.Equal, maker.column(this.initialFromTable!, "VAL_INST")),
           maker.op(maker.column(table, "VAL_CAR" ), ConstraintType.Equal, car_info.car._id),
         ])));
@@ -237,7 +237,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       // obi make full text search on the whole object attributes easy and fast
       let alias = this.nextAlias();
       let maker = this.ctx.maker;
-      this.joins.push(maker.left_join("TJ_VAL_STR", alias, maker.compare(maker.column(alias, "VAL_INST"), ConstraintType.Equal, maker.column(this.initialFromTable!, this.initialFromKeys[1]))));
+      this.joins.push(maker.join("left", "TJ_VAL_STR", alias, maker.compare(maker.column(alias, "VAL_INST"), ConstraintType.Equal, maker.column(this.initialFromTable!, this.initialFromKeys[1]))));
       return maker.op(maker.column(alias, "VAL"), ConstraintType.Text, value);
     }
     else {
@@ -439,12 +439,12 @@ function mk_query_ids(ctx: ObiSharedContext, direct: boolean, version: ObiQuery.
     ctx.maker.column("AVE", "VAL", "_version"),
     ctx.maker.column_alias_bind(ctx.maker.value(path), "_path"),
   ];
-  let from = [
-    ctx.maker.from(table),
-    ctx.maker.from(table, "AIS"),
-    ctx.maker.from(version.table, "AVE")
+  let from = ctx.maker.from(table);
+  let joins = [
+    ctx.maker.join('', table, "AIS"),
+    ctx.maker.join('', version.table, "AVE")
   ];
-  let query = ctx.maker.select(columns, from, [], where);
+  let query = ctx.maker.select(columns, from, joins, where);
   return query;
 }
 
@@ -470,12 +470,12 @@ function mk_query_val(ctx: ObiSharedContext, table: string, direct: boolean, whe
     ctx.maker.column(table, "VAL_CAR" , "car"),
     ctx.maker.column(table, column_val(direct), "val"),
   ];
-  let from = [ctx.maker.from(table)];
+  let joins: SqlBinding[] = [];
   if (table === "TJ_VAL_ID") {
     columns.push(ctx.maker.column("AIS", "VAL", "__is"));
-    from.push(ctx.maker.from(table, "AIS"));
+    joins.push(ctx.maker.join('', table, "AIS"));
   }
-  let query = ctx.maker.select(columns, from, [], where);
+  let query = ctx.maker.select(columns, ctx.maker.from(table), joins, where);
   return query;
 }
 

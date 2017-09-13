@@ -1,8 +1,9 @@
-import {DataSourceInternal} from '@openmicrostep/aspects';
+import {DataSourceInternal, ImmutableList} from '@openmicrostep/aspects';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
-export type SqlBinding = { readonly sql: string, readonly bind: ReadonlyArray<any> };
-type SqlBindingW = { sql: string, bind: any[] };
+type SqlBindingM = { sql: string, bind: any[] };
+export type SqlBindingW = { sql: string, bind: ReadonlyArray<any> };
+export type SqlBinding = Readonly<SqlBindingW>;
 export class SqlMaker {
   protected push_bindings(bind: any[], bindings: SqlBinding[]) {
     for (let b of bindings)
@@ -31,7 +32,7 @@ export class SqlMaker {
     return { sql: sql, bind: this.join_bindings(sql_select) };
   }
 
-  select(sql_columns: (string | SqlBinding)[], sql_from: SqlBinding[], sql_joins: SqlBinding[], sql_where?: SqlBinding, sql_sort?: string[]) : SqlBinding {
+  select(sql_columns: (string | SqlBinding)[], sql_from: SqlBinding, sql_joins: SqlBinding[], sql_where?: SqlBinding, sql_sort?: string[]) : SqlBinding {
     let bind: SqlBinding[] = [];
     let columns = sql_columns.map(c => {
       if (typeof c === "string")
@@ -39,8 +40,8 @@ export class SqlMaker {
       bind.push(...c.bind);
       return c.sql;
     }).join(',');
-    let sql = `SELECT DISTINCT ${columns}\nFROM ${this.join_sqls(sql_from, ',')}`;
-    this.push_bindings(bind, sql_from);
+    let sql = `SELECT DISTINCT ${columns}\nFROM ${sql_from.sql}`;
+    bind.push(...sql_from.bind)
     if (sql_joins.length) {
       sql += `\n${this.join_sqls(sql_joins, '\n')}`;
       this.push_bindings(bind, sql_joins);
@@ -71,7 +72,7 @@ export class SqlMaker {
     }
   }
 
-  _where(sql_where: SqlBinding) : string {
+  protected _where(sql_where: SqlBinding) : string {
     return sql_where.sql ? `WHERE ${sql_where.sql}` : '';
   }
 
@@ -97,12 +98,34 @@ export class SqlMaker {
     return { sql: `${r.sql} ${this.quote(alias)}`, bind: r.bind };
   }
 
-  left_join(table: string, alias: string, on: SqlBinding) {
-    return { sql: `LEFT OUTER JOIN ${this.quote(table)} ${this.quote(alias)} ON ${on.sql}`, bind: on.bind };
+  protected _join(kind: SqlMaker.JoinType, sql_select: string, on?: SqlBinding) : string {
+    let sql_kind: string;
+    switch(kind) {
+      case "left": sql_kind = on ? "LEFT JOIN" : "NATURAL LEFT JOIN"; break;
+      case "inner": sql_kind = on ? "INNER JOIN" : "NATURAL INNER JOIN"; break;
+      case "cross": sql_kind = on ? "CROSS JOIN" : "CROSS JOIN"; break;
+      case "right": sql_kind = on ? "RIGHT JOIN" : "NATURAL RIGHT JOIN"; break;
+      case "": sql_kind = on ? "CROSS JOIN" : "CROSS JOIN"; break;
+      default: throw new Error(`invalid join kind ${kind}`);
+    }
+    if (on)
+      return `${sql_kind} ${sql_select} ON ${on.sql}`;
+    else
+      return `${sql_kind} ${sql_select}`;
   }
 
-  inner_join(table: string, alias: string, on: SqlBinding) {
-    return { sql: `INNER JOIN ${this.quote(table)} ${this.quote(alias)} ON ${on.sql}`, bind: on.bind };
+  join(kind: SqlMaker.JoinType, table: string, alias: string, on?: SqlBinding) : SqlBinding {
+    return {
+      sql: this._join(kind, `${this.quote(table)} ${this.quote(alias)}`, on),
+      bind: on ? on.bind : [],
+    };
+  }
+
+  join_from(kind: SqlMaker.JoinType, sql_from: SqlBinding, on?: SqlBinding) {
+    return {
+      sql: this._join(kind, sql_from.sql, on),
+      bind: on ? [...sql_from.bind, ...on.bind] : sql_from.bind,
+    };
   }
 
   sub(sql_select: SqlBinding) : SqlBinding {
@@ -155,7 +178,7 @@ export class SqlMaker {
     return { sql: `${sql_column} = ?`, bind: [value] };
   }
 
-  _conditions(conditions: SqlBinding[], sql_op: string) : SqlBinding {
+  protected _conditions(conditions: SqlBinding[], sql_op: string) : SqlBinding {
     if (conditions.length === 0)
       return { sql: '', bind: [] };
     if (conditions.length === 1)
@@ -170,6 +193,8 @@ export class SqlMaker {
         bind.push(...condition.bind);
       }
     }
+    if (sql.length === 1)
+      return { sql: '', bind: [] };
     sql += ")";
     return { sql: sql, bind: bind };
   }
@@ -203,7 +228,7 @@ export class SqlMaker {
   }
 
   op_bind(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenColumnsTypes, value): SqlBinding {
-    let b = this.op(sql_column.sql, operator, value) as SqlBindingW;
+    let b = this.op(sql_column.sql, operator, value) as SqlBindingM;
     b.bind.unshift(...sql_column.bind);
     return b;
   }
@@ -221,7 +246,7 @@ export class SqlMaker {
   }
 
   compare_bind(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenSetTypes, sql_columnRight: SqlBinding): SqlBinding {
-    let b: SqlBindingW;
+    let b: SqlBindingM;
     switch (operator) {
       case ConstraintType.In:
         b = { sql: `${sql_columnLeft} IN ${sql_columnRight}` , bind: [] };
@@ -229,7 +254,7 @@ export class SqlMaker {
       case ConstraintType.NotIn:
         b = { sql: `${sql_columnLeft} NOT IN ${sql_columnRight}` , bind: [] };
         break;
-      default: b = this.compare(sql_columnLeft.sql, operator, sql_columnRight.sql) as SqlBindingW;
+      default: b = this.compare(sql_columnLeft.sql, operator, sql_columnRight.sql) as SqlBindingM;
     }
     b.bind.unshift(...sql_columnRight.bind);
     b.bind.unshift(...sql_columnLeft.bind);
@@ -237,6 +262,7 @@ export class SqlMaker {
   }
 }
 export namespace SqlMaker {
+  export type JoinType = "left" | "inner" | "right" | "cross" | "";
   export type NullType = 'integer' | 'decimal' | 'date' | 'string' | 'boolean' | undefined;
 }
 
