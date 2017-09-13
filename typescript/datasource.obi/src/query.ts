@@ -348,14 +348,15 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     };
     await load_ids(this.sql_select());
 
-    let car2attr = new Map<number, Aspect.InstalledAttribute>();
+    let car2attr_d = new Map<number, Aspect.InstalledAttribute>();
+    let car2attr_r = new Map<number, Aspect.InstalledAttribute>();
     const load_attributes = async (sql_select: SqlBinding) => {
       let row_values = await this.ctx.db.select(sql_select);
       for (let row of row_values) {
-        let {__is, _id, car, val} = row as {__is?: number, _id: number, car: number, val: any};
+        let {__is, _id, car, val, direct} = row as {__is?: number, _id: number, car: number, val: any, direct: boolean};
         let vo = cc.registeredObject(_id)!;
         let remoteAttributes = remotes.get(vo)!;
-        let a = car2attr.get(car)!;
+        let a = (direct ? car2attr_d : car2attr_r).get(car)!;
         val = this.ctx.config.obiValue_to_aspectValue(val, a.name);
         val = this.loadValue(this.ctx.component, val, __is);
         if (a.type.type === "set" || a.type.type === "array") {
@@ -378,7 +379,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         for (let a of attributes) {
           let car_info = this.car_info(a.name);
           let cars = cars_by_tables.get(car_info.table);
-          car2attr.set(car_info.car._id!, a);
+          (car_info.direct ? car2attr_d : car2attr_r).set(car_info.car._id!, a);
           if (!cars)
             cars_by_tables.set(car_info.table, cars = { dcar_ids: [], rcar_ids: [] });
           (car_info.direct ? cars.dcar_ids : cars.rcar_ids).push(car_info.car._id!);
@@ -469,6 +470,7 @@ function mk_query_val(ctx: ObiSharedContext, table: string, direct: boolean, whe
     ctx.maker.column(table, column_id(direct) , "_id"),
     ctx.maker.column(table, "VAL_CAR" , "car"),
     ctx.maker.column(table, column_val(direct), "val"),
+    ctx.maker.column_alias_bind(ctx.maker.value(direct) , "direct"),
   ];
   let joins: SqlBinding[] = [];
   if (table === "TJ_VAL_ID") {

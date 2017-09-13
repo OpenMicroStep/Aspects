@@ -36,6 +36,8 @@ function createSqlControlCenter(flux) {
           , fromDb: v => new Date(+v) , toDb: d => d.getTime() },
           { is: "sql-mapped-attribute", name: "_father"    , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "father"    }] },
           { is: "sql-mapped-attribute", name: "_mother"    , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "mother"    }] },
+          { is: "sql-mapped-attribute", name: "_childrens_by_father"     , path: [{ is: "sql-path", table: "People"  , key: "father", value: "id"        }] },
+          { is: "sql-mapped-attribute", name: "_childrens_by_mother"     , path: [{ is: "sql-path", table: "People"  , key: "mother", value: "id"        }] },
           { is: "sql-mapped-attribute", name: "_cars"                    , path: [{ is: "sql-path", table: "Car"     , key: "owner" , value: "id"        }] },
           { is: "sql-mapped-attribute", name: "_drivenCars"              , path: [{ is: "sql-path", table: "Drivers" , key: "people", value: "car"       }] },
       ]

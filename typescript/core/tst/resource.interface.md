@@ -33,7 +33,13 @@ _relation_: `_drivenCars`
 #### _firstname: string
 #### _lastname: string
 #### _father: People
+_relation_: `_childrens_by_father`
 #### _mother: People
+_relation_: `_childrens_by_mother`
+#### _childrens_by_father: [0, *, People]
+_relation_: `_father`
+#### _childrens_by_mother: [0, *, People]
+_relation_: `_mother`
 #### _cars: [0, *, Car]
 _relation_: `_owner`
 #### _drivenCars: [0, *, Car]

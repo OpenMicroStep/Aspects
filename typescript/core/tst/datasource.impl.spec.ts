@@ -419,6 +419,32 @@ function query_mother_father_peoples(f: Flux<Context>) {
   }}).then((envelop) => {
     let { peoples } = envelop.value();
     assert.deepEqual(peoples, [p4, p1, p2, p0, p3]);
+    let attributes = ['_firstname', '_lastname', '_father', '_mother'];
+    deepEqual(p4, { _firstname: "Abraham", _lastname: "Simpson", }, attributes);
+    deepEqual(p2, { _firstname: "Homer"  , _lastname: "Simpson", _father: p4 }, attributes);
+    deepEqual(p3, { _firstname: "Marge"  , _lastname: "Simpson", }, attributes);
+    deepEqual(p0, { _firstname: "Lisa"   , _lastname: "Simpson", _father: p2, _mother: p3 }, attributes);
+    deepEqual(p1, { _firstname: "Bart"   , _lastname: "Simpson", _father: p2, _mother: p3 }, attributes);
+    f.continue();
+  });
+}
+
+function query_father_tree(f: Flux<Context>) {
+  let {Car, People, db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
+  cc.registeredObjects(component).map(vo => vo.manager().unload());
+  db.farPromise('rawQuery', {
+    name: "peoples",
+    where: { $instanceOf: "People" },
+    scope: ['+_firstname', '+_lastname', '_father', '_childrens_by_father', '_mother', '_childrens_by_mother'],
+  }).then((envelop) => {
+    let { peoples } = envelop.value();
+    assert.deepEqual(peoples, [p4, p1, p2, p0, p3]);
+    let attributes = ['_firstname', '_lastname', '_father', '_childrens_by_father', '_mother', '_childrens_by_mother'];
+    deepEqual(p4, { _firstname: "Abraham", _lastname: "Simpson", _childrens_by_father: [p2]    , _childrens_by_mother: []      ,                          }, attributes);
+    deepEqual(p2, { _firstname: "Homer"  , _lastname: "Simpson", _childrens_by_father: [p0, p1], _childrens_by_mother: []      , _father: p4              }, attributes);
+    deepEqual(p3, { _firstname: "Marge"  , _lastname: "Simpson", _childrens_by_father: []      , _childrens_by_mother: [p0, p1],                          }, attributes);
+    deepEqual(p0, { _firstname: "Lisa"   , _lastname: "Simpson", _childrens_by_father: []      , _childrens_by_mother: []      , _father: p2, _mother: p3 }, attributes);
+    deepEqual(p1, { _firstname: "Bart"   , _lastname: "Simpson", _childrens_by_father: []      , _childrens_by_mother: []      , _father: p2, _mother: p3 }, attributes);
     f.continue();
   });
 }
@@ -429,8 +455,17 @@ function select(vo: object, attr: string[]) {
     ret[a] = vo[a];
   return ret;
 }
-function deepEqual(a, b, attr: string[]) {
-  assert.deepEqual(select(a, attr), select(b, attr));
+function deepEqual(a, b, attributes: string[]) {
+  for (let attribute of attributes) {
+    let va = a[attribute];
+    let vb = b[attribute];
+    if (va instanceof Set)
+      assert.sameMembers([...va], vb, attribute);
+    else if (va instanceof Array)
+      assert.deepEqual(va, vb, attribute);
+    else
+      assert.strictEqual(va, vb, attribute);
+  }
 }
 async function load_mixed_attributes(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
@@ -689,6 +724,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_elementof_sub,
       query_elementof_c1c2,
       query_mother_father_peoples,
+      query_father_tree,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]},
     { name: "mixed", tests: [
