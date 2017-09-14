@@ -8,7 +8,7 @@ class OracleSqlMaker extends SqlMaker {
   insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
     let sql =`INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')}) VALUES (${this.join_sqls(sql_values, ',')})`;
     if (output_columns.length > 0)
-      sql += ` RETURNING ${output_columns.map((c, i) => `${this.quote(c)} INTO :r${i}`).join(',')}`;
+      sql += ` RETURNING ${output_columns.map((c, i) => this.quote(c)).join(',')} INTO ${output_columns.map((c, i) => `:r${i}`).join(',')}`;
     return {
       sql: sql,
       bind: this.join_bindings(sql_values)
