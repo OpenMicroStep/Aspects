@@ -237,7 +237,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       // obi make full text search on the whole object attributes easy and fast
       let alias = this.nextAlias();
       let maker = this.ctx.maker;
-      this.joins.push(maker.join("left", "TJ_VAL_STR", alias, maker.compare(maker.column(alias, "VAL_INST"), ConstraintType.Equal, maker.column(this.initialFromTable!, this.initialFromKeys[1]))));
+      this.joins.push(maker.join("left", "TJ_VAL_STR", alias, maker.compare(maker.column(alias, "VAL_INST"), ConstraintType.Equal, this.sql_column("_id"))));
       return maker.op(maker.column(alias, "VAL"), ConstraintType.Text, value);
     }
     else {
