@@ -198,22 +198,21 @@ export class ObiDataSource extends DataSource
     }
   }
 
-  scoped<P>(scope: (component: AComponent) => Promise<P>) : Promise<P> {
+  async implQuery({ tr, sets }: { tr?: ObiDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
     let component = {};
     this.controlCenter().registerComponent(component);
-    return scope(component)
-      .then(v => { this.controlCenter().unregisterComponent(component); return Promise.resolve(v); })
-      .catch(v => { this.controlCenter().unregisterComponent(component); return Promise.reject(v); })
-  }
-
-  implQuery({ tr, sets }: { tr?: ObiDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
-    let ret = {};
-    return this.scoped(component =>
-      Promise.all(sets
+    try {
+      let ret = {};
+      await Promise.all(sets
         .filter(s => s.name)
         .map(s => this.execute(tr ? tr.tr : this.db.connector, s, component)
         .then(obs => ret[s.name!] = obs))
-      ).then(() => ret));
+        );
+      return ret;
+    }
+    finally {
+      this.controlCenter().unregisterComponent(component);
+    }
   }
 
   async implLoad({tr, objects, scope} : {
@@ -221,10 +220,19 @@ export class ObiDataSource extends DataSource
     objects: VersionedObject[];
     scope: DataSourceInternal.Scope;
   }): Promise<VersionedObject[]> {
-    let set = new ObjectSet('load');
-    set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
-    set.scope = DataSourceInternal.resolveScopeForObjects(scope, this.controlCenter(), objects);
-    return await this.scoped(component => ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, component), set).then(() => objects));
+    let component = {};
+    try {
+      this.controlCenter().registerComponent(component);
+      this.controlCenter().registerObjects(component, objects);
+      let set = new ObjectSet('load');
+      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
+      set.scope = DataSourceInternal.resolveScopeForObjects(scope, this.controlCenter(), objects);
+      await ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, component), set);
+      return objects;
+    }
+    finally {
+      this.controlCenter().unregisterComponent(component);
+    }
   }
 
   async implBeginTransaction(): Promise<ObiDataSourceTransaction> {

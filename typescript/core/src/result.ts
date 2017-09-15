@@ -11,7 +11,7 @@ export class Result<T = any> {
     return diagnostics.map((d: Result.ItemDiagnostic) => { d.is = "diagnostic"; return d; });
   }
 
-  static fromDiagnostics(diagnostics: Diagnostic[]) : Result<void> {
+  static fromDiagnostics<T = any>(diagnostics: Diagnostic[]) : Result<T> {
     return new Result(this.toDiagItems(diagnostics));
   }
 

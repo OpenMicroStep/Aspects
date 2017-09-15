@@ -120,7 +120,16 @@ module.exports =  {
       interfaces: [{
         is: "group",
         elements: ["=Files:core:src ? interface"],
-        customHeader: "import {Aspect, ControlCenter, DataSourceQueries, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, DataSourceInternal, ImmutableList, ImmutableSet, ImmutableObject, SafeValidators, DataSourceTransaction, DataSourceOptionalTransaction} from '../typescript/core/src/core';\nimport ObjectSet = DataSourceInternal.ObjectSet;"
+        customHeader: `import {
+            Aspect, ControlCenter,
+            VersionedObject, VersionedObjectConstructor,
+            FarImplementation, Result,
+            DataSourceInternal, DataSourceQueries, DataSourceTransaction, DataSourceOptionalTransaction,
+            ImmutableList, ImmutableSet, ImmutableObject,
+            SafeValidators, EncodedVersionedObjects
+          } from '../typescript/core/src/core';
+          import ObjectSet = DataSourceInternal.ObjectSet;
+        `
       }],
       npmPackage: { is: "component",
         "main": "typescript/core/src/core.js",

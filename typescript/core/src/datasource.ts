@@ -1,4 +1,8 @@
-import {Identifier, VersionedObject, VersionedObjectManager, FarImplementation, areEquals, Result, Invokable, Aspect, DataSourceInternal } from './core';
+import {
+  Identifier, VersionedObject, VersionedObjectManager, VersionedObjectCoder,
+  FarImplementation, areEquals, Result, Invokable, Aspect,
+  DataSourceInternal, EncodedVersionedObjects,
+} from './core';
 import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import {DataSource} from '../../../generated/aspects.interfaces';
 export {DataSource} from '../../../generated/aspects.interfaces';
@@ -9,6 +13,7 @@ DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
     return DataSourceInternal.applyWhere(arg1, objects, this.controlCenter());
   }
 });
+type ExtDataSource = { _queries?:DataSourceQueries, _safeValidators?: SafeValidators };
 export type DataSourceTransaction = {};
 export type DataSourceOptionalTransaction = DataSourceTransaction | undefined;
 export type DataSourceQuery = (reporter: Reporter, query: { id: string, [s: string]: any }) => DataSourceInternal.Request;
@@ -23,51 +28,71 @@ DataSource.category('initServer', <DataSource.ImplCategories.initServer<DataSour
 });
 
 DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.server>>{
-  query(request: { id: string, [k: string]: any }) {
-    return this.farPromise('distantQuery', request);
+  async query(request: { id: string, [k: string]: any }) : Promise<Result<{ [s: string]: VersionedObject[] }>> {
+    let cc = this.controlCenter();
+    let coder = new VersionedObjectCoder(new Map(), undefined);
+    let res = await this.farPromise('distantQuery', request);
+    if (!res.hasOneValue())
+      return res as Result;
+
+    let v = res.value();
+    cc.registerComponent(coder);
+    coder.decodeEncodedVersionedObjects(cc, v.e, false);
+    let r = {};
+    for (let k of Object.keys(v.results))
+      r[k] = v.results[k].map(id => cc.findChecked(id));
+    cc.unregisterComponent(coder);
+    return Result.fromResultWithNewValue(res, r);
   },
-  load(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
+  async load(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObject[]>>  {
     let diagnostics: Diagnostic[] = [];
     let saved: VersionedObject[]= [];
+    let coder = new VersionedObjectCoder(new Map(), undefined);
     for (let vo of w.objects) {
       if (vo.manager().state() !== VersionedObjectManager.State.NEW)
         saved.push(vo);
     }
     if (saved.length > 0) {
-      return this.farPromise('distantLoad', { objects: saved, scope: w.scope }).then((envelop) => {
-        return Result.fromResultWithNewValue(envelop, w.objects);
-      });
+      let res = await this.farPromise('distantLoad', { objects: saved, scope: w.scope });
+      if (res.hasOneValue()) {
+        let coder = new VersionedObjectCoder(new Map(), undefined);
+        this.controlCenter().registerComponent(coder);
+        coder.decodeEncodedVersionedObjects(this.controlCenter(), res.value(), false);
+        this.controlCenter().unregisterComponent(coder);
+      }
+      return Result.fromResultWithNewValue(res, w.objects);
     }
-    else {
-      return Promise.resolve(Result.fromValue(w.objects));
-    }
+    return Promise.resolve(Result.fromValue(w.objects));
   },
-  save(objects: VersionedObject.Categories.validation[]) {
+  async save(objects: VersionedObject.Categories.validation[]) : Promise<Result<VersionedObject[]>> {
     let reporter = new Reporter();
-    let changed = new Set<VersionedObject>();
-    for (let o of objects) {
-      let manager = o.manager();
+    let coder = new VersionedObjectCoder(new Map(), undefined);
+    for (let vo of objects) {
+      let manager = vo.manager();
       let state = manager.state();
       if (state !== VersionedObjectManager.State.UNCHANGED) {
-        changed.add(o);
-        o.validate(reporter);
+        vo.validate(reporter);
+        coder.encode(vo);
       }
     }
     if (reporter.diagnostics.length > 0)
       return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects);
-    return this.farPromise('distantSave', [...changed]).then((inv) => {
-      this.controlCenter().notificationCenter().postNotification({
-        name: "saved",
-        object: this,
-        info: objects,
-      })
-      return Result.fromResultWithNewValue(inv, objects);
-    });
+    let changed = coder.takeEncodedVersionedObjects();
+    if (changed.length > 0) {
+      let res = await this.farPromise('distantSave', changed);
+      if (res.hasOneValue()) {
+        this.controlCenter().registerComponent(coder);
+        coder.decodeEncodedVersionedObjects(this.controlCenter(),res.value(), false);
+        this.controlCenter().unregisterComponent(coder);
+      }
+      return Result.fromResultWithNewValue(res, objects);
+    }
+    return Result.fromValue(objects);
   }
 });
 
-DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.safe & { _queries?:DataSourceQueries }>>{
-  distantQuery(request) {
+DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.safe & ExtDataSource>>{
+  async distantQuery(request) : Promise<Result<{ e: EncodedVersionedObjects, results: { [s: string] : Identifier[] } }>> {
     let creator = this._queries && this._queries.get(request.id);
     if (!creator)
       return new Result([{ is: "diagnostic", type: "error", msg: `request ${request.id} doesn't exists` }]);
@@ -76,35 +101,52 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
     let query = creator(reporter, request);
     if (reporter.failed)
       return Result.fromDiagnostics(reporter.diagnostics);
-    return this.farPromise('safeQuery', query);
+    let res = await this.farPromise('safeQuery', query);
+    if (!res.hasOneValue())
+      return res as Result;
+
+    let v = res.value();
+    let r = {};
+    let coder = new VersionedObjectCoder(this._safeValidators || new Map(), undefined);
+    for (let k of Object.keys(v))
+      r[k] = v[k].map(vo => {
+        coder.encode(vo);
+        return vo.id();
+      });
+    return Result.fromResultWithNewValue(res, { e: coder.takeEncodedVersionedObjects(), results: r });
   },
-  distantLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
-    // TODO: add some local checks
-    return this.farPromise('safeLoad', w);
+  async distantLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<EncodedVersionedObjects>> {
+    let res = await this.farPromise('safeLoad', w);
+    if (!res.hasOneValue())
+      return res as Result;
+
+    let coder = new VersionedObjectCoder(this._safeValidators || new Map(), undefined);
+    for (let vo of res.value())
+      coder.encode(vo);
+    return Result.fromResultWithNewValue(res, coder.takeEncodedVersionedObjects());
   },
-  distantSave(objects: VersionedObject[]) {
-    // TODO: add some local checks
-    return this.farPromise('safeSave', objects);
+  async distantSave(data: EncodedVersionedObjects) : Promise<Result<EncodedVersionedObjects>> {
+    let coder = new VersionedObjectCoder(this._safeValidators || new Map(), new Set());
+    this.controlCenter().registerComponent(coder);
+    let objects = coder.decodeEncodedVersionedObjects(this.controlCenter(), data, true);
+    this.controlCenter().unregisterComponent(coder);
+    let res = await this.farPromise('safeSave', objects);
+    if (!res.hasOneValue())
+      return res as Result;
+
+    for (let vo of res.value())
+      coder.encode(vo);
+    return Result.fromResultWithNewValue(res, coder.takeEncodedVersionedObjects());
   }
 });
 
 export type SafeValidator<T extends VersionedObject = VersionedObject> = {
-  filterObject?: (object: VersionedObject) => void,
+  filterObject?: (manager: VersionedObjectManager) => void,
   preSaveAttributes?: DataSourceInternal.Scope,
   preSavePerObject?: (reporter: Reporter, set: { add(object: VersionedObject) }, object: T) => Promise<void>,
   preSavePerDomain?: (reporter: Reporter, set: { add(object: VersionedObject) }, objects: VersionedObject[]) => Promise<void>,
 }
 export type SafeValidators = Map<string, SafeValidator>;
-
-function filterObjects(validators: SafeValidators | undefined, objects: VersionedObject[]) {
-  if (validators) {
-    for (let o of objects) {
-      let validator = validators.get(o.manager().name());
-      if (validator && validator.filterObject)
-        validator.filterObject(o);
-    }
-  }
-}
 
 function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T[]) : Set<T> {
   let changed = new Set<T>();
@@ -119,32 +161,23 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
   return changed;
 }
 
-DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.implementation & { _safeValidators?: SafeValidators }>>{
-  async safeQuery(request: { [k: string]: any }) {
+DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.implementation & ExtDataSource>>{
+  safeQuery(request: { [k: string]: any }) {
     let sets = DataSourceInternal.parseRequest(<any>request, this.controlCenter());
-    let inv = await this.farPromise('implQuery', { tr: undefined, sets: sets });
-    if (inv.hasOneValue()) {
-      let r = inv.value();
-      for (let k in r)
-        filterObjects(this._safeValidators, r[k]);
-    }
-    return inv;
+    return this.farPromise('implQuery', { tr: undefined, sets: sets });
   },
-  async safeLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
-    let inv = await this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
-    if (inv.hasOneValue())
-      filterObjects(this._safeValidators, inv.value());
-    return inv;
+  safeLoad(w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
+    return this.farPromise('implLoad', { tr: undefined, objects: w.objects, scope: w.scope });
   },
   async safeSave(objects: VersionedObject.Categories.validation[]) {
     // TODO: Do we want to force load attributes in case of failure or for unchanged objects ?
     let changed = filterChangedObjectsAndPrepareNew(objects);
     if (changed.size === 0)
-      return Result.fromValue(objects);
+      return Result.fromValue(objects); // safe, there is no way new attributes have been loaded
 
     let begin = await this.farPromise('implBeginTransaction', undefined);
     if (!begin.hasOneValue())
-      return Result.fromResultWithNewValue(begin, objects);
+      return Result.fromResultWithNewValue(begin, objects); // safe, there is no way new attributes have been loaded
 
     let tr = begin.value();
     let reporter = new Reporter();

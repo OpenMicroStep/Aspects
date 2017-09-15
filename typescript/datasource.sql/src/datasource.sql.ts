@@ -164,14 +164,6 @@ export class SqlDataSource extends DataSource
     }
   }
 
-  scoped<P>(scope: (component: AComponent) => Promise<P>) : Promise<P> {
-    let component = {};
-    this.controlCenter().registerComponent(component);
-    return scope(component)
-      .then(v => { this.controlCenter().unregisterComponent(component); return Promise.resolve(v); })
-      .catch(v => { this.controlCenter().unregisterComponent(component); return Promise.reject(v); })
-  }
-
   execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
     let ctx: SqlMappedSharedContext = {
       cstor: SqlMappedQuery,
@@ -198,16 +190,22 @@ export class SqlDataSource extends DataSource
     };
   }
 
-  implQuery({ tr, sets }: { tr?: SqlDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
-    return this.scoped(async (component) => {
+  async implQuery({ tr, sets }: { tr?: SqlDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
+    let component = {};
+    this.controlCenter().registerComponent(component);
+    try {
       let ret = {};
       let ctx = this._ctx(tr, component);
       await Promise.all(sets
         .filter(s => s.name)
         .map(s => SqlQuery.execute(ctx, s)
-          .then((objects) => ret[s.name!] = objects)));
+        .then((objects) => ret[s.name!] = objects))
+        );
       return ret;
-    });
+    }
+    finally {
+      this.controlCenter().unregisterComponent(component);
+    }
   }
 
   async implLoad({tr, objects, scope} : {
@@ -215,34 +213,44 @@ export class SqlDataSource extends DataSource
     objects: VersionedObject[];
     scope: DataSourceInternal.Scope;
   }): Promise<VersionedObject[]> {
-    let types = new Map<Aspect.Installed, VersionedObject[]>();
-    for (let object of objects) {
-      let aspect = object.manager().aspect();
-      let list = types.get(aspect);
-      if (!list)
-        types.set(aspect, list = []);
-      list.push(object);
+    let component = {};
+    try {
+      this.controlCenter().registerComponent(component);
+      this.controlCenter().registerObjects(component, objects);
+
+      let types = new Map<Aspect.Installed, VersionedObject[]>();
+      for (let object of objects) {
+        let aspect = object.manager().aspect();
+        let list = types.get(aspect);
+        if (!list)
+          types.set(aspect, list = []);
+        list.push(object);
+      }
+      let sets = new Set<ObjectSet>();
+      for (let [aspect, list] of types) {
+        let set = new ObjectSet(aspect.name);
+        set.addType({ type: ConstraintType.MemberOf, value: aspect });
+        set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", list));
+        sets.add(set);
+      }
+      let set = new ObjectSet('load');
+      if (sets.size > 1) {
+        set.addType({ type: ConstraintType.UnionOf, value: sets });
+      }
+      else {
+        set = sets.values().next().value;
+      }
+      set.scope = DataSourceInternal.parseScope(scope, (type) => {
+        if (type === '_')
+          return types.keys();
+        return [this.controlCenter().aspectChecked(type)];
+      }).scope;
+      await SqlQuery.execute(this._ctx(tr, component), set);
+      return objects;
     }
-    let sets = new Set<ObjectSet>();
-    for (let [aspect, list] of types) {
-      let set = new ObjectSet(aspect.name);
-      set.addType({ type: ConstraintType.MemberOf, value: aspect });
-      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", list));
-      sets.add(set);
+    finally {
+      this.controlCenter().unregisterComponent(component);
     }
-    let set = new ObjectSet('load');
-    if (sets.size > 1) {
-      set.addType({ type: ConstraintType.UnionOf, value: sets });
-    }
-    else {
-      set = sets.values().next().value;
-    }
-    set.scope = DataSourceInternal.parseScope(scope, (type) => {
-      if (type === '_')
-        return types.keys();
-      return [this.controlCenter().aspectChecked(type)];
-    }).scope;
-    return await this.scoped(component => SqlQuery.execute(this._ctx(tr, component), set).then(() => objects));
   }
 
   async implBeginTransaction(): Promise<SqlDataSourceTransaction> {
