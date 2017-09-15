@@ -2,13 +2,17 @@ import { ControlCenter, PublicTransport, VersionedObject, VersionedObjectConstru
 import { Router, Request } from 'express';
 import * as bodyparser from 'body-parser';
 
-const text_middleware = bodyparser.text({type: () => true });
 
 const coder = new Transport.JSONCoder();
 export class ExpressTransport implements PublicTransport {
+  text_middleware: any;
+
   constructor(
     public app: Router,
-    public findObject: (cstor: VersionedObjectConstructor<VersionedObject>, id: Identifier, req: Request) => Promise<VersionedObject>) {}
+    public findObject: (cstor: VersionedObjectConstructor<VersionedObject>, id: Identifier, req: Request) => Promise<VersionedObject>,
+    options?: { body_limit: number }) {
+    this.text_middleware = bodyparser.text({type: () => true, limit:(options?options.body_limit:100000) });
+  }
 
   installMethod(cstor: VersionedObjectConstructor<VersionedObject>, method: Aspect.InstalledMethod) {
     let path = `/${cstor.definition.version}/${cstor.definition.name}/:id/${method.name}`;
@@ -16,7 +20,7 @@ export class ExpressTransport implements PublicTransport {
     let isRVoid = method.returnType.type === "void";
     console.info('GET:', path);
     if (!isA0Void)
-      this.app.use(path, text_middleware);
+      this.app.use(path, this.text_middleware);
     this.app[isA0Void ? "get" : "post"](path, (req, res) => {
       let id = req.params.id;
       this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id, req).then(async (entity) => {
