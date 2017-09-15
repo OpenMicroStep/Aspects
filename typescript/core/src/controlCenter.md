@@ -45,7 +45,7 @@ Unregister _oldObjects_ from _component_, then register _newObjects_ to _compone
 #### swapObjects(component: AComponent, oldObject?: array, newObject?: array)
 Unregister _oldObject_ from _component_ if _oldObject_ is not undefined, then register _newObject_ to _component_  if _newObject_ is not undefined.
 
-#### registeredObject(id: Identifier) : VersionedObject
+#### find(id: Identifier) : VersionedObject
 Returns the registered object that as the given _id_ if any.
 
 #### registeredObjects(component: AComponent) : [0, *, VersionedObject]

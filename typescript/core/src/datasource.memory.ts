@@ -293,7 +293,7 @@ export namespace InMemoryDataSource {
   function fromDSValue(ds: DataStore, tr: DataStoreCRUD, cc: ControlCenter, cmp: AComponent, value): any {
     const fix = (value: DataStoreObject) => {
       let lId = ds.fromDSId(value.id);
-      let vo = cc.registeredObject(lId);
+      let vo = cc.find(lId);
       if (!vo) {
         vo = cc.findOrCreate(lId, value.is);
         cc.registerObjects(cmp, [vo]);

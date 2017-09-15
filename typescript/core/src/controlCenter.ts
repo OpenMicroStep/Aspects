@@ -92,7 +92,7 @@ export class ControlCenter {
     return newObject;
   }
 
-  registeredObject(id: Identifier) : VersionedObject | undefined {
+  find(id: Identifier) : VersionedObject | undefined {
     return this._objects.get(id);
   }
 
@@ -167,7 +167,7 @@ export class ControlCenter {
 
   mergeObject(object: VersionedObject) {
     let m = object.manager();
-    let o = this.registeredObject(object.id());
+    let o = this.find(object.id());
     if (o && o !== object)
       o.manager().mergeWithRemote(m);
     return o || object;

@@ -666,7 +666,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let rdb_id = rtype && row[prefix + "__rid"];
         let rmapper = this.ctx.mappers[rtype]!;
         let rid = rmapper.fromDbKey(rmapper.attribute_id().fromDbKey(rdb_id));
-        let rvo = cc.registeredObject(rid)!;
+        let rvo = cc.find(rid)!;
         let rremoteAttributes = remotes.get(rvo)!;
         let rset = rremoteAttributes.get(rname);
         if (rset instanceof Set)
@@ -796,7 +796,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let classname = type.name;
       let mapper = this.ctx.mappers[classname];
       let subid = mapper.fromDbKey(value);
-      value = cc.registeredObject(subid);
+      value = cc.find(subid);
       if (!value) {
         value = cc.findOrCreate(subid, classname);
         cc.registerObjects(component, [value]);

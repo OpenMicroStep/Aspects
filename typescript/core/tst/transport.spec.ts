@@ -70,7 +70,7 @@ function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string,
     p1.cc.registerObjects(p1.component, [p1.db]);
 
     let res = coder.decode_handle_encode(cc, json, async (request) => {
-      let to = p1.cc.registeredObject(request.to)!;
+      let to = p1.cc.find(request.to)!;
       let inv = await Invocation.farPromise(to, request.method, request.args[0]);
       return inv.items();
     });

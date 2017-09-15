@@ -354,7 +354,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       let row_values = await this.ctx.db.select(sql_select);
       for (let row of row_values) {
         let {__is, _id, car, val, direct} = row as {__is?: number, _id: number, car: number, val: any, direct: boolean};
-        let vo = cc.registeredObject(_id)!;
+        let vo = cc.find(_id)!;
         let remoteAttributes = remotes.get(vo)!;
         let a = (direct ? car2attr_d : car2attr_r).get(car)!;
         val = this.ctx.config.obiValue_to_aspectValue(val, a.name);
@@ -411,7 +411,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
   loadValue(component: AComponent, value, is: number | undefined) {
     if (typeof is === "number") {
       let subid = value;
-      value = this.ctx.controlCenter.registeredObject(subid);
+      value = this.ctx.controlCenter.find(subid);
       if (!value) {
         let obi_is = this.ctx.systemObiById.get(is)!;
         let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
