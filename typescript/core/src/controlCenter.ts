@@ -131,7 +131,7 @@ export class ControlCenter {
       yield cstor.aspect;
   }
 
-  create<T extends VersionedObject>(classname: string, categories: string[]) : T {
+  create<T extends VersionedObject>(classname: string, categories: string[] = []) : T {
     let cstor = this.aspectConstructor(classname);
     if (!cstor)
       throw new Error(`cannot create ${classname}: no aspect found`);
