@@ -46,7 +46,7 @@ function init(flux: Flux<Context>) {
 function clean(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
   cc.unregisterObjects(component, [c0, c1, c2, c3, p0, p1, p2, p3, p4]);
-  assert.deepEqual(cc.registeredObjects(component), []);
+  assert.deepEqual([...cc.componentObjects(component)], []);
   cc.unregisterComponent(component);
   f.continue();
 }
@@ -407,7 +407,7 @@ function query_elementof_c1c2(f: Flux<Context>) {
 
 function query_mother_father_peoples(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
-  cc.registeredObjects(component).map(vo => vo.manager().unload());
+  [...cc.componentObjects(component)].map(vo => vo.manager().unload());
   db.farPromise('rawQuery', { name: "peoples", where: { $instanceOf: "People" }, scope: {
     People: {
       _: ['_firstname', '_lastname'],
@@ -431,7 +431,7 @@ function query_mother_father_peoples(f: Flux<Context>) {
 
 function query_father_tree(f: Flux<Context>) {
   let {Car, People, db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
-  cc.registeredObjects(component).map(vo => vo.manager().unload());
+  [...cc.componentObjects(component)].map(vo => vo.manager().unload());
   db.farPromise('rawQuery', {
     name: "peoples",
     where: { $instanceOf: "People" },

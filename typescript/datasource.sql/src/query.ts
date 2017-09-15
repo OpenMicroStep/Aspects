@@ -658,7 +658,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let remoteAttributes = remotes.get(vo);
       if (!remoteAttributes)
         remotes.set(vo, remoteAttributes = new Map<string, any>());
-      cc.registerObjects(this.ctx.component, [vo]);
+      cc.registerObject(this.ctx.component, vo);
 
       let rtype = row[prefix + "__ris"];
       if (rtype) {
@@ -799,7 +799,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       value = cc.find(subid);
       if (!value) {
         value = cc.findOrCreate(subid, classname);
-        cc.registerObjects(component, [value]);
+        cc.registerObject(component, value);
       }
     }
     return value;

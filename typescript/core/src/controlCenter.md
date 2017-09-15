@@ -31,6 +31,9 @@ Unregister _component_ with this controlCenter.
 If there is any registered object to _component_, the registration is removed.  
 If there is any invocation in progress for _component_, the invocation is discarded.
 
+#### registerObject(component: AComponent, object: VersionedObject)
+Register _object_ to _component_, allowing _component_ to manipulate it until the component or the objet is unregistered.
+
 #### registerObjects(component: AComponent, objects: array)
 Register _objects_ to _component_, allowing _component_ to manipulate them until the component or the objet is unregistered.
 
@@ -38,6 +41,11 @@ Register _objects_ to _component_, allowing _component_ to manipulate them until
 Unregister _objects_ of _component_.  
 Observers by _component_ on _objects_ are removed.  
 If there is any invocation in progress on one of _objects_, the invocation is discarded.
+
+#### unregisterObject(component: AComponent, object: VersionedObject)
+Unregister _object_ of _component_.  
+Observers by _component_ on _object_ are removed.  
+If there is any invocation in progress on _object_, the invocation is discarded.
 
 #### swapObjects(component: AComponent, oldObjects: array, newObjects: array)
 Unregister _oldObjects_ from _component_, then register _newObjects_ to _component_.
@@ -48,8 +56,8 @@ Unregister _oldObject_ from _component_ if _oldObject_ is not undefined, then re
 #### find(id: Identifier) : VersionedObject
 Returns the registered object that as the given _id_ if any.
 
-#### registeredObjects(component: AComponent) : [0, *, VersionedObject]
-Returns the list of registered object to _component_.
+#### componentObjects(component: AComponent) : <0, *, VersionedObject>
+Returns the set of objects registered to _component_.
 
 ### Object creation
 

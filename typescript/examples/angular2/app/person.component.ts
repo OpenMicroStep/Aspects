@@ -31,7 +31,7 @@ export class PersonComponent implements AfterViewInit, OnDestroy {
   }
 
   setPerson(p: Person.Aspects.client) {
-    controlCenter.registerObjects(this, [p]);
+    controlCenter.registerObject(this, p);
     dataSource.farEvent('load', { objects: [p], scope: ['_firstName', '_lastName', '_birthDate'] }, 'personLoaded', this);
   }
   personLoaded(notification: Notification) {

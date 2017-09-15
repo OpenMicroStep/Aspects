@@ -300,7 +300,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let manager = vo.manager();
         let path_n = _path || "";
         _path = _path || ".";
-        cc.registerObjects(this.ctx.component, [vo]);
+        cc.registerObject(this.ctx.component, vo);
         let idsByType = idsByPathType.get(_path);
         if (!idsByType)
           idsByPathType.set(_path, idsByType = new Map<Aspect.Installed, number[]>());
@@ -417,7 +417,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
         value = new (this.ctx.controlCenter.aspectConstructorChecked(classname))();
         value.manager().setId(subid);
-        this.ctx.controlCenter.registerObjects(component, [value]);
+        this.ctx.controlCenter.registerObject(component, value);
       }
     }
     return value;

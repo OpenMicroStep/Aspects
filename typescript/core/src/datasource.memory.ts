@@ -37,7 +37,7 @@ export class InMemoryDataSource extends DataSource
     let lManager = lObject.manager();
     let aspect = lManager.aspect();
     let remoteAttributes = new Map<keyof VersionedObject, any>();
-    cc.registerObjects(component, [lObject]);
+    cc.registerObject(component, lObject);
     function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
       let cls_scope = scope[aspect.name];
       if (!cls_scope)
@@ -176,7 +176,7 @@ export class InMemoryDataSource extends DataSource
           }
           if (diags.length > n) {
             let remoteAttributes = new Map<keyof VersionedObject, any>();
-            cc.registerObjects(component, [lObject]);
+            cc.registerObject(component, lObject);
             for (let k of lManager._localAttributes.keys())
               remoteAttributes.set(k, tr.fromDSValue(cc, component, dObject.attributes.get(k)));
             lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
@@ -296,7 +296,7 @@ export namespace InMemoryDataSource {
       let vo = cc.find(lId);
       if (!vo) {
         vo = cc.findOrCreate(lId, value.is);
-        cc.registerObjects(cmp, [vo]);
+        cc.registerObject(cmp, vo);
       }
       return vo;
     }

@@ -1,6 +1,6 @@
 import {
   FarTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Result, DataSource,
-  Aspect, AspectCache,
+  Aspect, AspectCache, ImmutableSet,
 } from './core';
 
 export type Identifier = string | number;
@@ -13,7 +13,7 @@ export interface AComponent {
 export class ControlCenter {
   /** @internal */ readonly _notificationCenter = new NotificationCenter();
   /** @internal */ readonly _objects = new Map<Identifier, VersionedObject>();
-  /** @internal */ readonly _components = new Set<AComponent>();
+  /** @internal */ readonly _components = new Map<AComponent, Set<VersionedObject>>();
   /** @internal */ readonly _aspects = new Map<string, Aspect.Constructor>();
   /** @internal */ readonly _cache: AspectCache;
 
@@ -27,56 +27,86 @@ export class ControlCenter {
 
   /// category registration
   registerComponent(component: AComponent) {
-    this._components.add(component);
+    if (!this._components.has(component))
+      this._components.set(component, new Set());
   }
 
   unregisterComponent(component: AComponent) {
-    if (!this._components.delete(component))
+    let objects = this._components.get(component);
+    if (!objects)
       throw new Error(`cannot remove unregistered component`);
-    this._objects.forEach((o, k) => {
-      let m = o.manager();
-      if (m._components.delete(component)) {
-        if (m._components.size === 0) {
-          this._objects.delete(k);
-          o.__manager = new VersionedObjectManager.UnregisteredVersionedObjectManager(m);
-        }
+    for (let object of objects) {
+      let m = object.manager();
+      if (!m._components.delete(component))
+        throw new Error(`control center '_components' is corrupted`);
+      if (m._components.size === 0) {
+        if (!this._objects.delete(object.id()))
+          throw new Error(`control center '_objects' is corrupted`);
+        object.__manager = new VersionedObjectManager.UnregisteredVersionedObjectManager(m);
       }
-    });
+    }
+    this._components.delete(component);
   }
 
-  registerObjects(component: AComponent, objects: VersionedObject[]) {
-    if (!this._components.has(component))
-      throw new Error(`you must register the component with 'registerComponent' before registering objects`);
-    const notificationCenter = this.notificationCenter();
-    for (let o of objects) {
-      if (o.controlCenter() !== this)
-        throw new Error(`you can't register an object that is associated with another control center`);
-      let id = o.id();
-      let i = this._objects;
-      let d = i.get(id);
-      if (!d)
-        i.set(id, d = o);
-      if (d !== o)
-        throw new Error(`a different object with the same id (${id}) is already registered`);
-      d.manager().registerComponent(component);
+  private _component_objects(component: AComponent) {
+    let component_objects = this._components.get(component);
+    if (!component_objects)
+      throw new Error(`you must register the component with 'registerComponent' before working with it`);
+    return component_objects;
+  }
+
+  private _registerObject(component: AComponent, component_objects: Set<VersionedObject>, object: VersionedObject) {
+    if (object.controlCenter() !== this)
+      throw new Error(`you can't register an object that is associated with another control center`);
+    let id = object.id();
+    let d = this._objects.get(id);
+    if (!d)
+      this._objects.set(id, d = object);
+    if (d !== object)
+      throw new Error(`a different object with the same id (${id}) is already registered`);
+    component_objects.add(object);
+    d.manager().registerComponent(component);
+  }
+
+  private _unregisterObject(component: AComponent, component_objects: Set<VersionedObject>, object: VersionedObject) {
+    let id = object.id();
+    if (!this._objects.get(id))
+      throw new Error(`cannot unregister an object that is not registered`);
+    let m = object.manager();
+    if (!m._components.delete(component))
+      throw new Error(`cannot unregister an object that is not registered by the given component`);
+    if (!component_objects.delete(object))
+      throw new Error(`control center '_components' is corrupted`);
+    if (m._components.size === 0) {
+      if (!this._objects.delete(id))
+        throw new Error(`control center '_objects' is corrupted`);
+      object.__manager = new VersionedObjectManager.UnregisteredVersionedObjectManager(m);
     }
   }
 
+  isRegistered(component: AComponent, object: VersionedObject): boolean {
+    let component_objects = this._components.get(component);
+    return component_objects ? component_objects.has(object) : false;
+  }
+
+  registerObject(component: AComponent, object: VersionedObject) {
+    this._registerObject(component, this._component_objects(component), object);
+  }
+
+  registerObjects(component: AComponent, objects: VersionedObject[]) {
+    let component_objects = this._component_objects(component);
+    for (let object of objects)
+      this._registerObject(component, component_objects, object);
+  }
+
+  unregisterObject(component: AComponent, object: VersionedObject) {
+    this._unregisterObject(component, this._component_objects(component), object);
+  }
+
   unregisterObjects(component: AComponent, objects: VersionedObject[]) {
-    objects.forEach(o => {
-      let i = this._objects;
-      let id = o.id();
-      let d = i.get(id);
-      if (!d)
-        throw new Error(`cannot unregister an object that is not registered`);
-      let m = o.manager();
-      if (!m._components.delete(component))
-        throw new Error(`cannot unregister an object that is not registered by the given component`);
-      if (m._components.size === 0) {
-        i.delete(id);
-        o.__manager = new VersionedObjectManager.UnregisteredVersionedObjectManager(m);
-      }
-    });
+    let component_objects = this._component_objects(component);
+    for (let object of objects)
+      this._unregisterObject(component, component_objects, object);
   }
 
   swapObjects<T extends VersionedObject>(component: AComponent, oldObjects: T[], newObjects: T[]) : T[] {
@@ -96,13 +126,15 @@ export class ControlCenter {
     return this._objects.get(id);
   }
 
-  registeredObjects(component: AComponent) : VersionedObject[] {
-    let ret = <VersionedObject[]>[];
-    this._objects.forEach((o, k) => {
-      if (o.manager()._components.has(component))
-        ret.push(o);
-    });
-    return ret;
+  findChecked(id: Identifier) : VersionedObject {
+    let vo = this._objects.get(id);
+    if (!vo)
+      throw new Error(`cannot find object with id ${id}`);
+    return vo;
+  }
+
+  componentObjects(component: AComponent) : ImmutableSet<VersionedObject> {
+    return this._component_objects(component);
   }
 
   /// category creation
