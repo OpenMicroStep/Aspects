@@ -212,8 +212,8 @@ export abstract class FlatCoder<T> {
           let enc = s.constructor && self.encoderByCstor.get(s.constructor);
           if (!enc) {
             for (enc of self.encoders) {
-              if (enc.canEncode(this, s))
-                break;
+              if (enc.canEncode(this, s)) break
+              else enc = undefined;
             }
             if(!enc)
               throw new Error(`cannot encode ${s.constructor.name}`);
