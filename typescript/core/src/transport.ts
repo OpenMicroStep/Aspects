@@ -162,6 +162,48 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
   } as ObjectFlatCoding<any[], any[]>,
 ];
 
+type EncodedBinary = { __is__: "Binary", data:  any[] };
+
+if (typeof Buffer !== "undefined") { // nodejs
+  jsonEncoders.push({ is: "Binary",
+    canEncode(e, s) { return s instanceof Buffer },
+    canDecode(d, s) { return s && s.__is__ === "Binary" },
+    encode(e, s) {
+      let r: any[] = [];
+      for (var i = 0; i < s.length; i++) {
+        r.push(e.encode(s[i]));
+      }
+      return { __is__: "Binary", data: r};
+    },
+    decode(d, s) {
+      let r: any = [] ;
+       for (let v of s.data)
+        r.push(d.decode(v));
+      return r;
+    },
+  } as ObjectFlatCoding<Buffer,  EncodedBinary>)
+}
+
+if (typeof Uint8Array !== "undefined") { //JS
+    jsonEncoders.push({ is: "Binary",
+    canEncode(e, s) { return s instanceof Uint8Array },
+    canDecode(d, s) { return s && s.__is__ === "Binary" },
+    encode(e, s) {
+      let r: any[] = [] ;
+      for (let v of s)
+        r.push(e.encode(v));
+      return { __is__: "Binary", data:r  };
+    },
+    decode(d, s) {
+      let r: any = [] ;
+       for (let v of s.data)
+        r.push(d.decode(v));
+      return r;
+    },
+  } as ObjectFlatCoding<Uint8Array,  EncodedBinary>)
+}
+
+
 export abstract class FlatCoder<T> {
   private encoderByCstor = new Map<Function, ObjectFlatCoding<any, any>>();
   private encoderByName: Map<string, ObjectFlatCoding<any, any>>;
