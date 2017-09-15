@@ -243,8 +243,11 @@ export abstract class FlatCoder<T> {
       decodedObjectsToRemoteId: decodedObjectsToRemoteId,
       decode(s: any): any {
         if (s && typeof s === "object") {
-          if (s.__is__)
-            return self.encoderByName.get(s.__is__)!.decode(this, s);
+          if (s.__is__) {
+            let enc = self.encoderByName.get(s.__is__)
+            if (!enc) throw new Error(`cannot decode ${s.__is__}`);
+            return enc.decode(this, s);
+          }
           for (let enc of self.encodersWithoutName)
             if (enc.canDecode(this, s))
               return enc.decode(this, s);
