@@ -164,6 +164,10 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
 
 type EncodedBinary = { __is__: "Binary", data:  any[] };
 
+declare class Buffer {
+  [s: number]: number;
+  length: number;
+}
 if (typeof Buffer !== "undefined") { // nodejs
   jsonEncoders.push({ is: "Binary",
     canEncode(e, s) { return s instanceof Buffer },
