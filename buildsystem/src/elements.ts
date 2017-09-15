@@ -61,7 +61,7 @@ export class TypeElement extends Element {
       case 'dictionary':
         return embedType(isAttribute, [`ImmutableObject<`, ``], `{${Object.keys(this.properties!).map(k => `${k === '*' ? '[k: string]' : `${k}`}: ${this.properties![k].__decl(isAttribute)}`).join(', ')}}` , [`>`, ``]);
       case 'or':
-        return this.types ? this.types.map(t => t.__decl(isAttribute)).join(' | ') : 'any';
+        return this.types ? `(${this.types.map(t => t.__decl(isAttribute)).join(' | ')})` : 'any';
     }
   }
 
