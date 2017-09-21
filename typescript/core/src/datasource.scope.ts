@@ -174,7 +174,7 @@ function parseScopePath(ctx: ParseScopeContext, iter: IterableIterator<void>) {
     done = iter.next().done;
     if (ctx.safe_aspect_path_cnt > 0 && ctx.safe_aspect_path_cnt !== n)  {
       if (n === 0)
-        n = ctx.safe_aspect_path_cnt
+        n = ctx.safe_aspect_path_cnt;
       else
         throw new Error(`incompatible sort count`);
     }

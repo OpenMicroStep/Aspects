@@ -1,9 +1,9 @@
-import {Aspect, DataSource, VersionedObject, VersionedObjectConstructor, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
-import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
+import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
+import {Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {OuiDB, ObiQuery, ObiParseContext, ObiDefinition, parseObis, getOne, ObiSharedContext} from './index.priv';
-import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnectorCRUD, Pool} from '@openmicrostep/aspects.sql';
+import {OuiDB, ObiQuery, ObiDefinition, getOne, ObiSharedContext} from './index.priv';
+import {DBConnectorTransaction, DBConnectorCRUD } from '@openmicrostep/aspects.sql';
 
 export namespace ObiDataSource {
   export interface Config {
@@ -18,8 +18,7 @@ export namespace ObiDataSource {
 function pass(a) { return a; }
 
 export type ObiDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
-export class ObiDataSource extends DataSource
-{
+export class ObiDataSource extends DataSource {
   constructor(manager: VersionedObjectManager<ObiDataSource>,
     public db: OuiDB,
     config: Partial<ObiDataSource.Config>,
@@ -43,7 +42,7 @@ export class ObiDataSource extends DataSource
   };
   static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
   static installAspect(on: ControlCenter, name: 'server'): { new(db?: OuiDB, config?: Partial<ObiDataSource.Config>): DataSource.Aspects.server };
-  static installAspect(on: ControlCenter, name:string): any {
+  static installAspect(on: ControlCenter, name: string): any {
     return on.cache().createAspect(on, name, this);
   }
 
@@ -102,7 +101,7 @@ export class ObiDataSource extends DataSource
       }
       value = this.config.aspectValue_to_obiValue(value, attribute.name);
       await this.db.raw_insert(tr, table, oid, cid, value);
-    }
+    };
     const remove = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
       if (value instanceof VersionedObject) {
         let state = value.manager().state();
@@ -116,15 +115,13 @@ export class ObiDataSource extends DataSource
       }
       value = this.config.aspectValue_to_obiValue(value, attribute.name);
       await this.db.raw_delete(tr, table, oid, cid, value);
-    }
+    };
 
     let manager = object.manager();
     let aspect = manager.aspect();
     let oid = manager.id();
-    let maker = this.db.maker;
     let version = manager.versionVersion();
     let state = manager.state();
-    let n = reporter.diagnostics.length;
 
     if (state === VersionedObjectManager.State.DELETED) {
       await this.db.raw_delete_obi(tr, reporter, oid as number);

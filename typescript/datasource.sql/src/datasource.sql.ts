@@ -1,17 +1,16 @@
 import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
-import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
+import {Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {SqlMappedObject, SqlMappedAttribute} from './mapper';
+import {SqlMappedObject} from './mapper';
 export * from './mapper';
 import {SqlQuery, SqlMappedQuery, SqlMappedSharedContext, mapValue} from './query';
-import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, DBConnectorCRUD, Pool} from './index';
+import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, DBConnectorCRUD} from './index';
 
 export type SqlDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
-export class SqlDataSource extends DataSource
-{
+export class SqlDataSource extends DataSource {
   constructor(manager: VersionedObjectManager<SqlDataSource>,
-    public mappers: { [s: string] : SqlMappedObject },
+    public mappers: { [s: string]: SqlMappedObject },
     private connector: DBConnector,
     private maker: SqlMaker
   ) {
@@ -26,8 +25,8 @@ export class SqlDataSource extends DataSource
     aspects: DataSource.definition.aspects
   };
   static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
-  static installAspect(on: ControlCenter, name: 'server'): { new(mappers?: { [s: string] : SqlMappedObject }, connector?: DBConnector, maker?: SqlMaker): DataSource.Aspects.server };
-  static installAspect(on: ControlCenter, name:string): any {
+  static installAspect(on: ControlCenter, name: 'server'): { new(mappers?: { [s: string]: SqlMappedObject }, connector?: DBConnector, maker?: SqlMaker): DataSource.Aspects.server };
+  static installAspect(on: ControlCenter, name: string): any {
     return on.cache().createAspect(on, name, this);
   }
 
@@ -115,8 +114,6 @@ export class SqlDataSource extends DataSource
     version++;
     if (isNew) {
       for (let c of mapper.inserts) {
-        let autoinc = "";
-        let key = "";
         let values = valuesByTable.get(c)!;
         let output_columns: string[] = [];
         let columns: string[] = [];
@@ -135,8 +132,8 @@ export class SqlDataSource extends DataSource
               let tvalues = valuesByTable.get(value.insert!);
               if (!tvalues || !tvalues.has(value.value!))
                 throw new Error(`referencing a previously created value that doesn't exists: ${value.insert}.${value.value}`);
-              values.set(value.name, tvalues.get(value.value!)); break;
-            }
+              values.set(value.name, tvalues.get(value.value!));
+            } break;
             case 'value': values.set(value.name, value.value); break;
             default:
               throw new Error(`unsupported sql-value type: ${value.type}`);

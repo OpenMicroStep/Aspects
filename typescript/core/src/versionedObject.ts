@@ -279,7 +279,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           other[data.relation.attribute] = v;
         }
         else if (add && other_manager.state() === VersionedObjectManager.State.NEW) {
-          let v = other[data.relation.attribute];
           switch (otype.type) {
             case 'set':   other[data.relation.attribute] = (new Set<VersionedObject>()).add(this._object); break;
             case 'class': other[data.relation.attribute] = this._object; break;
@@ -378,20 +377,20 @@ export namespace VersionedObjectManager {
   }
   UnregisteredVersionedObjectManager.prototype.id = function() {
     return this._manager.id();
-  }
+  };
   UnregisteredVersionedObjectManager.prototype.controlCenter = function() {
     return this._manager.controlCenter();
-  }
+  };
   UnregisteredVersionedObjectManager.prototype.aspect = function() {
     return this._manager.aspect();
-  }
+  };
   UnregisteredVersionedObjectManager.prototype.name = function() {
     return this._manager.name();
-  }
+  };
   UnregisteredVersionedObjectManager.prototype.registerComponent = function(component: AComponent) {
     this._manager._object.__manager = this._manager;
     this._manager.registerComponent(component);
-  }
+  };
   UnregisteredVersionedObjectManager.prototype.evenIfUnregistered = function() {
     return this._manager;
   };
@@ -405,7 +404,7 @@ export class VersionedObject {
       static installAspect(cc: ControlCenter, name: string): { new(): VersionedObject } {
         return cc.cache().createAspect(cc, name, this);
       }
-    }
+    };
   }
 
   static parent: VersionedObjectConstructor | undefined = undefined;

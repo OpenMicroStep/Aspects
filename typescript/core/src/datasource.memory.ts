@@ -1,11 +1,10 @@
 import {DataSource, areEquals, VersionedObject, VersionedObjectManager, Result, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect, ImmutableMap} from './core';
-import {Reporter, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
+import {Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
 
 export type MemoryDataSourceTransaction = { tr: InMemoryDataSource.DataStoreTransaction };
-export class InMemoryDataSource extends DataSource
-{
+export class InMemoryDataSource extends DataSource {
   constructor(manager: VersionedObjectManager<InMemoryDataSource>, private ds: InMemoryDataSource.DataStore) {
     super(manager);
   }
@@ -18,7 +17,7 @@ export class InMemoryDataSource extends DataSource
   };
   static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
   static installAspect(on: ControlCenter, name: 'server'): { new(ds?: InMemoryDataSource.DataStore): DataSource.Aspects.server };
-  static installAspect(on: ControlCenter, name:string): any {
+  static installAspect(on: ControlCenter, name: string): any {
     return on.cache().createAspect(on, name, this);
   }
 
@@ -41,7 +40,7 @@ export class InMemoryDataSource extends DataSource
     function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
       let cls_scope = scope[aspect.name];
       if (!cls_scope)
-        return
+        return;
       let attributes = cls_scope[path] || cls_scope['_'];
       if (!attributes)
         return;
@@ -55,7 +54,7 @@ export class InMemoryDataSource extends DataSource
         let spath = `${npath}${a.name}.`;
         this._load(component, ds, scope, spath, spath, lObject, dObject);
       }
-    }
+    };
     for (let a of attributes(aspect, scope, path)) {
       let v = dObject.get(a.name);
       if (v instanceof Set || v instanceof Array) {
@@ -138,8 +137,11 @@ export class InMemoryDataSource extends DataSource
     return this.ds.beginTransaction();
   }
 
-  implSave({tr, objects} : { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
-    let saved = new Set<VersionedObject>();
+  implSave({tr, objects}: { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
+    let cc = this.controlCenter();
+    let diags: Diagnostic[] = [];
+    let component = {};
+
     const save = (lObject: VersionedObject): InMemoryDataSource.DataStoreObject | undefined => {
       let dVersion = tr.versions.get(lObject);
       if (dVersion) {
@@ -168,7 +170,7 @@ export class InMemoryDataSource extends DataSource
           for (let [k, lv] of lManager._localAttributes) {
             let dbv = dObject.attributes.get(k);
             let exv = lManager._versionAttributes.get(k);
-            if (!areEquals(exv,dbv))
+            if (!areEquals(exv, dbv))
               diags.push({ type: "error", msg: `cannot update ${lObject.id()}: attribute ${k} mismatch` });
             else
               dObject.attributes.set(k, tr.toDSValue(lv, create));
@@ -192,18 +194,15 @@ export class InMemoryDataSource extends DataSource
           dObject.attributes.set(k, tr.toDSValue(lv, create));
         return dObject;
       }
-    }
+    };
 
-    const create = (vo) : InMemoryDataSource.DataStoreObject | undefined => {
+    function create(vo) : InMemoryDataSource.DataStoreObject | undefined {
       if (objects.has(vo))
         return save(vo)!;
       diags.push({ type: "error", msg: `cannot save, the object ${vo.id()} is not is the save list` });
       return undefined;
-    }
+    };
 
-    let cc = this.controlCenter();
-    let diags: Diagnostic[] = [];
-    let component = {};
     cc.registerComponent(component);
     for (let lObject of objects) {
       save(lObject);
@@ -230,7 +229,7 @@ export namespace InMemoryDataSource {
     version: number;
     attributes: Map<string, any>;
 
-    constructor(is : string, id: string, version: number, attributes = new Map<string, any>()) {
+    constructor(is: string, id: string, version: number, attributes = new Map<string, any>()) {
       this.is = is;
       this.id = id;
       this.version = version;
@@ -242,7 +241,7 @@ export namespace InMemoryDataSource {
     }
 
     get(name: string) {
-      if(name === "_id") return this.id;
+      if (name === "_id") return this.id;
       if (name === "_version") return this.version;
       return this.attributes.get(name);
     }
@@ -285,7 +284,7 @@ export namespace InMemoryDataSource {
     const fix = (value: VersionedObject) => {
       let dsId = ds.toDSId(value.id());
       return tr.get(dsId) || (create && create(value)) || new DataStoreObject(value.manager().name(), ds.toDSId(value.id()), -1);
-    }
+    };
     return fixVOValue(value, fix);
   }
 
@@ -298,7 +297,7 @@ export namespace InMemoryDataSource {
         cc.registerObject(cmp, vo);
       }
       return vo;
-    }
+    };
     return fixDSValue(value, fix);
   }
 
@@ -306,7 +305,6 @@ export namespace InMemoryDataSource {
     private prefix = "memory:";
     private idCounter = 0;
     private _objects = new Map<Identifier, DataStoreObject>();
-    private _locks = new Map<VersionedObject, Set<DataStoreTransaction>>();
 
     beginTransaction() {
       return new DataStoreTransaction(this);

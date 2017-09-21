@@ -1,17 +1,10 @@
-import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
+import {Aspect, VersionedObject, Identifier, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {SqlBinding, SqlMaker, SqlQuery, SqlQuerySharedContext, DBConnectorCRUD} from '@openmicrostep/aspects.sql';
+import {SqlBinding, SqlQuery, SqlQuerySharedContext, DBConnectorCRUD} from '@openmicrostep/aspects.sql';
 import {ObiDefinition, SysObiDefinition, getOne, ObiDataSource} from './index.priv';
 import ConstraintValue = DataSourceInternal.ConstraintValue;
 import scope_at_type_path = DataSourceInternal.ResolvedScope.scope_at_type_path;
-
-function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O) : O[] | undefined {
-  return arr ? arr.map(map) : undefined;
-}
-function isMonoAttribute(a: Aspect.InstalledAttribute) : boolean {
-  return a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary";
-}
 
 export function mapValue(def: ObiDefinition, ctx: ObiSharedContext, value, isId: boolean) {
   if (value instanceof VersionedObject) {
@@ -21,16 +14,14 @@ export function mapValue(def: ObiDefinition, ctx: ObiSharedContext, value, isId:
 }
 
 export interface ObiSharedContext extends SqlQuerySharedContext<ObiSharedContext, ObiQuery> {
-  db: DBConnectorCRUD,
-  config: ObiDataSource.Config,
-  systemObiByName: Map<string, SysObiDefinition>,
-  systemObiById: Map<number, SysObiDefinition>,
-  car_entityid: number,
-  car_type: ObiDefinition,
-  car_table: ObiDefinition,
+  db: DBConnectorCRUD;
+  config: ObiDataSource.Config;
+  systemObiByName: Map<string, SysObiDefinition>;
+  systemObiById: Map<number, SysObiDefinition>;
+  car_entityid: number;
+  car_type: ObiDefinition;
+  car_table: ObiDefinition;
 }
-
-const __is = "f4e21b09-793d-447a-b92c-5a2e76d939f2";
 
 export namespace ObiQuery {
   export interface CarInfo {
@@ -72,7 +63,6 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
   }
 
   setInitialRecursion(q_n: ObiQuery) {
-    let maker = this.ctx.maker;
     let c = q_n.initialFromKeys.map(k => ({ sql: this.ctx.maker.column(q_n.initialFromTable!, k), bind: [] }));
     this.addDefaultInitialFrom();
     this.addInitialFrom(q_n.from, q_n.initialFromTable!, q_n.initialFromKeys, c);
@@ -262,7 +252,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     let mono_rows = await this.ctx.db.select(mono_query);
     for (let row of mono_rows) {
       let { __is, _id, _version } = row as any;
-      let is = this.ctx.config.obiEntity_to_aspectClassname(__is)
+      let is = this.ctx.config.obiEntity_to_aspectClassname(__is);
       ret.set(_id, { __is: is, _id: _id, _version: _version });
     }
     return ret;
@@ -370,7 +360,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
           remoteAttributes.set(a.name, val);
         }
       }
-    }
+    };
     for (let [path, idsByType] of idsByPathType) {
       let tables = new Map<string, { dor: SqlBinding[], ror: SqlBinding[] }>();
       for (let [type, ids] of idsByType) {

@@ -1,10 +1,10 @@
-import {DataSourceInternal, ImmutableList} from '@openmicrostep/aspects';
+import {DataSourceInternal} from '@openmicrostep/aspects';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
 type SqlBindingM = { sql: string, bind: any[] };
 export type SqlBindingW = { sql: string, bind: ReadonlyArray<any> };
 export type SqlBinding = Readonly<SqlBindingW>;
-export class SqlMaker {
+export abstract class SqlMaker {
   protected push_bindings(bind: any[], bindings: SqlBinding[]) {
     for (let b of bindings)
       bind.push(...b.bind);
@@ -100,7 +100,7 @@ export class SqlMaker {
 
   protected _join(kind: SqlMaker.JoinType, sql_select: string, on?: SqlBinding) : string {
     let sql_kind: string;
-    switch(kind) {
+    switch (kind) {
       case "left": sql_kind = on ? "LEFT JOIN" : "NATURAL LEFT JOIN"; break;
       case "inner": sql_kind = on ? "INNER JOIN" : "NATURAL INNER JOIN"; break;
       case "cross": sql_kind = on ? "CROSS JOIN" : "CROSS JOIN"; break;
@@ -209,11 +209,10 @@ export class SqlMaker {
 
   op(sql_column: string, operator: DataSourceInternal.ConstraintOnValueTypes, value): SqlBinding {
     switch (operator) {
-      case ConstraintType.Equal: {
+      case ConstraintType.Equal:
         if (value === null || value === undefined)
           return { sql: `${sql_column} IS NULL`, bind: [] };
         return { sql: `${sql_column} = ?`       , bind: [value] };
-      }
       case ConstraintType.NotEqual:           return { sql: `${sql_column} <> ?`      , bind: [value] };
       case ConstraintType.GreaterThan:        return { sql: `${sql_column} > ?`       , bind: [value] };
       case ConstraintType.GreaterThanOrEqual: return { sql: `${sql_column} >= ?`      , bind: [value] };

@@ -1,4 +1,4 @@
-import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
+import {DBConnector, SqlBinding, SqlMaker} from './index';
 
 class OracleSqlMaker extends SqlMaker {
   quote(value: string) {

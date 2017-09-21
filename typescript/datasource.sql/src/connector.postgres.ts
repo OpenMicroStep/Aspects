@@ -1,11 +1,11 @@
-import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
+import {DBConnector, SqlBinding, SqlMaker} from './index';
 
 class PostgresSqlMaker extends SqlMaker {
   quote(value: string) {
     return `"${value.replace(/"/g, '""')}"`;
   }
 
-  value_null_typed(type: SqlMaker.NullType) : string {
+  value_null_typed(type: SqlMaker.NullType): string {
     switch (type) {
       case "string": return "NULL::text";
       case "integer": return "NULL::integer";
@@ -14,7 +14,7 @@ class PostgresSqlMaker extends SqlMaker {
     return "NULL";
   }
 
-  insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]) : SqlBinding {
+  insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]): SqlBinding {
     let sql =`INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')}) VALUES (${this.join_sqls(sql_values, ',')})`;
     if (output_columns.length > 0)
       sql += ` RETURNING ${output_columns.map(c => this.quote(c)).join(',')}`;
@@ -83,13 +83,13 @@ export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { n
     });
   },
   beginTransaction(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query("BEGIN", (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.query("BEGIN", (err) => err ? reject(err) : resolve()); });
   },
   commit(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query("COMMIT", (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.query("COMMIT", (err) => err ? reject(err) : resolve()); });
   },
   rollback(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query("ROLLBACK", (err) => err ? reject(err) : resolve()) });
+    return new Promise<any>((resolve, reject) => { db.query("ROLLBACK", (err) => err ? reject(err) : resolve()); });
   },
   transform(sql) { return DBConnector.transformBindings(sql, idx => `$${idx + 1}`); },
 });

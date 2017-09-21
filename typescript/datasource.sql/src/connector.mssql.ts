@@ -1,4 +1,4 @@
-import {DBConnector, DBConnectorTransaction, SqlBinding, SqlMaker} from './index';
+import {DBConnector, SqlBinding, SqlMaker} from './index';
 
 
 class MSSQLMaker extends SqlMaker {
@@ -22,12 +22,11 @@ MSSQLMaker.prototype.select_with_recursive = undefined; // TODO: CTE must be top
 function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
   let TYPES = tedious.TYPES;
   let request = new tedious.Request(sql.sql, cb);
-  let rows: object[] = [];
   for (let i = 0; i < sql.bind.length; i++) {
     let bind = sql.bind[i];
     let type;
-    switch(typeof bind) {
-      case 'number': {
+    switch (typeof bind) {
+      case 'number':
         if (Number.isInteger(bind)) {
           type = TYPES.BigInt;
           bind = `${bind}`;
@@ -36,15 +35,13 @@ function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
           type = TYPES.Real;
         }
         break;
-      }
       case 'boolean': type = TYPES.Bit; break;
       case 'string': type = TYPES.VarChar; break;
-      case 'object': {
+      case 'object':
         if (bind instanceof Date) type = TYPES.DateTime;
         else if (bind instanceof Buffer) type = TYPES.VarBinary;
         else if (bind === null) type = TYPES.VarChar;
         break;
-      }
       case 'undefined': type = TYPES.VarChar; bind = null; break;
     }
     if (!type)

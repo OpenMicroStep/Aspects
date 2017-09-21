@@ -121,7 +121,6 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       return q_n;
   }
   setInitialRecursion(q_n: SqlQuery<SharedContext>) {
-    let maker = this.ctx.maker;
     let c = q_n.initialFromKeys.map(k => ({ sql: this.ctx.maker.column(q_n.initialFromTable!, k), bind: [] }));
     this.addInitialFrom(q_n.from, q_n.initialFromTable!, q_n.initialFromKeys, c);
   }
@@ -317,7 +316,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
           let u_n = c.value[1];
           let u_np1 = c.value[2];
           let q_0 = await SqlQuery.build(this.ctx, u_0);
-          let q_n = this.create_q_n(q_0, u_n)
+          let q_n = this.create_q_n(q_0, u_n);
           let q_np1 = await SqlQuery.build(this.ctx, u_np1);
           await this.setInitialUnionOfAlln(q_0, q_n, q_np1);
           break;

@@ -37,13 +37,13 @@ export namespace DataSourceInternal {
       }
       return a === b ? 0 : (a < b ? -1 : +1 );
     },
-  }
+  };
   export class FilterContext<T> {
     _resolution = new Map<ObjectSet, Solution<T>>();
     constructor(public objects: T[] = [], public mapper: Mapper<T>) {}
 
     solution(set: ObjectSet) {
-      let s = this._resolution.get(set)!
+      let s = this._resolution.get(set)!;
       if (!s) {
         s = {
           partial: this.solvePartial(set),
@@ -94,7 +94,7 @@ export namespace DataSourceInternal {
     private pass(set: ObjectSet, constraint: Constraint, prefix: string, object: T) : boolean {
       let ok = true;
       if (constraint instanceof ConstraintTree) {
-        switch(constraint.type) {
+        switch (constraint.type) {
           case ConstraintType.And: ok = constraint.value.every(c => this.pass(set, c, prefix + constraint.prefix, object)); break;
           case ConstraintType.Or : ok = constraint.value.some (c => this.pass(set, c, prefix + constraint.prefix, object)); break;
         }
@@ -154,12 +154,10 @@ export namespace DataSourceInternal {
                 s.full = sol_u_0;
               }
               ok = s.full!.has(object);
-              break;
-            }
+            } break;
             case ConstraintType.Recursion: {
               ok = this.solveFull(c.value).has(object);
-              break;
-            }
+            } break;
           }
           if (!ok)
             break;
@@ -175,7 +173,7 @@ export namespace DataSourceInternal {
     private passVars(set: ObjectSet, set1: ObjectSet, o1: T, set2: ObjectSet, o2: T, constraint: Constraint, prefix: string) : boolean {
       let ok = true;
       if (constraint instanceof ConstraintTree) {
-        switch(constraint.type) {
+        switch (constraint.type) {
           case ConstraintType.And: ok = constraint.value.every(c => this.passVars(set, set1, o1, set2, o2, c, prefix + constraint.prefix)); break;
           case ConstraintType.Or : ok = constraint.value.some (c => this.passVars(set, set1, o1, set2, o2, c, prefix + constraint.prefix)); break;
         }
@@ -583,7 +581,7 @@ export namespace DataSourceInternal {
       let ret = {
         compatibleAspects: new Set<Aspect.Installed>(),
         attributes: new Map<string, Aspect.InstalledAttribute>(),
-      }
+      };
       _compatibleAspects(cc, this, undefined, ret.compatibleAspects, ret.attributes, false);
       return ret;
     }
@@ -595,10 +593,10 @@ export namespace DataSourceInternal {
 
   function c_or (constraints: Constraint[] = [], prefix = "") { return constraints.length === 1 && !prefix ? constraints[0] : new ConstraintTree(ConstraintType.Or , prefix, constraints); }
   function c_and(constraints: Constraint[] = [], prefix = "") { return constraints.length === 1 && !prefix ? constraints[0] : new ConstraintTree(ConstraintType.And, prefix, constraints); }
-  function c_value(type: ConstraintOnValueTypes, leftVariable: string, leftAttribute: string, value: any): ConstraintValue
-  { return new ConstraintValue(type, leftVariable, leftAttribute, value); }
-  function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: string, rightVariable: string, rightAttribute: string): ConstraintVariable
-  { return new ConstraintVariable(type, leftVariable, leftAttribute, rightVariable, rightAttribute); }
+  function c_value(type: ConstraintOnValueTypes, leftVariable: string, leftAttribute: string, value: any): ConstraintValue {
+    return new ConstraintValue(type, leftVariable, leftAttribute, value); }
+  function c_var(type: ConstraintBetweenColumnsTypes, leftVariable: string, leftAttribute: string, rightVariable: string, rightAttribute: string): ConstraintVariable {
+    return new ConstraintVariable(type, leftVariable, leftAttribute, rightVariable, rightAttribute); }
   function c_subin (sub: string, attribute: string): ConstraintSub { return new ConstraintSub(ConstraintType.SubIn   , attribute, sub); }
   function c_subnin(sub: string, attribute: string): ConstraintSub { return new ConstraintSub(ConstraintType.SubNotIn, attribute, sub); }
 
@@ -618,14 +616,14 @@ export namespace DataSourceInternal {
   }
 
   function pass_value(op: ConstraintOnValueTypes, left, right) {
-    switch(op) {
+    switch (op) {
       case ConstraintType.Equal: return map(left) === map(right);
       case ConstraintType.NotEqual: return map(left) !== map(right);
       case ConstraintType.GreaterThan: return left > right;
       case ConstraintType.GreaterThanOrEqual: return left >= right;
       case ConstraintType.LessThan: return left < right;
       case ConstraintType.LessThanOrEqual: return left <= right;
-      case ConstraintType.Text: {
+      case ConstraintType.Text:
         if (left instanceof VersionedObject && typeof right === "string") {
           let manager = left.manager();
           for (let a of manager.aspect().attributes.values())
@@ -634,7 +632,6 @@ export namespace DataSourceInternal {
           return false;
         }
         return false;
-      }
       case ConstraintType.In: return find(right, left);
       case ConstraintType.NotIn: return !find(right, left);
       case ConstraintType.Has: return find(left, right);
@@ -648,38 +645,38 @@ export namespace DataSourceInternal {
   export type Value = any;
   export type Instance<R> = string | R;
   export interface ConstraintDefinition {
-    $eq?: Value,
-    $ne?: Value,
-    $gt?: string | Date | number,
-    $gte?: string | Date | number,
-    $lt?: string | Date | number,
-    $lte?: string | Date | number,
-    $exists?: boolean,
-    $in?: Instance<ObjectSetDefinition> | (Value[]),
-    $nin?: Instance<ObjectSetDefinition> | (Value[]),
-    $has?: Instance<ObjectSetDefinition> | Value,
-    [s: string]: Value | ConstraintDefinition
-  };
+    $eq?: Value;
+    $ne?: Value;
+    $gt?: string | Date | number;
+    $gte?: string | Date | number;
+    $lt?: string | Date | number;
+    $lte?: string | Date | number;
+    $exists?: boolean;
+    $in?: Instance<ObjectSetDefinition> | (Value[]);
+    $nin?: Instance<ObjectSetDefinition> | (Value[]);
+    $has?: Instance<ObjectSetDefinition> | Value;
+    [s: string]: Value | ConstraintDefinition;
+  }
   export interface ObjectSetDefinitionR {
-    $in: Instance<ObjectSetDefinition> | (Value[]),
-    $nin: Instance<ObjectSetDefinition> | (Value[]),
-    $union : Instance<ObjectSetDefinition>[],
-    $unionForAlln : string,
-    $intersection : Instance<ObjectSetDefinition>[],
-    $diff: [Instance<ObjectSetDefinition>, Instance<ObjectSetDefinition>],
-    $instanceOf: string | Function,
-    $memberOf: string | Function,
-    $text: string,
-    $out: string,
-    $or: ConstraintDefinition[],
-    $and: ConstraintDefinition[],
-  };
+    $in: Instance<ObjectSetDefinition> | (Value[]);
+    $nin: Instance<ObjectSetDefinition> | (Value[]);
+    $union: Instance<ObjectSetDefinition>[];
+    $unionForAlln: string;
+    $intersection: Instance<ObjectSetDefinition>[];
+    $diff: [Instance<ObjectSetDefinition>, Instance<ObjectSetDefinition>];
+    $instanceOf: string | Function;
+    $memberOf: string | Function;
+    $text: string;
+    $out: string;
+    $or: ConstraintDefinition[];
+    $and: ConstraintDefinition[];
+  }
   export type ObjectSetDefinition = Partial<ObjectSetDefinitionR> & {
     [s: string]: Value | ConstraintDefinition
-  };
+  }
   export interface Element extends ObjectSetDefinitionR {
-    $elementOf: Instance<ObjectSetDefinition>
-  };
+    $elementOf: Instance<ObjectSetDefinition>;
+  }
   export type Result = {
     name: string;
     where: Instance<ObjectSetDefinition>;
@@ -773,7 +770,7 @@ export namespace DataSourceInternal {
       if (value) // No constraint on empty string
         set.and(c_value(ConstraintType.Text, set._name, "_id", value));
     },
-  }
+  };
 
   const operatorsBetweenSet: { [s: string]: ConstraintBetweenColumnsTypes; } = {
     $eq: ConstraintType.Equal,
@@ -841,7 +838,7 @@ export namespace DataSourceInternal {
     resolve(reference: string, end: ParseStack | undefined = undefined) : ObjectSet {
       let key = `${reference}=`;
       let v: ObjectSet | undefined, s: ParseStack | undefined = this.head;
-      for (;!v && s; s = s.parent) {
+      for (; !v && s; s = s.parent) {
         let o = s.original[key];
         if (o) {
           v = s.resolved.get(key);
@@ -900,7 +897,7 @@ export namespace DataSourceInternal {
         decl = (k, s, c) => {
           set.setVariable(k, s);
           set.and(c);
-        }
+        };
       }
       let i = start;
       for (; i < last; i++) { // >.attr1<.attr2
@@ -945,7 +942,7 @@ export namespace DataSourceInternal {
         set = set || this.createSet(name);
       }
 
-      for(let key in v) {
+      for (let key in v) {
         if (key.startsWith('$') && key !== "$out") {
           // key is an operator
           let o = operatorsOnSet[key];
@@ -967,7 +964,7 @@ export namespace DataSourceInternal {
     }
 
     parseConditions(set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, conditions: ConstraintDefinition) {
-      for(let key in conditions) {
+      for (let key in conditions) {
         if (!key.startsWith('$')) {
           if (key.startsWith('=')) {
             // only elements are allowed here ( ie. =element_name(.attribute)* )
@@ -990,7 +987,7 @@ export namespace DataSourceInternal {
         }
         else {
           this.push(conditions);
-          for(var key in conditions) {
+          for (var key in conditions) {
             if (!key.startsWith(`$`))
               throw new Error(`an operator was expected`);
             let v = conditions[key];
@@ -999,7 +996,7 @@ export namespace DataSourceInternal {
               let o = operatorsBetweenSet[key];
               if (o === undefined)
                 throw new Error(`operator between two set '${key}' not found`);
-              constraints.push(c_var(o, left.variable, left.attribute, right.variable, right.attribute))
+              constraints.push(c_var(o, left.variable, left.attribute, right.variable, right.attribute));
             }
             else {
               let o = operatorsOnValue[key];
@@ -1024,7 +1021,7 @@ export namespace DataSourceInternal {
 
   function parseResult(context: ParseContext, result: Result) {
     context.push(result);
-    let set = context.parseSet(result.where, result.name)
+    let set = context.parseSet(result.where, result.name);
     set = set.clone(set._name);
     set.name = result.name;
     if (result.scope) {
@@ -1097,27 +1094,5 @@ export namespace DataSourceInternal {
       }
     }
     return ret;
-  }
-
-  export function buildScopeTreeItem(
-    cc: ControlCenter, aspect: Aspect.Installed, scope: Iterable<string>,
-    lvl: number, stack: Set<string>,
-    handleAttribute: (aspect: Aspect.Installed, attribute: Aspect.InstalledAttribute) => void,
-  ) {
-    for (let k of scope) {
-      let a = aspect.attributes.get(k);
-      if (a) {
-        let sub_names = Aspect.typeToAspectNames(a.type);
-        handleAttribute(aspect, a);
-        if (sub_names.length) {
-          stack.add(k);
-          for (let sub_name of sub_names) {
-            let aspect = cc.aspect(sub_name)!;
-            buildScopeTreeItem(cc, aspect, scope, lvl + 1, stack, handleAttribute);
-          }
-          stack.delete(k);
-        }
-      }
-    }
   }
 }
