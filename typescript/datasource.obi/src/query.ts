@@ -120,7 +120,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
 
   sql_select_id(): SqlBinding {
     return this.ctx.maker.select(
-      [this.ctx.maker.column(this.initialFromTable!, "VAL_INST", "_id")],
+      [this.ctx.maker.column_alias(this.initialFromKeyColumns[0].sql, "_id")],
       this.sql_from(),
       this.sql_join(),
       this.sql_where()
@@ -221,14 +221,14 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         table = this.nextAlias();
         this.tables.set(attribute, table);
         this.joins.push(maker.join("left", car_info.table, table, maker.and([
-          maker.compare(maker.column(table, column_id(car_info.direct)), ConstraintType.Equal, maker.column(this.initialFromTable!, "VAL_INST")),
+          maker.compare(maker.column(table, column_id(car_info.direct)), ConstraintType.Equal, this.initialFromKeyColumns[0].sql),
           maker.op(maker.column(table, "VAL_CAR" ), ConstraintType.Equal, car_info.car._id),
         ])));
       }
       return maker.column(table, column_val(car_info.direct));
     }
     else {
-      return maker.column(this.initialFromTable!, "VAL_INST");
+      return this.initialFromKeyColumns[0].sql;
     }
   }
 

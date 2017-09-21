@@ -115,6 +115,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       let q_n = new this.ctx.cstor(this.ctx, u_n);
       q_n.initialFromTable = this.nextAlias();
       q_n.initialFromKeys = q_0.initialFromKeys;
+      q_n.initialFromKeyColumns = [{ sql: this.ctx.maker.column(q_n.initialFromTable!, "_id"), bind: [] }];
       q_n.from = this.ctx.maker.from(q_n.initialFromTable!);
       this.ctx.queries.set(u_n, q_n);
       return q_n;
