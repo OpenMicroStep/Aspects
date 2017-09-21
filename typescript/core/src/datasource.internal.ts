@@ -1,13 +1,18 @@
 import {
-  ControlCenter, Identifier, VersionedObject, VersionedObjectManager,
-  FarImplementation, areEquals, Invokable,
-  Aspect, DataSource, Validation,
-  ImmutableSet,
+  ControlCenter, VersionedObject,
+  areEquals,
+  Aspect, Validation,
 } from './core';
 import * as DataSourceScope from './datasource.scope';
-import {Reporter, Diagnostic, AttributeTypes as V} from '@openmicrostep/msbuildsystem.shared';
+import { AttributeTypes as V} from '@openmicrostep/msbuildsystem.shared';
 
 export namespace DataSourceInternal {
+  export import Scope = DataSourceScope.Scope;
+  export import ResolvedScope = DataSourceScope.ResolvedScope;
+  export import ResolvedSort = DataSourceScope.ResolvedSort;
+  export import parseScope = DataSourceScope.parseScope;
+  export import traverseScope = DataSourceScope.traverseScope;
+
   type VarDep = Map<ObjectSet, Set<ObjectSet>>;
   type Solution<T> = {
     partial: Set<T>,
@@ -639,11 +644,6 @@ export namespace DataSourceInternal {
     }
     throw new Error(`Unsupported on value constraint ${ConstraintType[op as any]}`);
   }
-
-  export import Scope = DataSourceScope.Scope;
-  export import ResolvedScope = DataSourceScope.ResolvedScope;
-  export import ResolvedSort = DataSourceScope.ResolvedSort;
-  export import parseScope = DataSourceScope.parseScope;
 
   export type Value = any;
   export type Instance<R> = string | R;

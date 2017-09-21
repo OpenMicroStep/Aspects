@@ -1,4 +1,4 @@
-import { Aspect, ImmutableSet } from './core';
+import { Aspect, ImmutableSet, VersionedObject, VersionedObjectManager } from './core';
 
 export type Scope = {
   [s: string]: {
@@ -216,7 +216,44 @@ export function parseScope(
   parseScopePath(ctx, iterParseRootTypes(ctx, '.'));
 
   return { scope: ctx.scope, sort: ctx.sort };
+}
 
+function _traverseScope(
+  scope: ResolvedScope, object: VersionedObject,
+  path: string, n_path: string,
+  for_each: (manager: VersionedObjectManager, path: string, attributes: ImmutableSet<Aspect.InstalledAttribute>) => void
+) {
+  let manager = object.manager().evenIfUnregistered();
+  let attributes = ResolvedScope.scope_at_type_path(scope, manager.name(), path);
+  for_each(manager, path, attributes);
+  for (let attribute of attributes) {
+    if (Aspect.typeIsClass(attribute.type)) {
+      let s_path = `${n_path}${attribute.name}.`;
+      if (Aspect.typeIsMultiple(attribute.type)) {
+        let l_values: any = manager.localAttributes().get(attribute.name as keyof VersionedObject);
+        if (l_values) for (let v of l_values)
+          _traverseScope(scope, v, s_path, s_path, for_each);
+        let v_values: any = manager.versionAttributes().get(attribute.name as keyof VersionedObject);
+        if (v_values) for (let v of v_values)
+          _traverseScope(scope, v, s_path, s_path, for_each);
+      }
+      else {
+        let l_value: any = manager.localAttributes().get(attribute.name as keyof VersionedObject);
+        if (l_value)
+          _traverseScope(scope, l_value, s_path, s_path, for_each);
+        let v_value: any = manager.versionAttributes().get(attribute.name as keyof VersionedObject);
+        if (v_value)
+          _traverseScope(scope, v_value, s_path, s_path, for_each);
+      }
+    }
+  }
+}
+
+export function traverseScope(
+  scope: ResolvedScope, object: VersionedObject,
+  for_each: (manager: VersionedObjectManager, path: string, attributes: ImmutableSet<Aspect.InstalledAttribute>) => void
+) {
+  _traverseScope(scope, object, '.', '', for_each);
 }
 
 function* iterParseRootTypes(ctx: ParseScopeContext, safe_path: string) {

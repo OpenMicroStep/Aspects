@@ -1,6 +1,10 @@
-import {ControlCenter, areEquals, Identifier, Invocation, Result, Invokable, Aspect, addIsEqualSupport, ImmutableMap, AComponent} from './core';
+import {
+  ControlCenter, areEquals, Identifier, Invocation, Result, Aspect, addIsEqualSupport,
+  ImmutableMap, ImmutableList, AComponent,
+  SafePostLoad, SafePreSave, SafePostSave,
+} from './core';
 import { Flux } from '@openmicrostep/async';
-import { Reporter, Diagnostic } from '@openmicrostep/msbuildsystem.shared';
+import { Reporter } from '@openmicrostep/msbuildsystem.shared';
 
 function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
   let ret = { add: [] as T[], del: [] as T[] };
@@ -65,8 +69,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   controlCenter() { return this._controlCenter; }
   name() { return this._aspect.name; }
   aspect() { return this._aspect; }
+  object() { return this._object; }
 
   isRegistered() { return this._components.size > 0; }
+
+  /** @internal */ evenIfUnregistered() : this {
+    return this; // easy access to manager even if the object is not registered
+  }
 
   /** @internal */ registerComponent(component: AComponent) {
     this._components.add(component);
@@ -383,6 +392,9 @@ export namespace VersionedObjectManager {
     this._manager._object.__manager = this._manager;
     this._manager.registerComponent(component);
   }
+  UnregisteredVersionedObjectManager.prototype.evenIfUnregistered = function() {
+    return this._manager;
+  };
 }
 export class VersionedObject {
   static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {

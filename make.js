@@ -129,6 +129,7 @@ module.exports =  {
             SafeValidators, EncodedVersionedObjects
           } from '../typescript/core/src/core';
           import ObjectSet = DataSourceInternal.ObjectSet;
+          import ResolvedScope = DataSourceInternal.ResolvedScope;
         `
       }],
       npmPackage: { is: "component",

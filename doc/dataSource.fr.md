@@ -11,11 +11,6 @@ La sécurité autour des sources de données est un point très important, on va
  - les requêtes ne peuvent être considérées comme sécurisées que si elles sont générées coté serveur
  - les droits à considérer sont ceux s'appliquant sur les données (le droit _imprimer_ est donc sans intérêt par example)
 
-## Vocabulaire
-
-On nomme __proposition__ toute demande de modification d'un ensemble de données (création, suppréssion, modification).   
-On nomme __opération__ toute demande de modification ou de lecture d'un ensemble de données.
-
 ## Intégrité et sécurité des données
 
 Une source de données à pour responsabilité de gérer:
@@ -23,66 +18,39 @@ Une source de données à pour responsabilité de gérer:
  - l'intégrité des données: l'application de modifications résultent toujours en un modèle cohérent
  - la sécurité des données: restriction en fonction des droits de la session des possibilités de lecture et de modifications
 
-Ainsi, pour tout échange de données (lecture, création, modification, suppression) l'ensemble des objets manipulés est passé à une fonction de validation.
+Ainsi, pour tout échange de données (lecture, création, modification, suppression) l'ensemble des objets manipulés est validé.
 
 Dans le cas d'une lecture:
  
  - recherche de la définition de la requête
  - execution de la requête
- - en mode debug: vérification de la cohérence
- - vérification des droits sur le résultat (opération 'query')
+ - vérification des droits et de la cohérence sur le résultat
 
 Dans le cas d'une modification:
 
- - vérification des droits (opération 'update')
- - vérification de la cohérence des modifications
+ - vérification des droits et de la cohérence avant modifications
  - application des modifications
- - en mode debug: vérification de la cohérence 
- - vérification des droits sur le résultat (opération 'query')
+ - vérification des droits et de la cohérence après modifications
 
+A tout objet est associé une fonction de validation qui a uniquement pour rôle la validation de l'objet et non de son entourage. Cela permet d'effectuer les vérifications simples de cohérence. Cette fonction est toujours appelée par la datasource lors d'un _save_.
 
-### Cohérence des données
+En plus de cette simple validation, a une datasource est attaché un ensemble de validateurs.
+Ces validateurs sont définies par rapport au nom des classes des objects qui seront manipulés.
+Ainsi, pour chaque classe, il est possible de définir trois ensemble de validateurs:
 
-Vérifier la cohérence des données est une tâche qui nécéssite de valider toute proposition.
+  - `safe_post_load`: vérification des droits et de la cohérence sur le résultat
+  - `safe_pre_save`: vérification des droits et de la cohérence avant modifications
+  - `safe_post_save`: vérification des droits et de la cohérence après modifications
 
-Cette validation porte sur l'ensemble de la proposition.
+Chaque validateur a pour rôle de créer un __contexte de validation__ valide jusqu'a l'appel à `finalize` sur celui-ci.
+Sur cet objet la fonction `for_each` sera appelée pour tous les objets à vérifier.
 
-La vérification de cohérence des données ne devrait JAMAIS modifier la proposition.
-Son rôle se limite à accepter ou refuser une proposition.
+Un __contexte de validation__ est créer pour chaque validateur différent, il est donc possible d'accumuler des informations pour l'ensemble des objets partageant le même validateur jusqu'à la finalisation du contexte.
 
-L'implémentation par défaut vérifie la cohérence via les étapes suivantes:
+La finalisation du contexte de validation est la seule étape asynchrone du processus.
 
- - pour chaque classe, la fonction `attributesToLoad(for: 'consistency'): string[]` fourni la liste des attributs à pré-charger
- - pour l'ensemble des objets, l'ensemble des attributs demandés sont chargés
- - pour chaque objet, la fonction `validateConsistency(reporter: Reporter): boolean` valide ou non la cohérence
- - pour chaque objet, une fonction `validatorsForGraphConsistency(): Validator[] | undefined` 
-   fourni la liste des validateurs de graphes qui vont vérifier la cohérence entre les objets
- - pour chaque validateur de graphe trouvé, celui-ci est appelée avec en paramètre le rapporteur et la liste des objets qu'il doit valider.
-   Il valide ou non la cohérence.
-
-La fonction gérant tout le système de cohérence à pour signature: `validateConsistency(objects: VersionedObject[]): boolean`
-
-
-### Application des droits
-
-Comme pour l'intégrité des données une fonction de validation va vérifier les droits par rapport à l'opération en cours sur les objets concernés de la session en cours.
-
-De même, cette validation porte sur l'ensemble des objets concernés et son rôle se limite à accepter ou à refuser l'opération.
-
-La fonction gérant tout le système de droits à pour signature: `validateRights(reporter: Reporter, session: Session, objects: VersionedObject[], operation: 'query' | 'update'): boolean`
-
-L'implémentation par défaut vérifie les droits via les étapes suivantes:
-
- - pour chaque classe, la fonction `attributesToLoad(for: 'rights'): string[]` fourni la liste des attributs à pré-charger
- - pour l'ensemble des objets, l'ensemble des attributs demandés sont chargés
- - pour chaque objet, la fonction `validateRights(reporter: Reporter, session: Session): boolean` valide ou non les droits
- - pour chaque objet, une fonction `validatorsForGraphRights(operation: 'query' | 'update'): Validator[] | undefined` 
-   fourni la liste des validateurs de graphes qui vont vérifier les droits entre les objets
- - pour chaque validateur de graphe trouvé, celui-ci est appelée avec en paramètre:
-   - le rapporteur
-   - la session
-   - la liste des objets qu'il doit valider
-   - le type d'opération (`query` ou `update`)
+Pour tout problème, un validateur peut reporter les diagnostics. 
+En cas de problème, l'operation _query_, _load_ ou _save_ est abandonées.
 
 ### Gestion des requêtes
 

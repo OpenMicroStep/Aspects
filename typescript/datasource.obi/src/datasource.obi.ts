@@ -215,10 +215,10 @@ export class ObiDataSource extends DataSource
     }
   }
 
-  async implLoad({tr, objects, scope} : {
+  async implLoad({tr, objects, scope}: {
     tr?: ObiDataSourceTransaction;
     objects: VersionedObject[];
-    scope: DataSourceInternal.Scope;
+    scope: DataSourceInternal.ResolvedScope;
   }): Promise<VersionedObject[]> {
     let component = {};
     try {
@@ -226,7 +226,7 @@ export class ObiDataSource extends DataSource
       this.controlCenter().registerObjects(component, objects);
       let set = new ObjectSet('load');
       set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
-      set.scope = DataSourceInternal.resolveScopeForObjects(scope, this.controlCenter(), objects);
+      set.scope = scope;
       await ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, component), set);
       return objects;
     }

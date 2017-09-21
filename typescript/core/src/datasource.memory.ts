@@ -110,10 +110,10 @@ export class InMemoryDataSource extends DataSource
     return ret;
   }
 
-  implLoad({tr, objects, scope} : {
+  implLoad({tr, objects, scope}: {
     tr?: InMemoryDataSource.DataStoreTransaction;
     objects: VersionedObject[];
-    scope: DataSourceInternal.Scope;
+    scope: DataSourceInternal.ResolvedScope;
   }): VersionedObject[] {
     let ds = tr || this.ds;
     let cc = this.controlCenter();
@@ -121,12 +121,11 @@ export class InMemoryDataSource extends DataSource
     let ret: VersionedObject[] = [];
     cc.registerComponent(component);
     if (objects) {
-      let rscope = DataSourceInternal.resolveScopeForObjects(scope, this.controlCenter(), objects);
       for (let lObject of objects) {
         let dbId = this.ds.toDSId(lObject.id());
         let dObject = ds.get(dbId);
         if (dObject) {
-          this._loads(component, ds, rscope, lObject, dObject);
+          this._loads(component, ds, scope, lObject, dObject);
           ret.push(lObject);
         }
       }

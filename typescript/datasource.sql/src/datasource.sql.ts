@@ -208,10 +208,10 @@ export class SqlDataSource extends DataSource
     }
   }
 
-  async implLoad({tr, objects, scope} : {
+  async implLoad({tr, objects, scope}: {
     tr?: SqlDataSourceTransaction;
     objects: VersionedObject[];
-    scope: DataSourceInternal.Scope;
+    scope: DataSourceInternal.ResolvedScope;
   }): Promise<VersionedObject[]> {
     let component = {};
     try {
@@ -240,11 +240,7 @@ export class SqlDataSource extends DataSource
       else {
         set = sets.values().next().value;
       }
-      set.scope = DataSourceInternal.parseScope(scope, (type) => {
-        if (type === '_')
-          return types.keys();
-        return [this.controlCenter().aspectChecked(type)];
-      }).scope;
+      set.scope = scope;
       await SqlQuery.execute(this._ctx(tr, component), set);
       return objects;
     }

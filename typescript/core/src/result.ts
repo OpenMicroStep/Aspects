@@ -1,6 +1,5 @@
-import { VersionedObject, ControlCenter, NotificationCenter, Aspect, ImmutableList } from './core';
-import {Reporter, AttributePath, Diagnostic} from '@openmicrostep/msbuildsystem.shared';
-import { Flux } from '@openmicrostep/async';
+import { ImmutableList } from './core';
+import { Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 
 export class Result<T = any> {
   _items: Result.Item[];
@@ -23,6 +22,9 @@ export class Result<T = any> {
     return new Result([{ is: "value", value: value }]);
   }
 
+  static fromItemsWithoutValue(items: ImmutableList<Result.Item>) : Result<any> {
+    return new Result([...items.filter(i => i.is !== "value")]);
+  }
   static fromItemsWithNewValue<T>(items: ImmutableList<Result.Item>, value: T) : Result<T> {
     return new Result([...items.filter(i => i.is !== "value"), { is: "value", value: value }]);
   }

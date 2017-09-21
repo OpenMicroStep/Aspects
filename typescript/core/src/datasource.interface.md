@@ -90,7 +90,7 @@ Vérouille la datasource sur le tuple `on`. Tant que `implEndTransaction` n'a pa
 
 Effectue une requête et retourne le résultat
 
-#### implLoad(a: { tr: DataSourceOptionalTransaction, objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject]
+#### implLoad(a: { tr: DataSourceOptionalTransaction, objects: [0, *, VersionedObject], scope: ResolvedScope }): [0, *, VersionedObject]
 
 Charge les attributs de `objects` et retourne les objets.
 
