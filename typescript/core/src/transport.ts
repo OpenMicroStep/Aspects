@@ -60,6 +60,16 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
       return r;
     },
   } as ObjectFlatCoding<Set<any>, { __is__: "Set", entries: any[] }>,
+  { is: "Date",
+    canEncode(e, s) { return s instanceof Date; },
+    canDecode(d, s) { return s && s.__is__ === this.is; },
+    encode(e, s) {
+      return { __is__: this.is, v: s.getTime() };
+    },
+    decode(d, s) {
+      return new Date(s.v);
+    },
+  } as ObjectFlatCoding<Date, { __is__: "Date", v: number }>,
   { is: "VersionedObject",
     canEncode(e, s) { return s instanceof VersionedObject },
     encode(e, s) {
