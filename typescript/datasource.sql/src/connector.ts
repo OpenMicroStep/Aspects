@@ -1,5 +1,5 @@
-import {DataSourceInternal} from '@openmicrostep/aspects';
-import {Pool, SqlMaker, SqlBinding} from './index';
+import {DataSourceInternal, Pool} from '@openmicrostep/aspects';
+import { SqlMaker, SqlBinding} from './index';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
 export interface DBConnectorCRUD {

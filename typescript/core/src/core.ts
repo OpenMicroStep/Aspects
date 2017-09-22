@@ -11,6 +11,7 @@ export * from './datasource.transport';
 export * from './datasource.internal';
 export * from './datasource.memory';
 export * from './transport';
+export * from './pool';
 
 export interface ImmutableList<T> extends ReadonlyArray<T> {
 
