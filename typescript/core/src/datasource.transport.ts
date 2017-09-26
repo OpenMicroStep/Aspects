@@ -103,9 +103,11 @@ export class VersionedObjectCoder {
         switch (value.is) {
           case 'vo': {
             let [name, id] = value.v;
-            let vo = cc.find(id);
+            let vo = cc.find(id) || this.encodedWithLocalId.get(id);
             if (!vo) {
               vo = cc.create(name);
+              if (VersionedObjectManager.isLocalId(id))
+                throw new Error(`reference to an unknown locally defined object ${value.v}`);
               vo.manager().setId(id);
             }
             return vo;
@@ -145,6 +147,7 @@ export class VersionedObjectCoder {
         if (!is_local)
           l.manager().setId(s.real_id);
         else if (allow_decode_unknown_local_id) {
+          this.encodedWithLocalId.set(s.local_id, l);
           this.decodedWithLocalId.set(l, s.local_id);
           s.real_id = l.id();
         }
