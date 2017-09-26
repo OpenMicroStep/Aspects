@@ -1,13 +1,15 @@
-# Module aspect.ts
+## class AspectConfiguration
 
-Handle dynamic creation of aspect classes.
+Hold the configuration of classes:
 
-## Direct attributes and methods injection
+ - their aspect and implementation
+ - how farMethod are handled (the transport)
 
-It use 2 level of cache before the final class
+### Internals
 
- - final class: attachement to the controlcenter (not cached and veryfast: complexity of a closure)
- - aspect implementation (install categories & attributes on the class)
+In the background, it manages a cache of installed aspect on top of class implementations by using 2 caches:
+
+ - fully installed aspect on top of class implementations
  - category cache (to boost & share methods)
 
 To boost performance and object creation times, attributes are installed as getter and setter on the prototype and redirected to the manager.
@@ -15,11 +17,6 @@ To boost performance and object creation times, attributes are installed as gett
 Here is a diagram of what is done
 
 ```
-+------------------------------------------+
-|               Final class                |
-| constructor closure of the controlCenter |
-+------------------------------------------+
-                     |
   +--------------------------------------+
   |            Cached Aspect             |
   | attributes defined on the prototype  |
@@ -31,41 +28,42 @@ Here is a diagram of what is done
   +--------------------------------------+
 ```
 
-If we consider too classes __A__ and __B__ with __B__ extends __A__ we got:
 
-```
-+-----------+   +-----------+
-|  Final A  |   |  Final B  |
-+-----------+   +-----------+
-     |                |
-+-----------+   +-----------+
-| Cached  A |   | Cached  B |
-+-----------+   +-----------+
-      |               |
-      |         +-----------+
-      |         |     B     |
-      |         +-----------+
-      |               |
-      |---------------+
-      |
-+-----------+
-|     A     |
-+-----------+
-```
+### Methods
 
-So if we consider publicly available classes:
+#### `constructor(classes: { name: string, aspect: string, cstor: VersionedObjectConstructor, farTransports?: { transport: FarTransport, categories: string[] }[] }[], defaultFarTransport?: FarTransport)`
 
-```js
-FinalA instanceof A === true
-FinalB instanceof A === true
-FinalB instanceof B === true
-B instanceof A === true
-FinalB instanceof FinalA === false
-```
+Create a new aspect configuration.  
 
-TODO: consider dynamic modification of prototype chain to fix `FinalB instanceof FinalA` and investigate potential performance losses (js engines hate this).
+__!__: throws in the following cases:
 
-## Aspect runtime data
+ - _classes_ __MUST NOT__ contains to classes of the same name otherwise an exception is thrown
+ - if _defaultFarTransport_ is not provided, all far categories must have the corresponding transport defined in _farTransport_, otherwise an exception is thrown
 
-To allow the controlcenter to be fast at its job, when an aspect is built, an `Aspect.Installed` object is generated.
-This object contains `O(1)` accesses to important imformations (typings, transports, relations, references) and is monomorphic
+#### `create(cc: ControlCenter, classname: string, categories: string[], ...args: any[]) : VersionnedObject`
+
+Create a new versionned object attached to the given control center.  
+
+__!__: throws in the following cases:
+
+  - __classname__ doesn't exists in this configuration
+  - the installed aspect of __classname__ doesn't have all the requested categories
+
+#### `aspect(classname: string): Aspect.InstallAspect | undefined`
+Get an installed aspect from its classname or undefined if not found
+
+#### `aspectChecked(classname: string): Aspect.InstallAspect`
+Get an installed aspect from its classname.
+
+__!__: throws if __classname__ doesn't exists in this configuration
+
+#### `aspects(): IterableIterator<Aspect.Installed>`
+Returns the list of installed aspects (ie: classname, aspect, attributes, methods, categories, implementation).
+
+#### `aspectFactory<T extends VersionedObject>(cc: ControlCenter, classname: string, categories: string[]) : Aspect.Factory<T>`
+Returns a method that will create a new versionned object of class _classname_ attached to __cc__ each time it's called.
+
+__!__: throws in the following cases:
+
+  - __classname__ doesn't exists in this configuration
+  - the installed aspect of __classname__ doesn't have all the requested categories

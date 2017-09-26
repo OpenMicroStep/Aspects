@@ -1,7 +1,7 @@
 import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import {ObiParseContext, ObiDefinition, SysObiDefinition, parseObis, getOne, add_to, del_from} from './index.priv';
-import {DataSourceInternal, VersionedObjectConstructor, VersionedObject, Aspect, AspectCache} from '@openmicrostep/aspects';
-import {SqlMaker, DBConnectorTransaction, SqlBinding, DBConnector} from '@openmicrostep/aspects.sql';
+import {DataSourceInternal, Aspect} from '@openmicrostep/aspects';
+import {SqlMaker, DBConnectorTransaction, DBConnector} from '@openmicrostep/aspects.sql';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
 function mk_obi(id: number | undefined, system_name: string | undefined): ObiDefinition {
@@ -37,7 +37,6 @@ export class OuiDB {
   }
   maker: SqlMaker;
 
-  cache = new AspectCache();
   systemObiByName = new Map<string, SysObiDefinition>();
   systemObiById = new Map<number, SysObiDefinition>();
   _valTables: string[] = ["TJ_VAL_ID", "TJ_VAL_INT", "TJ_VAL_STR"];

@@ -628,10 +628,6 @@ export class DataSource extends VersionedObject {
   static readonly category: DataSource.Categories;
 }
 export declare namespace DataSource {
-  function installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
-  function installAspect(on: ControlCenter, name: 'server'): { new(): DataSource.Aspects.server };
-  function installAspect(on: ControlCenter, name: 'impl'): { new(): DataSource.Aspects.impl };
-
   function __DataSource_c(name: string): {};
   function __DataSource_c(name: 'local'): DataSource.Categories.local;
   function __DataSource_c(name: 'client'): DataSource.Categories.client;
@@ -750,4 +746,24 @@ export declare namespace DataSource {
     export type server = Categories.local & Categories.server & Categories.safe & Categories.raw;
     export type impl = Categories.implementation;
   }
+}
+export namespace DataSource {
+  export function create(cc: ControlCenter) { return cc.create<DataSource>("DataSource"); }
+  export const Aspects = {
+    client: <Aspect.FastConfiguration<DataSource.Aspects.client>> {
+      name: "DataSource", aspect: "client", cstor: DataSource, categories: ["local", "client", "server"],
+      create(cc: ControlCenter) { return cc.create<DataSource.Aspects.client>("DataSource", this.categories); },
+      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.client>("DataSource", this.categories); },
+    },
+    server: <Aspect.FastConfiguration<DataSource.Aspects.server>> {
+      name: "DataSource", aspect: "server", cstor: DataSource, categories: ["local", "server", "safe", "raw"],
+      create(cc: ControlCenter) { return cc.create<DataSource.Aspects.server>("DataSource", this.categories); },
+      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.server>("DataSource", this.categories); },
+    },
+    impl: <Aspect.FastConfiguration<DataSource.Aspects.impl>> {
+      name: "DataSource", aspect: "impl", cstor: DataSource, categories: ["implementation"],
+      create(cc: ControlCenter) { return cc.create<DataSource.Aspects.impl>("DataSource", this.categories); },
+      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.impl>("DataSource", this.categories); },
+    },
+  };
 }

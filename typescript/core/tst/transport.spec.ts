@@ -1,28 +1,33 @@
-import {ControlCenter, Identifier, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectCache} from '@openmicrostep/aspects';
+import {ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
 function createContext_C1(publicTransport: (json: string) => Promise<string>) {
-  let cc = new ControlCenter(new AspectCache());
-  let ret = {
-    cc: cc,
-    Resource  : Resource  .installAspect(cc, "c1"    ),
-    Car       : Car       .installAspect(cc, "c1"    ),
-    People    : People    .installAspect(cc, "c1"    ),
-    db: new (DataSource.installAspect(cc, "client"))(),
-    component: {},
-  };
-  ret.db.manager().setId('datasource');
   let coder = new Transport.JSONCoder();
-  ret.cc.installTransport({
+  let default_transport = {
     async remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
       let req = { to: to.id(), method: method, args: args };
-      let res = await coder.encode_transport_decode(ret.cc, req, publicTransport);
+      let res = await coder.encode_transport_decode(to.controlCenter(), req, publicTransport);
       let inv = new Result(res);
       return inv;
     }
-  });
+  };
+  let cc = new ControlCenter(new AspectConfiguration([
+    Resource.Aspects.c1,
+    Car.Aspects.c1,
+    People.Aspects.c1,
+    DataSource.Aspects.client,
+  ], default_transport));
+  let ret = {
+    cc: cc,
+    Resource  : Resource.Aspects.c1.factory(cc),
+    Car       : Car.Aspects.c1.factory(cc),
+    People    : People.Aspects.c1.factory(cc),
+    db: DataSource.Aspects.client.create(cc),
+    component: {},
+  };
+  ret.db.manager().setId('datasource');
   return ret;
 }
 
@@ -45,11 +50,16 @@ type ContextS1 = {
 
 function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string, DataSourceQuery>): ContextS1 {
   let ctx: any = {};
-  let cc = ctx.cc = new ControlCenter();
-  ctx.Resource   = Resource.installAspect(cc, "s1"    );
-  ctx.Car        = Car     .installAspect(cc, "s1"    );
-  ctx.People     = People  .installAspect(cc, "s1"    );
-  ctx.DataSource = InMemoryDataSource.installAspect(cc, "server");
+  let cc = ctx.cc = new ControlCenter(new AspectConfiguration([
+    Resource.Aspects.s1,
+    Car.Aspects.s1,
+    People.Aspects.s1,
+    InMemoryDataSource.Aspects.server,
+  ]));
+  ctx.Resource   = Resource.Aspects.s1.factory(cc);
+  ctx.Car        = Car.Aspects.s1.factory(cc);
+  ctx.People     = People.Aspects.s1.factory(cc);
+  ctx.DataSource = InMemoryDataSource.Aspects.server.factory(cc);
 
   ctx.db = new ctx.DataSource(ds);
   ctx.db.setQueries(queries);

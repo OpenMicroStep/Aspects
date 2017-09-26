@@ -1,4 +1,4 @@
-import { Aspect, Identifier, VersionedObject, VersionedObjectManager } from './core';
+import { Aspect, Identifier, VersionedObject, VersionedObjectConstructor } from './core';
 import { Async, Flux } from '@openmicrostep/async';
 import { Reporter, AttributeTypes as V, AttributePath } from '@openmicrostep/msbuildsystem.shared';
 
@@ -40,12 +40,12 @@ export function classValidator(classname: string, allowUndefined: boolean) : Asp
     if (value === undefined && allowUndefined)
       return value;
     if (value instanceof VersionedObject) {
-      let cstor: Function | undefined = value.controlCenter().aspectConstructor(classname);
-      if (!cstor && classname === "VersionedObject")
+      let aspect = value.controlCenter().aspect(classname);
+      if (!aspect && classname === "VersionedObject")
         return value;
-      else if (!cstor)
+      else if (!aspect)
         path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, unable to find aspect`});
-      else if (value instanceof cstor)
+      else if (value instanceof aspect.implementation)
         return value;
       else
         path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.manager().name()}`});
@@ -58,11 +58,11 @@ export function classValidator(classname: string, allowUndefined: boolean) : Asp
   }}
 }
 
-export function categoryValidation<T extends VersionedObject>(on: { new(manager: VersionedObjectManager<any>): T, category(name: 'validation', implementation: VersionedObject.ImplCategories.validation<T>): void }, extensions: V.Extensions0<Partial<T>>) {
+export function categoryValidation<T extends VersionedObject>(on: VersionedObjectConstructor<T> & { category(name: 'validation', implementation: VersionedObject.ImplCategories.validation<T>): void }, extensions: V.Extensions0<Partial<T>>) {
   const validate = Validation.attributesValidator(extensions);
   on.category('validation', {
     validate(reporter) {
-      validate(reporter, this);
+      validate(reporter, this as T);
     }
   });
 }

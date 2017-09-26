@@ -1,4 +1,4 @@
-import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
+import {ControlCenter, AspectConfiguration} from '@openmicrostep/aspects';
 import {Reporter, Parser} from '@openmicrostep/msbuildsystem.shared';
 import {SqliteDBConnectorFactory} from '@openmicrostep/aspects.sql';
 import {parseObis, ObiDefinition, OuiDB, ObiDataSource, StdDefinition} from '@openmicrostep/aspects.obi';
@@ -673,11 +673,12 @@ async function createObiControlCenter(flux) {
   await ouiDb.injectObis(test_obis);
   await ouiDb.loadSystemObis();
 
-  let cc = new ControlCenter();
-  let C = Car.installAspect(cc, 'test1');
-  let P = People.installAspect(cc, 'test1');
-  let DB = ObiDataSource.installAspect(cc, "server");
-  let db = new DB(ouiDb, {
+  let cc = new ControlCenter(new AspectConfiguration([
+    Car.Aspects.test1,
+    People.Aspects.test1,
+    ObiDataSource.Aspects.server,
+  ]));
+  let db = ObiDataSource.Aspects.server.create(cc, ouiDb, {
     aspectClassname_to_ObiEntity: (classname: string) => `T_${classname}`,
     obiEntity_to_aspectClassname: (classname: string) => classname.substring(2),
     aspectAttribute_to_ObiCar: (attribute: string) => `t${attribute}`,
@@ -695,8 +696,8 @@ async function createObiControlCenter(flux) {
 
   Object.assign(flux.context, {
     connector: connector,
-    Car: C,
-    People: P,
+    Car: Car.Aspects.test1.factory(cc),
+    People: People.Aspects.test1.factory(cc),
     db: db,
     cc: cc
   });

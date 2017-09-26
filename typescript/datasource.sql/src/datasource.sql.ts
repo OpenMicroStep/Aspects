@@ -9,12 +9,12 @@ import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConn
 
 export type SqlDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
 export class SqlDataSource extends DataSource {
-  constructor(manager: VersionedObjectManager<SqlDataSource>,
+  constructor(cc: ControlCenter,
     public mappers: { [s: string]: SqlMappedObject },
     private connector: DBConnector,
-    private maker: SqlMaker
+    private maker: SqlMaker = connector.maker
   ) {
-    super(manager);
+    super(cc);
   }
 
   static parent = DataSource;
@@ -24,11 +24,6 @@ export class SqlDataSource extends DataSource {
     version: 0,
     aspects: DataSource.definition.aspects
   };
-  static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
-  static installAspect(on: ControlCenter, name: 'server'): { new(mappers?: { [s: string]: SqlMappedObject }, connector?: DBConnector, maker?: SqlMaker): DataSource.Aspects.server };
-  static installAspect(on: ControlCenter, name: string): any {
-    return on.cache().createAspect(on, name, this);
-  }
 
   async save(tr: SqlDataSourceTransaction, reporter: Reporter, objects: Set<VersionedObject>, object: VersionedObject) : Promise<void> {
     let manager = object.manager();
@@ -277,4 +272,17 @@ export class SqlDataSource extends DataSource {
       await tr.tr.rollback();
     }
   }
+}
+
+export namespace SqlDataSource {
+  export const Aspects = {
+    client: Aspect.disabled_aspect<DataSource.Aspects.server>("DataSource", "client", "SqlDataSource"),
+    server: <Aspect.FastConfiguration<DataSource.Aspects.server>> {
+      name: "DataSource", aspect: "server", cstor: SqlDataSource, categories: DataSource.Aspects.server.categories,
+      create(cc: ControlCenter, mappers: { [s: string]: SqlMappedObject }, connector: DBConnector) {
+        return cc.create<DataSource.Aspects.server>("DataSource", this.categories, mappers, connector);
+      },
+      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.server>("DataSource", this.categories); },
+    },
+  };
 }

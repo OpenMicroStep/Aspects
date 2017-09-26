@@ -1,15 +1,13 @@
-import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, AspectCache, Aspect} from '@openmicrostep/aspects';
+import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
-import ConstraintType = DataSourceInternal.ConstraintType;
-import ObjectSet = DataSourceInternal.ObjectSet;
 
-const cache = new AspectCache();
-const cc = new ControlCenter(cache);
-Resource.installAspect(cc, "test1");
-Car.installAspect(cc, "test1");
-People.installAspect(cc, "test1");
+const cc = new ControlCenter(new AspectConfiguration([
+  Resource.Aspects.test1,
+  Car.Aspects.test1,
+  People.Aspects.test1,
+]));
 
 function serialize(s, map = new Map()) {
   let r = s;

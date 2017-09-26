@@ -1,5 +1,5 @@
-import {ControlCenter, VersionedObject, VersionedObjectConstructor, DataSource, Aspect, DataSourceQuery} from '@openmicrostep/aspects';
-import {SqliteDBConnectorFactory, SqlDataSource, SqlMaker, loadSqlMappers} from '@openmicrostep/aspects.sql';
+import {ControlCenter, DataSource, AspectConfiguration, DataSourceQuery} from '@openmicrostep/aspects';
+import {SqliteDBConnectorFactory, SqlDataSource, loadSqlMappers} from '@openmicrostep/aspects.sql';
 import {ExpressTransport} from '@openmicrostep/aspects.express';
 import {Person, DemoApp} from '../shared/index';
 import * as express from 'express';
@@ -40,17 +40,19 @@ queries.set("allpersons", (reporter, query) => {
     name: 'persons',
     where: { $instanceOf: Person, $text: query.text },
     scope: ['_firstName', '_lastName']
-  }
+  };
 });
 
 const router = express.Router();
+const cfg = new AspectConfiguration([
+  DemoApp.Aspects.server,
+  Person.Aspects.server,
+  SqlDataSource.Aspects.server,
+]);
 const transport = new ExpressTransport(router, async (cstor, id) => {
-  const controlCenter = new ControlCenter();
-  const DemoAppServer = DemoApp.installAspect(controlCenter, "server");
-  const PersonServer = Person.installAspect(controlCenter, "server");
-  const DB = SqlDataSource.installAspect(controlCenter, "server");
-  const db = new DB(mappers, connector, connector.maker);
-  const demoapp: DemoApp = new DemoAppServer();
+  const cc = new ControlCenter(cfg);
+  const db = SqlDataSource.Aspects.server.create(cc, mappers, connector, connector.maker);
+  const demoapp: DemoApp = DemoApp.Aspects.server.create(cc);
   db.setQueries(queries);
   demoapp.manager().setId('__root');
   db.manager().setId('__dataSource');
@@ -67,10 +69,10 @@ const transport = new ExpressTransport(router, async (cstor, id) => {
       return Promise.reject('not found')
     });
 });
+cfg.installPublicTransport(transport, DataSource, ["server"]);
+cfg.installPublicTransport(transport, DemoApp, ["far"]);
+cfg.installPublicTransport(transport, Person, ["calculation"]);
 
-ControlCenter.globalCache.installPublicTransport(transport, DataSource, ["server"]);
-ControlCenter.globalCache.installPublicTransport(transport, DemoApp, ["far"]);
-ControlCenter.globalCache.installPublicTransport(transport, Person, ["calculation"]);
 
 const app = express();
 app.use('/', express.static(__dirname + "/../../../../openms.aspects.angular/node_modules/app/"));

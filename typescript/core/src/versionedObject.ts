@@ -52,7 +52,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   /** @internal */ _oldVersion: number;
   /** @internal */ _oldVersionAttributes: VersionedObjectManager.Attributes<T>;
 
-  constructor(controlCenter: ControlCenter, aspect: Aspect.Installed) {
+  constructor(controlCenter: ControlCenter, object: T) {
     this._controlCenter = controlCenter;
     this._components = new Set();
     this._id = `_localid:${++VersionedObjectManager.LocalIdCounter}`;
@@ -61,8 +61,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._versionAttributes = new Map();
     this._oldVersion = VersionedObjectManager.NoVersion;
     this._oldVersionAttributes = new Map();
-    this._aspect = aspect;
-    this._object = undefined!;
+    this._aspect = (object.constructor as any).aspect;
+    this._object = object;
   }
 
   id()     : Identifier { return this._id; }
@@ -401,9 +401,6 @@ export class VersionedObject {
       static parent = cstor;
       static definition = definition;
       static displayName = `base ${definition.name}`;
-      static installAspect(cc: ControlCenter, name: string): { new(): VersionedObject } {
-        return cc.cache().createAspect(cc, name, this);
-      }
     };
   }
 
@@ -437,8 +434,8 @@ export class VersionedObject {
   /** @internal */ readonly _id: Identifier;  // virtual attribute handled by the manager
   /** @internal */ readonly _version: number; // virtual attribute handled by the manager
 
-  constructor(manager: VersionedObjectManager<any>) {
-    this.__manager = manager; // this will fill _id and _version attributes
+  constructor(cc: ControlCenter) {
+    this.__manager = new VersionedObjectManager(cc, this); // this will fill _id and _version attributes
   }
 
   id()     : Identifier { return this.__manager.id(); }
@@ -470,11 +467,6 @@ Object.defineProperty(VersionedObject, "category", {
     Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
   }
 });
-Object.defineProperty(VersionedObject, "installAspect", {
-  value: function installAspect(this: typeof VersionedObject, on: ControlCenter, name: string): { new(): VersionedObject } {
-    return on.cache().createAspect(on, name, this);
-  }
-});
 
 VersionedObject.category('validation', {
   validate(reporter: Reporter): void {}
@@ -492,10 +484,10 @@ Object.defineProperty(VersionedObject.prototype, '_version', {
 function isEqualVersionedObject(this: VersionedObject, other, level?: number) {
   return other === this;
 }
-addIsEqualSupport(VersionedObject, isEqualVersionedObject);
+addIsEqualSupport(VersionedObject as any, isEqualVersionedObject);
 
 export interface VersionedObjectConstructor<C extends VersionedObject = VersionedObject> {
-  new(manager: VersionedObjectManager<C>, ...args): C;
+  new(cc: ControlCenter, ...args): C;
   definition: Aspect.Definition;
   parent?: VersionedObjectConstructor<VersionedObject>;
 
@@ -504,8 +496,8 @@ export interface VersionedObjectConstructor<C extends VersionedObject = Versione
 }
 
 export declare namespace VersionedObject {
-  function __VersionedObject_c(n: string): {};
-  function __VersionedObject_i(n: string): {};
+  export function __VersionedObject_c(n: string): {};
+  export function __VersionedObject_i(n: string): {};
 }
 export namespace VersionedObject {
   export interface Categories<C extends VersionedObject = VersionedObject> {

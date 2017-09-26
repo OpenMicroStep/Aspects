@@ -1,6 +1,6 @@
 import {
   FarTransport, VersionedObject, VersionedObjectManager, VersionedObjectConstructor, NotificationCenter, Result, DataSource,
-  Aspect, AspectCache, ImmutableSet,
+  Aspect, AspectConfiguration, ImmutableSet,
 } from './core';
 
 export type Identifier = string | number;
@@ -14,14 +14,12 @@ export class ControlCenter {
   /** @internal */ readonly _notificationCenter = new NotificationCenter();
   /** @internal */ readonly _objects = new Map<Identifier, VersionedObject>();
   /** @internal */ readonly _components = new Map<AComponent, Set<VersionedObject>>();
-  /** @internal */ readonly _aspects = new Map<string, Aspect.Constructor>();
-  /** @internal */ readonly _cache: AspectCache;
+  /** @internal */ readonly _configuration: AspectConfiguration;
 
-  static readonly globalCache = new AspectCache();
-
-  constructor(cache: AspectCache = ControlCenter.globalCache) {
-    this._cache = cache;
+  constructor(configuration: AspectConfiguration) {
+    this._configuration = configuration;
   }
+
   /// events
   notificationCenter() { return this._notificationCenter; }
 
@@ -138,39 +136,22 @@ export class ControlCenter {
   }
 
   /// category creation
-  aspectConstructor(classname: string) : Aspect.Constructor | undefined {
-    return this._aspects.get(classname);
-  }
-  aspectConstructorChecked(classname: string) : Aspect.Constructor {
-    let cstor = this._aspects.get(classname);
-    if (!cstor)
-      throw new Error(`cannot find aspect ${classname}`);
-    return cstor;
-  }
-  installedAspectConstructors() : Iterable<Aspect.Constructor> {
-    return this._aspects.values();
-  }
-
   aspect(classname: string) : Aspect.Installed | undefined {
-    let cstor = this.aspectConstructor(classname);
-    return cstor ? cstor.aspect : undefined;
+    return this._configuration.aspect(classname);
   }
   aspectChecked(classname: string) : Aspect.Installed {
-    return this.aspectConstructorChecked(classname).aspect;
+    return this._configuration.aspectChecked(classname);
   }
-  *installedAspects() : Iterable<Aspect.Installed> {
-    for (let cstor of this._aspects.values())
-      yield cstor.aspect;
+  installedAspects() : IterableIterator<Aspect.Installed> {
+    return this._configuration.aspects();
   }
 
-  create<T extends VersionedObject>(classname: string, categories: string[] = []) : T {
-    let cstor = this.aspectConstructor(classname);
-    if (!cstor)
-      throw new Error(`cannot create ${classname}: no aspect found`);
-    for (let category of categories)
-      if (!cstor.aspect.categories.has(category))
-        throw new Error(`cannot create ${classname}: category ${category} is missing in aspect ${cstor.aspect.aspect}`);
-    return new cstor() as T;
+  aspectFactory<T extends VersionedObject>(classname: string, categories: string[] = []) : Aspect.Factory<T> {
+    return this._configuration.aspectFactory<T>(this, classname, categories);
+  }
+
+  create<T extends VersionedObject>(classname: string, categories: string[] = [], ...args) : T {
+    return this._configuration.create<T>(this, classname, categories, ...args);
   }
 
   findOrCreate<T extends VersionedObject>(id: Identifier, classname: string, categories: string[] = []) : T {
@@ -183,8 +164,8 @@ export class ControlCenter {
   }
 
   /// category cache
-  cache() {
-    return this._cache;
+  configuration() {
+    return this._configuration;
   }
 
   changeObjectId(oldId: Identifier, newId: Identifier) {
@@ -203,17 +184,5 @@ export class ControlCenter {
     if (o && o !== object)
       o.manager().mergeWithRemote(m);
     return o || object;
-  }
-
-  /// category Transport
-  installTransport(transport: FarTransport, filter?: (cstor: Aspect.Constructor) => boolean) {
-    this._aspects.forEach(cstor => {
-      if (filter && !filter(cstor))
-        return;
-      cstor.aspect.farMethods.forEach(method => {
-        if (method.transport === Aspect.farTransportStub)
-          method.transport = transport;
-      });
-    });
   }
 }

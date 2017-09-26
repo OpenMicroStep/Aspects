@@ -155,8 +155,8 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       }
     }
     else {
-      for (let cstor of this.ctx.controlCenter.installedAspectConstructors()) {
-        let a = cstor.aspect.attributes.get(attribute);
+      for (let aspect of this.ctx.controlCenter.installedAspects()) {
+        let a = aspect.attributes.get(attribute);
         if (a)
           return a;
       }
@@ -405,7 +405,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       if (!value) {
         let obi_is = this.ctx.systemObiById.get(is)!;
         let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
-        value = new (this.ctx.controlCenter.aspectConstructorChecked(classname))();
+        value = this.ctx.controlCenter.create(classname);
         value.manager().setId(subid);
         this.ctx.controlCenter.registerObject(component, value);
       }

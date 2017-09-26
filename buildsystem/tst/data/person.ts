@@ -202,8 +202,12 @@ export declare namespace Person {
     }
   }
   export namespace Aspects {
-    
   }
+}
+export namespace Person {
+  export function create(cc: ControlCenter) { return cc.create<Person>("Person"); }
+  export const Aspects = {
+  };
 }
 export class Cat extends VersionedObject {
   _owner: Person | undefined;
@@ -242,6 +246,10 @@ export declare namespace Cat {
   export namespace ImplCategories {
   }
   export namespace Aspects {
-    
   }
+}
+export namespace Cat {
+  export function create(cc: ControlCenter) { return cc.create<Cat>("Cat"); }
+  export const Aspects = {
+  };
 }
