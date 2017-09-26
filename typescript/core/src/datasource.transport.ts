@@ -7,6 +7,7 @@ export type EncodedVersionedObjects = EncodedVersionedObject[];
 export type EncodedValue = null | string | number | boolean |
   { is: "vo", v: [string, Identifier] } |
   { is: "set", v: EncodedValue[] } |
+  { is: "date", v: string } |
   { is: "obj", v: { [s: string]: EncodedValue } } |
   any[];
 export type EncodedVersionedObject = {
@@ -63,6 +64,9 @@ export class VersionedObjectCoder {
         r.push(this._encodeValue(v));
       return r;
     }
+    else if (value instanceof Date) {
+      return { is: "date", v: value.toISOString() };
+    }
     else if (typeof value === "object") {
       if (value.constructor !== Object)
         throw new Error(`cannot encode non std objects ${value.constructor && value.constructor.name}`);
@@ -111,6 +115,9 @@ export class VersionedObjectCoder {
             for (let v of value.v)
               r.add(this._decodeValue(cc, v));
             return r;
+          }
+          case 'date': {
+            return new Date(value.v);
           }
           case 'obj': {
             let r = {};
