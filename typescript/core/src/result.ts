@@ -2,9 +2,9 @@ import { ImmutableList } from './core';
 import { Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 
 export class Result<T = any> {
-  _items: Result.Item[];
-  _values: T[] = [];
-  _diagnostics: Diagnostic[] = [];
+  /** @internal */ _items: Result.Item[];
+  /** @internal */ _values: T[] = [];
+  /** @internal */ _diagnostics: Diagnostic[] = [];
 
   static toDiagItems(diagnostics: Diagnostic[]) : Result.ItemDiagnostic[] {
     return diagnostics.map((d: Result.ItemDiagnostic) => { d.is = "diagnostic"; return d; });
