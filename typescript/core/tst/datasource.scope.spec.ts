@@ -194,7 +194,7 @@ function scope_on_bad_attribute() {
       Car: {
         '.': ['_cars']
       },
-    })
+    });
   }, `'_cars' requested but not found for 'Car'`);
 }
 
@@ -283,7 +283,7 @@ function sort_on__() {
       Car: {
         '_': ['+_name']
       },
-    })
+    });
   }, `sort is forbidden on '_' paths`);
 }
 
@@ -296,7 +296,7 @@ function sort_on_sub() {
       People: {
         '_owner.': ['+_name']
       },
-    })
+    });
   }, `sort is forbidden on '_owner.' path`);
 }
 
@@ -306,7 +306,7 @@ function sort_on_mult() {
       People: {
         '.': ['+_cars']
       },
-    })
+    });
   }, `cannot sort on '_cars' (multiple values)`);
 }
 
@@ -341,7 +341,7 @@ function sort_incompatible() {
       Car: {
         '.': ['+_name']
       },
-    })
+    });
   }, `incompatible sorts`);
   assert.throw(() => {
     parseScope({
@@ -351,7 +351,7 @@ function sort_incompatible() {
       Car: {
         '.': ['+_name']
       },
-    })
+    });
   }, `incompatible sort count`);
 }
 

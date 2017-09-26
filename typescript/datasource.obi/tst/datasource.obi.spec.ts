@@ -692,7 +692,6 @@ async function createObiControlCenter(flux) {
       return value;
     },
   });
-  //trace = true;
 
   Object.assign(flux.context, {
     connector: connector,
