@@ -85,6 +85,7 @@ elementFactories.registerSimple('class', (reporter, name, definition, attrPath, 
 });
 export class ClassElement extends Element {
   superclass: string = "VersionedObject";
+  is_sub_object: boolean = false;
   attributes: AttributeElement[] = [];
   queries: QueryElement[] = [];
   categories: CategoryElement[] = [];
@@ -173,6 +174,7 @@ export namespace ${this.name} {
       is: this.is,
       name: this.name,
       version: 0,
+      is_sub_object: this.is_sub_object,
       attributes: this.attributes.map(a => a.toJSON()),
       queries: this.queries.map(a => a.toJSON()),
       categories: this.categories.map(c => c.toJSON()),

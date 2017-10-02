@@ -33,6 +33,8 @@ function serialize(s, map = new Map()) {
         map.set(s, r = []);
         s.forEach(e => r.push(serialize(e, map)));
       }
+      else if ("contains_vo" in s)
+        map.set(s, r = s);
       else if (s.aspect && s.name && s.attributes)
         map.set(s, r = { aspect: s.aspect, name: s.name });
       else {

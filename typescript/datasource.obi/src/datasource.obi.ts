@@ -38,6 +38,7 @@ export class ObiDataSource extends DataSource {
     is: "class",
     name: "ObiDataSource",
     version: 0,
+    is_sub_object: false,
     aspects: DataSource.definition.aspects
   };
 

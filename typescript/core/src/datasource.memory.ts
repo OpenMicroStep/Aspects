@@ -13,6 +13,7 @@ export class InMemoryDataSource extends DataSource {
     is: "class",
     name: "InMemoryDataSource",
     version: 0,
+    is_sub_object: false,
     aspects: DataSource.definition.aspects
   };
 

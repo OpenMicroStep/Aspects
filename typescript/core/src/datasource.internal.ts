@@ -337,6 +337,7 @@ export namespace DataSourceInternal {
     type: type_any,
     validator: Validation.validateId,
     relation: undefined,
+    contains_vo: false,
   };
   function attribute_any(name: string): Aspect.InstalledAttribute {
     return {
@@ -344,6 +345,7 @@ export namespace DataSourceInternal {
       type: type_any,
       validator: V.validateAny,
       relation: undefined,
+      contains_vo: false,
     };
   }
 

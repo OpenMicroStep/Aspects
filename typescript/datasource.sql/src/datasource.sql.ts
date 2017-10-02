@@ -22,6 +22,7 @@ export class SqlDataSource extends DataSource {
     is: "class",
     name: "SqlDataSource",
     version: 0,
+    is_sub_object: false,
     aspects: DataSource.definition.aspects
   };
 

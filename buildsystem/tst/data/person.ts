@@ -13,6 +13,7 @@ export class Person extends VersionedObject {
     "is": "class",
     "name": "Person",
     "version": 0,
+    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
@@ -216,6 +217,7 @@ export class Cat extends VersionedObject {
     "is": "class",
     "name": "Cat",
     "version": 0,
+    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
