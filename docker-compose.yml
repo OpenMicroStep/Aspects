@@ -1,5 +1,5 @@
 mssql:
-  image: microsoft/mssql-server-linux
+  image: microsoft/mssql-server-linux:2017-GA
   environment:
    - ACCEPT_EULA=Y
    - SA_PASSWORD=7wnjijM9JihtKok4RC6
