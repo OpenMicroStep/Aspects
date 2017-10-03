@@ -23,7 +23,7 @@ class PostgresSqlMaker extends SqlMaker {
   }
 
   insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]): SqlBinding {
-    let sql =`INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')}) VALUES (${this.join_sqls(sql_values, ',')})`;
+    let sql = `INSERT INTO ${this.quote(table)} (${columns.map(c => this.quote(c)).join(',')}) VALUES (${this.join_sqls(sql_values, ',')})`;
     if (output_columns.length > 0)
       sql += ` RETURNING ${output_columns.map(c => this.quote(c)).join(',')}`;
     return {
