@@ -248,17 +248,15 @@ export class AspectConfiguration {
         categories.add(c);
         this.installLocalCategoryCache(this.cachedCategory(name, c, cstor), aspect_cstor!, cstor);
       });
-      aspect_def.farCategories.forEach(c => {
-        categories.add(c);
-        this.installFarCategoryCache(this.cachedCategory(name, c, cstor), aspect_cstor!, cstor, (category) => {
-          let ft = farTransports && farTransports.find(t => t.categories.indexOf(category) !== -1);
-          let t = ft && ft.transport;
-          if (!t)
-            t = defaultFarTransport;
-          if (!t)
-            throw new Error(`no far transport on ${category} for ${name}`);
-          return t;
-        });
+      aspect_def.farCategories.forEach(category_name => {
+        categories.add(category_name);
+        let ft = farTransports && farTransports.find(t => t.categories.indexOf(category_name) !== -1);
+        let t = ft && ft.transport;
+        if (!t)
+          t = defaultFarTransport;
+        if (!t)
+          throw new Error(`no far transport on ${category_name} for ${name}`);
+        this.installFarCategoryCache(this.cachedCategory(name, category_name, cstor), aspect_cstor!, cstor, t);
       });
       this._aspects.set(name, aspect_cstor);
     }
@@ -369,11 +367,11 @@ export class AspectConfiguration {
     });
   }
 
-  private installFarCategoryCache(cache: Map<string, Aspect.InstalledMethod>, aspect_cstor: VersionedObjectConstructorCache, cstor: VersionedObjectConstructor, transport: (category: string) => FarTransport) {
-    cache.forEach((far_method, category_name) => {
+  private installFarCategoryCache(cache: Map<string, Aspect.InstalledMethod>, aspect_cstor: VersionedObjectConstructorCache, cstor: VersionedObjectConstructor, transport: FarTransport) {
+    cache.forEach((far_method, method_name) => {
       if (!far_method.transport)
         throw new Error(`${far_method.name} is not a far method`);
-      aspect_cstor.aspect.farMethods.set(category_name, Object.assign({}, far_method as Aspect.InstalledFarMethod, { transport: transport(category_name) }));
+      aspect_cstor.aspect.farMethods.set(method_name, Object.assign({}, far_method as Aspect.InstalledFarMethod, { transport: transport }));
     });
   }
 
