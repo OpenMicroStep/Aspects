@@ -1,21 +1,18 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { ControlCenter, DataSource, Aspect } from '@openmicrostep/aspects';
+import { ControlCenter, DataSource, AspectConfiguration } from '@openmicrostep/aspects';
 import { XHRTransport } from '@openmicrostep/aspects.xhr';
 import { AppModule } from './app.module';
 import {Person, DemoApp} from '../shared/index';
 
-export const controlCenter = new ControlCenter();
-export const DemoAppClient = DemoApp.installAspect(controlCenter, "client");
-export const PersonClient = Person.installAspect(controlCenter, "client");
-export const dataSource = new (DataSource.installAspect(controlCenter, "client"))();
-export const app = new DemoAppClient();
 const xhr = new XHRTransport();
-for (let cstor of controlCenter.installedAspectConstructors()) {
-  cstor.aspect.farMethods.forEach(method => {
-    if (method.transport === Aspect.farTransportStub)
-      method.transport = xhr;
-  });
-}
+const cfg = new AspectConfiguration([
+  DemoApp.Aspects.client,
+  Person.Aspects.client,
+  DataSource.Aspects.client,
+], xhr);
+export const controlCenter = new ControlCenter(cfg);
+export const dataSource = DataSource.Aspects.client.create(controlCenter);
+export const app = DemoApp.Aspects.client.create(controlCenter);
 platformBrowserDynamic().bootstrapModule(AppModule);
 
 app.manager().setId('__root');

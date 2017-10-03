@@ -155,8 +155,8 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       }
     }
     else {
-      for (let cstor of this.ctx.controlCenter.installedAspectConstructors()) {
-        let a = cstor.aspect.attributes.get(attribute);
+      for (let aspect of this.ctx.controlCenter.installedAspects()) {
+        let a = aspect.attributes.get(attribute);
         if (a)
           return a;
       }
@@ -187,11 +187,11 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     else {
       let a = this.aspectAttribute(attribute);
       if (a.relation) {
-        let other_is_name = this.ctx.config.aspectClassname_to_ObiEntity(a.relation.class);
+        let other_is_name = this.ctx.config.aspectClassname_to_ObiEntity(a.relation.class.name);
         let other_is = this.ctx.systemObiByName.get(other_is_name);
         if (!other_is)
           throw new Error(`obi ${other_is_name} not found`);
-        let other_car = this.ctx.systemObiByName.get(this.ctx.config.aspectAttribute_to_ObiCar(a.relation.attribute));
+        let other_car = this.ctx.systemObiByName.get(this.ctx.config.aspectAttribute_to_ObiCar(a.relation.attribute.name));
         if (!other_car)
           throw new Error(`caracteristic ${a.relation.attribute} not found`);
         return this.mk_car_info(other_car, false);
@@ -405,7 +405,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       if (!value) {
         let obi_is = this.ctx.systemObiById.get(is)!;
         let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
-        value = new (this.ctx.controlCenter.aspectConstructorChecked(classname))();
+        value = this.ctx.controlCenter.create(classname);
         value.manager().setId(subid);
         this.ctx.controlCenter.registerObject(component, value);
       }

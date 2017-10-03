@@ -13,6 +13,7 @@ export class Person extends VersionedObject {
     "is": "class",
     "name": "Person",
     "version": 0,
+    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
@@ -202,8 +203,12 @@ export declare namespace Person {
     }
   }
   export namespace Aspects {
-    
   }
+}
+export namespace Person {
+  export function create(cc: ControlCenter) { return cc.create<Person>("Person"); }
+  export const Aspects = {
+  };
 }
 export class Cat extends VersionedObject {
   _owner: Person | undefined;
@@ -212,6 +217,7 @@ export class Cat extends VersionedObject {
     "is": "class",
     "name": "Cat",
     "version": 0,
+    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
@@ -242,6 +248,10 @@ export declare namespace Cat {
   export namespace ImplCategories {
   }
   export namespace Aspects {
-    
   }
+}
+export namespace Cat {
+  export function create(cc: ControlCenter) { return cc.create<Cat>("Cat"); }
+  export const Aspects = {
+  };
 }

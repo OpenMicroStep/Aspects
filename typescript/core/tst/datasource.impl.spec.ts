@@ -1,8 +1,7 @@
-import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager, Result, Aspect, ImmutableSet} from '@openmicrostep/aspects';
+import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, VersionedObjectManager, Result} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
-import ConstraintType = DataSourceInternal.ConstraintType;
 
 interface Flux<T> {
   context: T;
@@ -44,7 +43,7 @@ function init(flux: Flux<Context>) {
 }
 
 function clean(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
   cc.unregisterObjects(component, [c0, c1, c2, c3, p0, p1, p2, p3, p4]);
   assert.deepEqual([...cc.componentObjects(component)], []);
   cc.unregisterComponent(component);
@@ -52,7 +51,7 @@ function clean(f: Flux<Context>) {
 }
 
 function save_c0(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   assert.equal(c0.version(), VersionedObjectManager.NextVersion);
   assert.equal(c0.manager().hasChanges(), true);
   db.farPromise('rawSave', [c0]).then((envelop) => {
@@ -63,7 +62,7 @@ function save_c0(f: Flux<Context>) {
   });
 }
 function save_c0_new_name(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   assert.equal(c0.manager().hasChanges(), false);
   c0._name = "ReNault";
   assert.equal(c0.manager().hasChanges(), true);
@@ -75,7 +74,7 @@ function save_c0_new_name(f: Flux<Context>) {
   });
 }
 function save_c0_c1_c2(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawSave', [c0, c1, c2]).then((envelop) => {
     assert.sameMembers(envelop.value(), [c0, c1, c2]);
     assert.equal(c0.version(), 1);
@@ -85,7 +84,7 @@ function save_c0_c1_c2(f: Flux<Context>) {
   });
 }
 function query_cars(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car } }).then((envelop) => {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c0, c1, c2]);
@@ -93,7 +92,7 @@ function query_cars(f: Flux<Context>) {
   });
 }
 function query_peugeots(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _name: "Peugeot" } }).then((envelop) => {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c2]);
@@ -103,7 +102,7 @@ function query_peugeots(f: Flux<Context>) {
   });
 }
 function query_eq_peugeots(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _name: { $eq: "Peugeot" } } }).then((envelop) => {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c2]);
@@ -113,7 +112,7 @@ function query_eq_peugeots(f: Flux<Context>) {
   });
 }
 function query_ne_peugeots(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _name: { $ne: "Peugeot" } } }).then((envelop) => {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c0, c1]);
@@ -123,21 +122,21 @@ function query_ne_peugeots(f: Flux<Context>) {
   });
 }
 function query_in_c2(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, $in: [c2] } }).then((envelop) => {
     assert.sameMembers(envelop.value()['cars'], [c2]);
     f.continue();
   });
 };
 function query_id_c2(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: Car, _id: c2.id() } }).then((envelop) => {
     assert.sameMembers(envelop.value()['cars'], [c2]);
     f.continue();
   });
 }
 function query_peoples(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "peoples", where: { $instanceOf: People } }).then((envelop) => {
     assert.deepEqual(envelop.value(), {
       peoples: []
@@ -147,7 +146,7 @@ function query_peoples(f: Flux<Context>) {
 }
 
 function sort_c0_c1_c2_c3_asc(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: "Car" }, scope: {
     Car: { '.' : ['+_name', '+_model'] },
   } }).then((envelop) => {
@@ -159,7 +158,7 @@ function sort_c0_c1_c2_c3_asc(f: Flux<Context>) {
 }
 
 function sort_c0_c1_c2_c3_dsc(f: Flux<Context>) {
-  let {Car, People, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { name: "cars", where: { $instanceOf: "Car" }, scope: {
     Car: { '.' : ['-_name', '-_model'] },
   } }).then((envelop) => {
@@ -171,7 +170,7 @@ function sort_c0_c1_c2_c3_dsc(f: Flux<Context>) {
 }
 
 function save_c0_c1_c2_c3_p0_p1_p2_p3_p4(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
   db.farPromise('rawSave', [c0, c1, c2, c3, p0, p1, p2, p3, p4]).then(envelop => {
     assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0, c1, c2, c3, p0, p1, p2, p3, p4]);
@@ -179,7 +178,7 @@ function save_c0_c1_c2_c3_p0_p1_p2_p3_p4(f: Flux<Context>) {
   });
 }
 function save_relation_c0p0_c1p0_c2p1(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   assert.equal(c0.manager().hasChanges(), false);
   assert.sameMembers([...p0._cars], []);
   c0._owner = p0;
@@ -234,7 +233,7 @@ async function _query_cars(f: Flux<Context>, q: () => Promise<Result<{ [k: strin
   return { lp0: lp0, lc0: lc0 };
 }
 async function query_cars_peoples(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   await _query_cars(f, () => {
     return db.farPromise('rawQuery', { results: [
       { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0.id() }, scope: ['_name', '_owner', '_model']             },
@@ -245,7 +244,7 @@ async function query_cars_peoples(f: Flux<Context>) {
 }
 
 async function query_cars_peoples_relation_in_scope(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   let {lp0, lc0} = await _query_cars(f, () => {
     return db.farPromise('rawQuery', { results: [
       { name: "cars"   , where: { $instanceOf: Car   , _owner: p0, _id: c0.id() }, scope: ['_name', '_owner', '_model']             },
@@ -257,7 +256,7 @@ async function query_cars_peoples_relation_in_scope(f: Flux<Context>) {
 }
 
 function query_cars_peoples_constraint_on_relation(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   let p0_cpy = { id: p0.id(), _firstname: p0._firstname, _lastname: p0._lastname, _birthDate: p0._birthDate };
   cc.unregisterObjects(component, [c0, p0]);
   db.farPromise('rawQuery', { results: [
@@ -285,7 +284,7 @@ function query_cars_peoples_constraint_on_relation(f: Flux<Context>) {
 }
 
 function query_elementof(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { // All persons with a car and their cars
     "C=": { $instanceOf: Car },
     "P=": { $instanceOf: People },
@@ -305,7 +304,7 @@ function query_elementof(f: Flux<Context>) {
   });
 }
 function query_intersection(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { // All persons with a car and their cars
     "C=": { $instanceOf: Car },
     "P=": { $instanceOf: People },
@@ -320,7 +319,7 @@ function query_intersection(f: Flux<Context>) {
   });
 }
 function query_elementof_sub(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { // All persons with a car and their cars
     "C=": { $instanceOf: Car },
     "P=": { $instanceOf: People },
@@ -346,7 +345,7 @@ function query_elementof_sub(f: Flux<Context>) {
   });
 }
 function query_elementof_intersection(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { // All persons with a car and their cars
     "C=": { $instanceOf: Car },
     "P=": { $instanceOf: People },
@@ -385,7 +384,7 @@ function query_elementof_intersection(f: Flux<Context>) {
   });
 }
 function query_elementof_c1c2(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   db.farPromise('rawQuery', { // Cars where the owner has another car
     "C=": { $instanceOf: Car },
     "cars=": {
@@ -406,7 +405,7 @@ function query_elementof_c1c2(f: Flux<Context>) {
 }
 
 function query_mother_father_peoples(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
   [...cc.componentObjects(component)].map(vo => vo.manager().unload());
   db.farPromise('rawQuery', { name: "peoples", where: { $instanceOf: "People" }, scope: {
     People: {
@@ -430,7 +429,7 @@ function query_mother_father_peoples(f: Flux<Context>) {
 }
 
 function query_father_tree(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
   [...cc.componentObjects(component)].map(vo => vo.manager().unload());
   db.farPromise('rawQuery', {
     name: "peoples",
@@ -468,7 +467,7 @@ function deepEqual(a, b, attributes: string[]) {
   }
 }
 async function load_mixed_attributes(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
 
   c0.manager().unload();
   p0.manager().unload();
@@ -488,7 +487,7 @@ async function load_mixed_attributes(f: Flux<Context>) {
   f.continue();
 }
 async function load_sub_attributes(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   c0.manager().unload();
   p0.manager().unload();
 
@@ -507,7 +506,7 @@ async function load_sub_attributes(f: Flux<Context>) {
   f.continue();
 }
 async function load_sub_mult_attributes(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   c0.manager().unload();
   c1.manager().unload();
   p0.manager().unload();
@@ -534,7 +533,7 @@ async function load_sub_mult_attributes(f: Flux<Context>) {
 }
 
 async function query_union_cars_peoples(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   cc.unregisterObjects(component, [c0, p0]);
 
   let inv = await db.farPromise('rawQuery', {
@@ -562,7 +561,7 @@ async function query_union_cars_peoples(f: Flux<Context>) {
   f.continue();
 }
 async function query_cars_sub_scope(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2} = f.context;
   cc.unregisterObjects(component, [c0, p0]);
 
   let inv = await db.farPromise('rawQuery', {
@@ -590,7 +589,7 @@ async function query_cars_sub_scope(f: Flux<Context>) {
 }
 
 async function query_parents(f: Flux<Context>) {
-  let {Car, People, db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
+  let {db, cc, component, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
 
   let inv = await db.farPromise('rawQuery', {
     "parents=": {
@@ -620,7 +619,7 @@ async function query_parents(f: Flux<Context>) {
 }
 
 function createWithCC(flux, nb) {
-  let {Car, People, db, cc} = flux.context as Context;
+  let {Car, db, cc} = flux.context as Context;
   let objects: VersionedObject[] = [];
   for (var i = 0; i < nb; i++) {
     objects.push(Object.assign(new Car(), { _name: "Renault", _model: "Clio 3" }));

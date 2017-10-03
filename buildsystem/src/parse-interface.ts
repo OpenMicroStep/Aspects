@@ -4,6 +4,7 @@ in:                                   out:
 Description de la classe              Person=: {
                                         is:class,
                                         superclass: Object
+                                        is_sub_object: boolean
 ### attributes                          attributes: [=_version, ..., =_birthDate],
 #### _version:   integer                _version=:   {is: attribute, type:integer},
 #### _firstName: string                 _firstName=: {is: attribute, type:string},
@@ -164,6 +165,7 @@ namespace Element {
     is: 'class',
     name: string,
     superclass?: string,
+    is_sub_object: boolean,
 
     "attributes=": { is: "group" },
     attributes: string[],
@@ -231,15 +233,11 @@ function _parseAttribute(parser: Parser, is: string) {
 
 function parseAttribute(parser: Parser) : Element.Attribute {
   let attr = _parseAttribute(parser, 'attribute') as Element.Attribute;
-  do {
-    if (parser.ch === '#')
-      break;
-    parser.skip(Parser.isSpaceChar);
-    if (parser.test('_relation_:')) {
-      parser.skip(Parser.isSpaceChar);
-      attr.relation = parseQuotedString(parser, '`');
-    }
-  } while (!attr.relation && parseUntilNextLine(parser));
+  parseOptions(parser, (parser) => {
+    let relation = parseStringOption(parser, "relation");
+    if (relation)
+      attr.relation = relation;
+  });
   return attr;
 }
 
@@ -349,6 +347,7 @@ function parseClass(parser: Parser) : Element.Class | undefined {
   let ret: Element.Class = {
     is: 'class',
     name: name,
+    is_sub_object: false,
     "attributes=": { is: 'group' }, attributes: [],
     "queries="   : { is: 'group' }, queries: [],
     "categories=": { is: 'group' }, categories: [], farCategories: [],
@@ -361,7 +360,33 @@ function parseClass(parser: Parser) : Element.Class | undefined {
     parser.skip(Parser.isSpaceChar);
   }
   parseUntilNextLine(parser);
+  parseOptions(parser, (parser) => {
+    if (parseBooleanOption(parser, "sub object") === true)
+      ret.is_sub_object = true;
+  });
   return ret;
+}
+
+function parseOptions(parser: Parser, try_parse_option: (parser: Parser) => void) {
+  do {
+    if (parser.ch === '#')
+      break;
+    parser.skip(Parser.isSpaceChar);
+    try_parse_option(parser);
+  } while (parseUntilNextLine(parser));
+}
+
+function parseStringOption(parser: Parser, option: string) : string | undefined {
+  if (parser.test(`_${option}_:`)) {
+    parser.skip(Parser.isSpaceChar);
+    return parseQuotedString(parser, '`');
+  }
+  return undefined
+}
+function parseBooleanOption(parser: Parser, option: string) : true | undefined {
+  if (parser.test(`_${option}_`))
+    return true;
+  return undefined;
 }
 
 function parseName(parser: Parser) {

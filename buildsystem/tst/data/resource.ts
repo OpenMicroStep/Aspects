@@ -7,6 +7,7 @@ export class Resource extends VersionedObject {
     "is": "class",
     "name": "Resource",
     "version": 0,
+    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
@@ -53,8 +54,6 @@ export class Resource extends VersionedObject {
   static readonly category: Resource.Categories;
 }
 export declare namespace Resource {
-  function installAspect(on: ControlCenter, name: 'test1'): { new(): Resource.Aspects.test1 };
-
   function __Resource_c(name: string): {};
   function __Resource_c(name: 'local'): Resource.Categories.local;
   function __Resource_i(name: string): {};
@@ -77,6 +76,16 @@ export declare namespace Resource {
     export type test1 = Categories.local;
   }
 }
+export namespace Resource {
+  export function create(cc: ControlCenter) { return cc.create<Resource>("Resource"); }
+  export const Aspects = {
+    test1: <Aspect.FastConfiguration<Resource.Aspects.test1>> {
+      name: "Resource", aspect: "test1", cstor: Resource, categories: ["local"],
+      create(cc: ControlCenter) { return cc.create<Resource.Aspects.test1>("Resource", this.categories); },
+      factory(cc: ControlCenter) { return cc.aspectFactory<Resource.Aspects.test1>("Resource", this.categories); },
+    },
+  };
+}
 export class Car extends Resource {
   _model: string | undefined;
 
@@ -84,6 +93,7 @@ export class Car extends Resource {
     "is": "class",
     "name": "Car",
     "version": 0,
+    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
@@ -152,8 +162,6 @@ export namespace Car {
   export const __Car_ImplCategories_local2 = Resource.__Resource_i && Resource.__Resource_i<Car>('local2');
 }
 export declare namespace Car {
-  function installAspect(on: ControlCenter, name: 'test1'): { new(): Car.Aspects.test1 };
-
   function __Car_c(name: string): {};
   function __Car_c(name: 'local'): Car.Categories.local;
   function __Car_c(name: 'local2'): Car.Categories.local2;
@@ -184,4 +192,14 @@ export declare namespace Car {
   export namespace Aspects {
     export type test1 = Categories.local;
   }
+}
+export namespace Car {
+  export function create(cc: ControlCenter) { return cc.create<Car>("Car"); }
+  export const Aspects = {
+    test1: <Aspect.FastConfiguration<Car.Aspects.test1>> {
+      name: "Car", aspect: "test1", cstor: Car, categories: ["local"],
+      create(cc: ControlCenter) { return cc.create<Car.Aspects.test1>("Car", this.categories); },
+      factory(cc: ControlCenter) { return cc.aspectFactory<Car.Aspects.test1>("Car", this.categories); },
+    },
+  };
 }

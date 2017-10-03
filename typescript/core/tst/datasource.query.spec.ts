@@ -1,15 +1,15 @@
-import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, AspectCache, Aspect} from '@openmicrostep/aspects';
+import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, AspectConfiguration} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import ConstraintType = DataSourceInternal.ConstraintType;
 import ObjectSet = DataSourceInternal.ObjectSet;
 
-const cache = new AspectCache();
-const cc = new ControlCenter(cache);
-Resource.installAspect(cc, "test1");
-Car.installAspect(cc, "test1");
-People.installAspect(cc, "test1");
+const cc = new ControlCenter(new AspectConfiguration([
+  Resource.Aspects.test1,
+  Car.Aspects.test1,
+  People.Aspects.test1,
+]));
 
 function aspect_attr(type: string, attr: string) {
   let r =  cc.aspectChecked(type).attributes.get(attr);
@@ -33,6 +33,8 @@ function serialize(s, map = new Map()) {
         map.set(s, r = []);
         s.forEach(e => r.push(serialize(e, map)));
       }
+      else if ("contains_vo" in s)
+        map.set(s, r = s);
       else if (s.aspect && s.name && s.attributes)
         map.set(s, r = { aspect: s.aspect, name: s.name });
       else {
@@ -744,9 +746,12 @@ function persons_with_cars_and_their_cars_1k() { // about 170ms
 }
 
 function makeObjects() {
-  let cc = new ControlCenter();
-  let C = Car.installAspect(cc, 'test1');
-  let P = People.installAspect(cc, 'test1');
+  let cc = new ControlCenter(new AspectConfiguration([
+    Car.Aspects.test1,
+    People.Aspects.test1,
+  ]));
+  let C = Car.Aspects.test1.factory(cc);
+  let P = People.Aspects.test1.factory(cc);
   let objects: VersionedObject[] = [];
   objects.push(Object.assign(new C(), { _name: "Renault", _model: "Clio 3" }));
   objects.push(Object.assign(new C(), { _name: "Renault", _model: "Clio 2" }));

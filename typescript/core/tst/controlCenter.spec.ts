@@ -1,13 +1,15 @@
-import {ControlCenter, NotificationCenter} from '@openmicrostep/aspects';
+import {ControlCenter, NotificationCenter, AspectConfiguration} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
 function basics() {
   let c0 = {};
   let c1 = {};
-  let cc = new ControlCenter();
+  let cc = new ControlCenter(new AspectConfiguration([
+    Resource.Aspects.test1,
+  ]));
   assert.instanceOf(cc.notificationCenter(), NotificationCenter);
-  let R = Resource.installAspect(cc, 'test1');
+  let R = cc.aspectFactory<Resource.Aspects.test1>("Resource");
   let r0 = new R();
   let r1 = new R();
   cc.registerComponent(c0);
@@ -61,17 +63,17 @@ function basics() {
 }
 
 function cannot_mix_cc() {
-  let cc1 = new ControlCenter();
-  let cc2 = new ControlCenter();
+  let cfg = new AspectConfiguration([
+    Car.Aspects.test1,
+    People.Aspects.test1,
+  ]);
+  let cc1 = new ControlCenter(cfg);
+  let cc2 = new ControlCenter(cfg);
   let c0 = {};
-  let C1 = Car.installAspect(cc1, 'test1');
-  let P1 = People.installAspect(cc1, 'test1');
-  let C2 = Car.installAspect(cc2, 'test1');
-  let P2 = People.installAspect(cc2, 'test1');
-  let c2 = new C2();
+  let c2 = cc2.create<Car.Aspects.test1>("Car");
   cc1.registerComponent(c0);
   assert.throw(() => cc1.registerObjects(c0, [c2]));
-  assert.throw(() => c2._owner = new P1());
+  assert.throw(() => c2._owner = cc1.create<People.Aspects.test1>("People"));
 }
 
 export const tests = { name: 'ControlCenter', tests: [

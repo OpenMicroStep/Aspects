@@ -4,7 +4,7 @@ import {
   SafePostLoad, SafePreSave, SafePostSave,
 } from './core';
 import { Flux } from '@openmicrostep/async';
-import { Reporter } from '@openmicrostep/msbuildsystem.shared';
+import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsystem.shared';
 
 function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
   let ret = { add: [] as T[], del: [] as T[] };
@@ -44,6 +44,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   /** @internal */ _controlCenter: ControlCenter;
   /** @internal */ _aspect: Aspect.Installed;
   /** @internal */ _object: T;
+  /** @internal */ _parent_manager: VersionedObjectManager | undefined;
   /** @internal */ _components: Set<object>;
 
   /** @internal */ _localAttributes: VersionedObjectManager.Attributes<T>;
@@ -52,7 +53,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   /** @internal */ _oldVersion: number;
   /** @internal */ _oldVersionAttributes: VersionedObjectManager.Attributes<T>;
 
-  constructor(controlCenter: ControlCenter, aspect: Aspect.Installed) {
+  constructor(controlCenter: ControlCenter, object: T) {
     this._controlCenter = controlCenter;
     this._components = new Set();
     this._id = `_localid:${++VersionedObjectManager.LocalIdCounter}`;
@@ -61,8 +62,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._versionAttributes = new Map();
     this._oldVersion = VersionedObjectManager.NoVersion;
     this._oldVersionAttributes = new Map();
-    this._aspect = aspect;
-    this._object = undefined!;
+    this._aspect = (object.constructor as any).aspect;
+    this._object = object;
+    this._parent_manager = undefined;
   }
 
   id()     : Identifier { return this._id; }
@@ -70,6 +72,15 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   name() { return this._aspect.name; }
   aspect() { return this._aspect; }
   object() { return this._object; }
+
+  isSubObject() { return this._aspect.is_sub_object; }
+  rootObject() {
+    if (!this.isSubObject())
+      return this._object;
+    else if (this._parent_manager)
+      return this._parent_manager.rootObject();
+    throw new Error(`cannot find root object of sub object, the sub object is not linked to any parent object`);
+  }
 
   isRegistered() { return this._components.size > 0; }
 
@@ -234,6 +245,17 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return undefined;
   }
 
+  validateAttributeValue(attribute: string, value: any): Diagnostic[] {
+    let reporter = new Reporter();
+    let a = this._aspect.attributes.get(attribute);
+    let path = new AttributePath(this.name(), this.id(), '.', attribute);
+    if (!a)
+      path.diagnostic(reporter, { type: "error", msg: `attribute doesn't exists` });
+    else
+      a.validator.validate(reporter, path, value, this);
+    return reporter.diagnostics;
+  }
+
   setAttributeValue<K extends keyof T>(attribute: K, value: T[K]) {
     this.setAttributeValueFast(attribute, value, this._aspect.attributes.get(attribute)!);
   }
@@ -247,7 +269,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (!hasVersionAttribute && !isNew)
       throw new Error(`attribute '${attribute}' is unaccessible and never was`);
     if (hasVersionAttribute && areEquals(this._versionAttributes.get(attribute), value)) {
-      if (data.relation)
+      if (data.relation || data.contains_vo)
         oldValue = this._localAttributes.get(attribute);
       hasChanged = this._localAttributes.delete(attribute);
     }
@@ -259,33 +281,46 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       this._localAttributes.set(attribute, value);
       hasChanged = true;
     }
-    if (hasChanged && data.relation) {
-      let { add: sadd, del: sdel } = diff<VersionedObject>(data.type, value, oldValue);
-      let otype = this.controlCenter().aspectChecked(data.relation.class).attributes.get(data.relation.attribute)!.type;
-      let add = true;
+    if (hasChanged && data.contains_vo) {
+      let { add, del } = diff<VersionedObject>(data.type, value, oldValue);
+      let is_add = true;
       let ai = 0, di = 0;
-      while ((add = ai < sadd.length) || di < sdel.length) {
-        let other = add ? sadd[ai++] : sdel[di++];
-        let other_manager = other.manager();
-        if (other_manager.controlCenter() !== this.controlCenter())
-          throw new Error(`you can't mix objects of different control centers`);
-        if (other_manager.hasAttributeValue(data.relation.attribute)) {
-          let v = other[data.relation.attribute];
-          switch (otype.type) {
-            case 'set':   v = new Set<VersionedObject>(v); v[add ? 'add' : 'delete'](this._object); break;
-            case 'class': v = add ? this._object : undefined; break;
-            default: throw new Error(`unsupported relation destination type ${otype.type}`);
+      while ((is_add = ai < add.length) || di < del.length) {
+        let sub_object = is_add ? add[ai++] : del[di++];
+        let sub_object_manager = sub_object.manager();
+        this._check_sub_object(sub_object_manager, is_add);
+        if (data.relation) {
+          let relation_name = data.relation.attribute.name;
+          let relation_type = data.relation.attribute.type;
+          if (sub_object_manager.hasAttributeValue(relation_name)) {
+            let v = sub_object[relation_name];
+            switch (relation_type.type) {
+              case 'set':   v = new Set<VersionedObject>(v); v[is_add ? 'add' : 'delete'](this._object); break;
+              case 'class': v = is_add ? this._object : undefined; break;
+              default: throw new Error(`unsupported relation destination type ${relation_type.type}`);
+            }
+            sub_object[relation_name] = v;
           }
-          other[data.relation.attribute] = v;
-        }
-        else if (add && other_manager.state() === VersionedObjectManager.State.NEW) {
-          switch (otype.type) {
-            case 'set':   other[data.relation.attribute] = (new Set<VersionedObject>()).add(this._object); break;
-            case 'class': other[data.relation.attribute] = this._object; break;
-            default: throw new Error(`unsupported relation destination type ${otype.type}`);
+          else if (is_add && sub_object_manager.state() === VersionedObjectManager.State.NEW) {
+            switch (relation_type.type) {
+              case 'set':   sub_object[relation_name] = (new Set<VersionedObject>()).add(this._object); break;
+              case 'class': sub_object[relation_name] = this._object; break;
+              default: throw new Error(`unsupported relation destination type ${relation_type.type}`);
+            }
           }
         }
       }
+    }
+  }
+
+  private _check_sub_object(sub_object_manager: VersionedObjectManager, is_add: boolean) {
+    if (sub_object_manager.controlCenter() !== this.controlCenter())
+      throw new Error(`you can't mix objects of different control centers`);
+    if (is_add && sub_object_manager.isSubObject()) {
+      if (!sub_object_manager._parent_manager)
+        sub_object_manager._parent_manager = this;
+      else if (sub_object_manager._parent_manager !== this)
+        throw new Error(`you can't move sub objects to another parent`);
     }
   }
 
@@ -293,30 +328,58 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this.mergeWithRemoteAttributes(manager._versionAttributes, manager._version);
   }
   mergeWithRemoteAttributes(attributes: Map<keyof T, any>, version: number) {
+    // _attributes_ can't be trusted, so we need to validate _attributes_ keys and types
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
-    if (version === this._version) {
-      if (VersionedObjectManager.SafeMode) {
-        for (let k of attributes.keys())
-          if (this._versionAttributes.has(k) && !areEquals(this._versionAttributes.get(k), attributes.get(k)))
-            ret.conflicts.push(k);
-      }
-      attributes.forEach((v, k) => this._versionAttributes.set(k, v));
-    }
-    else if (version > this._version) {
-      this._version = version;
-      this._oldVersion = this._version;
-      this._oldVersionAttributes = this._versionAttributes;
-      this._versionAttributes = attributes;
-      for (let k of this._versionAttributes.keys()) {
-        if (!this._oldVersionAttributes.has(k) || !areEquals(this._oldVersionAttributes.get(k), attributes.get(k)))
-          ret.changes.push(k);
-        if (this._localAttributes.has(k)) {
-          if (areEquals(this._localAttributes.get(k), this._versionAttributes.get(k)))
-            this._localAttributes.delete(k);
-          else if (!areEquals(this._oldVersionAttributes.get(k), this._versionAttributes.get(k)))
-            ret.conflicts.push(k);
+    let reporter = new Reporter();
+    let path = new AttributePath(this.name(), this.id(), '.', '');
+    for (let [k, v] of attributes) {
+      let a = this._aspect.attributes.get(k);
+      path.set(k);
+      if (!a)
+        path.diagnostic(reporter, { type: "error", msg: `attribute doesn't exists` });
+      else {
+        let s = reporter.snapshot();
+        a.validator.validate(reporter, path, v, this);
+        if (!reporter.failed) { // v is valid
+          if (a.contains_vo) {
+            switch (a.type.type) { // validate sub objects
+              case 'set':
+              case 'array':
+                for (let vi of v as VersionedObject[])
+                  this._check_sub_object(vi.manager(), true);
+                break;
+              case 'class':
+                if (v)
+                  this._check_sub_object(v.manager(), true);
+                break;
+            }
+            // TODO: check relations ? (do the other side of the relation is uptodate ?)
+          }
+          if (version === this._version) {
+            if (this._versionAttributes.has(k) && !areEquals(this._versionAttributes.get(k), v))
+              ret.conflicts.push(k);
+            this._versionAttributes.set(k, v);
+          }
+          else if (version > this._version) {
+            if (!this._versionAttributes.has(k) || !areEquals(this._versionAttributes.get(k), v))
+              ret.changes.push(k);
+            if (this._localAttributes.has(k)) {
+              if (areEquals(this._localAttributes.get(k), v))
+                this._localAttributes.delete(k);
+              else if (!areEquals(this._versionAttributes.get(k), v))
+                ret.conflicts.push(k);
+            }
+          }
         }
       }
+    }
+    if (reporter.failed)
+      throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
+    if (version > this._version) {
+      this._version = version;
+      this._versionAttributes = attributes;
+      this._oldVersion = this._version;
+      this._oldVersionAttributes = this._versionAttributes;
       for (let k of this._oldVersionAttributes.keys()) {
         if (!this._versionAttributes.has(k))
           ret.missings.push(k);
@@ -401,9 +464,6 @@ export class VersionedObject {
       static parent = cstor;
       static definition = definition;
       static displayName = `base ${definition.name}`;
-      static installAspect(cc: ControlCenter, name: string): { new(): VersionedObject } {
-        return cc.cache().createAspect(cc, name, this);
-      }
     };
   }
 
@@ -413,6 +473,7 @@ export class VersionedObject {
     is: "class",
     name: "VersionedObject",
     version: 0,
+    is_sub_object: false,
     attributes: [],
     categories: [{
       is: "category",
@@ -437,8 +498,8 @@ export class VersionedObject {
   /** @internal */ readonly _id: Identifier;  // virtual attribute handled by the manager
   /** @internal */ readonly _version: number; // virtual attribute handled by the manager
 
-  constructor(manager: VersionedObjectManager<any>) {
-    this.__manager = manager; // this will fill _id and _version attributes
+  constructor(cc: ControlCenter) {
+    this.__manager = new VersionedObjectManager(cc, this); // this will fill _id and _version attributes
   }
 
   id()     : Identifier { return this.__manager.id(); }
@@ -470,11 +531,6 @@ Object.defineProperty(VersionedObject, "category", {
     Object.keys(implementation).forEach(k => this.prototype[k] = implementation[k]);
   }
 });
-Object.defineProperty(VersionedObject, "installAspect", {
-  value: function installAspect(this: typeof VersionedObject, on: ControlCenter, name: string): { new(): VersionedObject } {
-    return on.cache().createAspect(on, name, this);
-  }
-});
 
 VersionedObject.category('validation', {
   validate(reporter: Reporter): void {}
@@ -492,10 +548,10 @@ Object.defineProperty(VersionedObject.prototype, '_version', {
 function isEqualVersionedObject(this: VersionedObject, other, level?: number) {
   return other === this;
 }
-addIsEqualSupport(VersionedObject, isEqualVersionedObject);
+addIsEqualSupport(VersionedObject as any, isEqualVersionedObject);
 
 export interface VersionedObjectConstructor<C extends VersionedObject = VersionedObject> {
-  new(manager: VersionedObjectManager<C>, ...args): C;
+  new(cc: ControlCenter, ...args): C;
   definition: Aspect.Definition;
   parent?: VersionedObjectConstructor<VersionedObject>;
 
@@ -504,8 +560,8 @@ export interface VersionedObjectConstructor<C extends VersionedObject = Versione
 }
 
 export declare namespace VersionedObject {
-  function __VersionedObject_c(n: string): {};
-  function __VersionedObject_i(n: string): {};
+  export function __VersionedObject_c(n: string): {};
+  export function __VersionedObject_i(n: string): {};
 }
 export namespace VersionedObject {
   export interface Categories<C extends VersionedObject = VersionedObject> {

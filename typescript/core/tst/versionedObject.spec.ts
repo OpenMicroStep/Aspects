@@ -1,16 +1,20 @@
-import {VersionedObject, VersionedObjectManager, ControlCenter, ImmutableSet} from '@openmicrostep/aspects';
+import {VersionedObject, VersionedObjectManager, ControlCenter, AspectConfiguration} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import {tests as tests_perfs} from './versionedObject.perfs.spec';
 
+const cfg = new AspectConfiguration([
+  Resource.Aspects.test1,
+  Car.Aspects.test1,
+  People.Aspects.test1,
+]);
 function basics() {
-  let cc = new ControlCenter();
-  let R = Resource.installAspect(cc, 'test1');
-  let C = Car.installAspect(cc, 'test1');
-  let P = People.installAspect(cc, 'test1');
+  let cc = new ControlCenter(cfg);
+  let R = Resource.Aspects.test1.factory(cc);
+  let C = Car.Aspects.test1.factory(cc);
+  let P = People.Aspects.test1.factory(cc);
   let v1 = new R();
-  assert.instanceOf(v1, R);
   assert.instanceOf(v1, Resource);
   assert.instanceOf(v1, VersionedObject);
   assert.equal(v1.version(), -1);
@@ -19,7 +23,6 @@ function basics() {
   assert.equal(v1.manager().controlCenter(), cc);
 
   let v2 = new R();
-  assert.instanceOf(v2, R);
   assert.instanceOf(v2, Resource);
   assert.instanceOf(v2, VersionedObject);
   assert.equal(v2.version(), -1);
@@ -28,11 +31,8 @@ function basics() {
   assert.notEqual(v1.id(), v2.id());
 
   let c1 = new C();
-  assert.notInstanceOf(c1, P);
   assert.notInstanceOf(c1, People);
-  assert.instanceOf(c1, C);
   assert.instanceOf(c1, Car);
-  assert.notInstanceOf(c1, R);
   assert.instanceOf(c1, Resource);
   assert.instanceOf(c1, VersionedObject);
   assert.equal(c1.version(), -1);
@@ -48,11 +48,8 @@ function basics() {
   assert.equal(c1.model(), `MyModel`);
 
   let p1 = new P();
-  assert.notInstanceOf(p1, C);
   assert.notInstanceOf(p1, Car);
-  assert.instanceOf(p1, P);
   assert.instanceOf(p1, People);
-  assert.notInstanceOf(p1, R);
   assert.instanceOf(p1, Resource);
   assert.instanceOf(p1, VersionedObject);
   assert.equal(p1.version(), -1);
@@ -71,31 +68,28 @@ function basics() {
   assert.equal(v2.version(), v2.version());
 
   assert.equal(v1.name(), undefined);
-  assert.doesNotThrow(() => { v1.manager().setId(v1.id()) });
-  assert.throw(() => { v1.manager().setId(v2.id()) }, `cannot change identifier to a local identifier`);
+  assert.doesNotThrow(() => { v1.manager().setId(v1.id()); });
+  assert.throw(() => { v1.manager().setId(v2.id()); }, `cannot change identifier to a local identifier`);
   v1.manager().setId(2);
   assert.equal(v1.id(), 2);
-  assert.throw(() => { v1.manager().setId(3) }, `id can't be modified once assigned (not local)`);
-  assert.throw(() => { v1.name() }, `attribute '_name' is unaccessible and never was`);
+  assert.throw(() => { v1.manager().setId(3); }, `id can't be modified once assigned (not local)`);
+  assert.throw(() => { v1.name(); }, `attribute '_name' is unaccessible and never was`);
   v1.manager().setVersion(2);
 }
 
 function shared() {
-  let cc = new ControlCenter();
-  let R = Resource.installAspect(cc, 'test1');
-  let C = Car.installAspect(cc, 'test1');
-  let P = People.installAspect(cc, 'test1');
+  let cc = new ControlCenter(cfg);
+  let C = Car.Aspects.test1.factory(cc);
 
   let c0 = new C();
   let c1 = c0.controlCenter().create<Car.Categories.local>("Car", ['local']);
-  assert.instanceOf(c1, C);
   assert.instanceOf(c1, Car);
 }
 
 function relation_1_n() {
-  let cc = new ControlCenter();
-  let C = Car.installAspect(cc, 'test1');
-  let P = People.installAspect(cc, 'test1');
+  let cc = new ControlCenter(cfg);
+  let C = Car.Aspects.test1.factory(cc);
+  let P = People.Aspects.test1.factory(cc);
 
   let c0 = new C();
   let c1 = new C();
@@ -122,9 +116,9 @@ function relation_1_n() {
 }
 
 function relation_n_n() {
-  let cc = new ControlCenter();
-  let C = Car.installAspect(cc, 'test1');
-  let P = People.installAspect(cc, 'test1');
+  let cc = new ControlCenter(cfg);
+  let C = Car.Aspects.test1.factory(cc);
+  let P = People.Aspects.test1.factory(cc);
 
   let c0 = new C();
   let c1 = new C();

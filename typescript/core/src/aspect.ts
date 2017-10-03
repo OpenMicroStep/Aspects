@@ -20,13 +20,13 @@ export interface Aspect {
   farCategories: string[];
 };
 export namespace Aspect {
-  export const farTransportStub = {
+  export const farTransportStub: FarTransport = {
     remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
       return Promise.reject(`transport not installed`);
     }
   };
 
-  export const localTransport = {
+  export const localTransport: FarTransport = {
     remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
       let impl = to[method];
       if (typeof impl === "function")
@@ -77,6 +77,20 @@ export namespace Aspect {
     return [];
   }
 
+  export function disabled_aspect<T extends VersionedObject>(name: string, aspect: string, impl: string) : Aspect.FastConfiguration<T> {
+    function throw_disabled(): any {
+      throw new Error(`aspect ${aspect} is disabled for ${name} with ${impl} implementation`);
+    }
+    return {
+      get name() { return throw_disabled(); },
+      get aspect() { return throw_disabled(); },
+      get cstor() { return throw_disabled(); },
+      get categories() { return throw_disabled(); },
+      create: throw_disabled,
+      factory: throw_disabled,
+    };
+  }
+
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object' | 'boolean';
   export type TypeVoid       =  { is: 'type', type: 'void' };
   export type TypePrimitive  =  { is: 'type', type: 'primitive', name: PrimaryType };
@@ -92,6 +106,7 @@ export namespace Aspect {
     is: string;
     name: string;
     version: number;
+    is_sub_object: boolean;
     queries?: never[];
     attributes?: Attribute[];
     categories?: Category[];
@@ -125,28 +140,43 @@ export namespace Aspect {
     transport: FarTransport;
   };
   export interface Reference {
-    class: string;
-    attribute: string;
+    class: Installed;
+    attribute: InstalledAttribute;
   };
   export interface InstalledAttribute {
     name: string;
     type: Type;
     validator: AttributeTypeValidator;
     relation: Reference | undefined;
+    contains_vo: boolean;
   };
   export interface Installed {
     name: string;
     aspect: string;
     version: number;
+    is_sub_object: boolean;
     references: Reference[];
     categories: Set<string>;
     attributes: Map<string, InstalledAttribute>;
     farMethods: Map<string, InstalledFarMethod>;
     implementation: VersionedObjectConstructor;
   };
-  export interface Constructor {
-    new(): VersionedObject;
-    aspect: Aspect.Installed;
+  export interface Factory<T extends VersionedObject> {
+    (...args): T;
+    new(...args): T;
+  }
+
+  export type Configuration = {
+    name: string,
+    aspect: string,
+    cstor: VersionedObjectConstructor,
+  }
+  export type FastConfiguration<
+    T extends VersionedObject = VersionedObject
+  > = Configuration & {
+    categories: string[],
+    create(cc: ControlCenter, ...args) : T,
+    factory(cc: ControlCenter) : Factory<T>,
   }
 }
 
@@ -164,66 +194,134 @@ function nameClass<T extends { new(...args): any }>(name: string, parent: string
 }
 
 
-const installedAttributesOnImpl = new Map<string, {
-  attributes: Map<string, Aspect.InstalledAttribute>;
-  references: Aspect.Reference[];
-  impls: Set<VersionedObjectConstructor>
-}>();
-const voAttributes = {
-  attributes: new Map<string, Aspect.InstalledAttribute>(),
-  references: [],
-  impls: new Set<VersionedObjectConstructor>([VersionedObject]),
-};
-installedAttributesOnImpl.set(VersionedObject.definition.name, voAttributes);
-
-voAttributes.attributes.set("_id", {
+const voAttributes = new Map<string, Aspect.InstalledAttribute>();
+voAttributes.set("_id", {
   name: "_id",
   type: { is: "type", type: "primitive", name: "any" as Aspect.PrimaryType },
   validator: Validation.validateId,
   relation: undefined,
+  contains_vo: false,
 });
-voAttributes.attributes.set("_version", {
+voAttributes.set("_version", {
   name: "_version",
   type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
   validator: Validation.validateVersion,
   relation: undefined,
+  contains_vo: false,
 });
-export class AspectCache {
-  private readonly cachedAspects = new Map<string, VersionedObjectConstructorCache>();
-  private readonly cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
 
-  createAspect(on: ControlCenter, name: string, implementation: VersionedObjectConstructor) : Aspect.Constructor {
-    let tmp = this.cachedAspect(name, implementation);
-    let aspect = tmp.aspect;
-    let cstor = class InstalledAspect extends tmp {
-      constructor(...args) {
-        super(new VersionedObjectManager(on, aspect), ...args);
-        this.__manager._object = this;
-      }
-      static displayName = `${aspect.name}[${aspect.aspect}]`;
-      static aspect = aspect;
-    };
-    on._aspects.set(aspect.name, cstor);
-    return nameClass(`${aspect.name}:${aspect.aspect}`, (tmp as any).displayName || tmp.name, cstor);
+export class AspectSelection {
+  /** @internal */ _classes: { name: string, aspect: string, cstor: VersionedObjectConstructor }[];
+  constructor(classes: { name: string, aspect: string, cstor: VersionedObjectConstructor }[]) {
+    let uniq = new Set<string>();
+    for (let { name } of classes) {
+      if (uniq.has(name))
+        throw new Error(`an aspect with class name ${name} already exists`);
+      uniq.add(name);
+    }
+    this._classes = classes.slice(0);
   }
 
-  mutateCache(from: VersionedObjectConstructor, definition: { attributesToAdd: Aspect.Attribute[], attributesToRemove: Aspect.Attribute[] }) {
-    let attr = installedAttributesOnImpl.get(from.definition.name);
-    if (!attr)
-      throw new Error(`cannot extends a non installed aspect`);
+  classes(): Iterable<Readonly<{ name: string, aspect: string, cstor: VersionedObjectConstructor }>> {
+    return this._classes;
+  }
+}
+export class AspectConfiguration {
+  private readonly _aspects = new Map<string, VersionedObjectConstructorCache>();
+  private readonly _cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
 
-    definition.attributesToAdd.forEach(attribute => {
-      const data = this.installAttribute(from, attribute);
-      attr!.impls.forEach(impl => this.installAttributeData(impl, data));
-      attr!.attributes.set(data.name, data);
-    });
-    definition.attributesToRemove.forEach(attribute => {
-      const data = attr!.attributes.get(attribute.name);
-      if (data) {
-        attr!.impls.forEach(impl => this.uninstallAttribute(impl, data));
-        attr!.attributes.delete(attribute.name);
-      }
-    });
+  constructor(
+    selection: AspectSelection,
+    farTransports: { transport: FarTransport, classes: string[], farCategories: string[] }[] = [],
+    defaultFarTransport?: FarTransport
+  ) {
+    for (let { name, aspect, cstor } of selection.classes()) {
+      let aspect_cstor = this._aspects.get(name);
+      if (aspect_cstor)
+        throw new Error(`an aspect with class name ${name} already exists`);
+
+      aspect_cstor = nameClass(`${name}:${aspect}`, `${name}`, class CachedAspect extends cstor {
+        static aspect: Aspect.Installed = {
+          name: name,
+          version: cstor.definition.version,
+          aspect: aspect,
+          is_sub_object: cstor.definition.is_sub_object,
+          references: [],
+          categories: new Set(),
+          attributes: new Map(voAttributes),
+          farMethods: new Map(),
+          implementation: cstor,
+        };
+      });
+      this._aspects.set(name, aspect_cstor);
+    }
+
+    let installed_attributes = new Set<VersionedObjectConstructorCache>();
+    let pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][] = [];
+    for (let { name, aspect, cstor } of selection.classes()) {
+      let aspect_cstor = this._aspects.get(name)!;
+
+      let categories = aspect_cstor.aspect.categories;
+      let aspect_def = cstor.definition.aspects.find(a => a.name === aspect);
+      if (!aspect_def)
+        throw new Error(`aspect ${aspect} not found in ${name} definition`);
+      aspect_def.categories.forEach(c => {
+        categories.add(c);
+        this.installLocalCategoryCache(this.cachedCategory(name, c, cstor), aspect_cstor!, cstor);
+      });
+      aspect_def.farCategories.forEach(category_name => {
+        categories.add(category_name);
+        let ft = farTransports && farTransports.find(t => t.farCategories.indexOf(category_name) !== -1 && t.classes.indexOf(name) !== -1);
+        let t = ft && ft.transport;
+        if (!t)
+          t = defaultFarTransport;
+        if (!t)
+          throw new Error(`no far transport on ${category_name} for ${name}`);
+        this.installFarCategoryCache(this.cachedCategory(name, category_name, cstor), aspect_cstor!, cstor, t);
+      });
+
+      this.install_attributes(aspect_cstor, installed_attributes, pending_relations);
+    }
+    this.install_attribute_relations(pending_relations);
+  }
+
+  private _cstor(classname: string, categories: string[]) {
+    let cstor = this._aspects.get(classname);
+    if (!cstor)
+      throw new Error(`cannot create ${classname}: no aspect found`);
+    for (let category of categories)
+      if (!cstor.aspect.categories.has(category))
+        throw new Error(`cannot create ${classname}: category ${category} is missing in aspect ${cstor.aspect.aspect}`);
+    return cstor;
+  }
+
+  create<T extends VersionedObject>(cc: ControlCenter, classname: string, categories: string[], ...args: any[]) : T {
+    let cstor = this._cstor(classname, categories);
+    return new cstor(cc, ...args) as T;
+  }
+
+  aspect(classname: string) : Aspect.Installed | undefined {
+    let cstor = this._aspects.get(classname);
+    return cstor ? cstor.aspect : undefined;
+  }
+
+  aspectChecked(classname: string) : Aspect.Installed {
+    let cstor = this._aspects.get(classname);
+    if (!cstor)
+      throw new Error(`cannot find aspect ${classname}`);
+    return cstor.aspect;
+  }
+
+  aspectFactory<T extends VersionedObject>(cc: ControlCenter, classname: string, categories: string[]) : Aspect.Factory<T> {
+    let cstor = this._cstor(classname, categories);
+    return function factory (...args) {
+      return new cstor!(cc, ...args);
+    } as any;
+  }
+
+  *aspects(): IterableIterator<Aspect.Installed> {
+    for (let cstor of this._aspects.values())
+      yield cstor.aspect;
   }
 
   installPublicTransport(transport: PublicTransport, on: VersionedObjectConstructor, categories: string[]) {
@@ -236,34 +334,11 @@ export class AspectCache {
     }
   }
 
-  cachedAspect(name: string, implementation: VersionedObjectConstructor) : VersionedObjectConstructorCache {
-    let key = JSON.stringify([implementation.definition.name, implementation.definition.version, name]);
-    let tmp = this.cachedAspects.get(key);
+  private cachedCategory(name: string, category: string, from: VersionedObjectConstructor): Map<string, Aspect.InstalledMethod> {
+    let key = JSON.stringify([name, category]);
+    let tmp = this._cachedCategories.get(key);
     if (!tmp) {
-      let attrs = this.installAttributes(implementation);
-      tmp = nameClass(`CACHED:${implementation.definition.name}:${name}`, `${implementation.definition.name}`, class CachedAspect extends implementation {
-        static aspect: Aspect.Installed = {
-          name: implementation.definition.name,
-          version: implementation.definition.version,
-          aspect: name,
-          references: attrs.references,
-          categories: new Set(),
-          attributes: attrs.attributes,
-          farMethods: new Map(),
-          implementation: implementation,
-        };
-      });
-      this.installAspect(name, tmp, implementation);
-      this.cachedAspects.set(key, tmp);
-    }
-    return tmp;
-  }
-
-  private cachedCategory(categoryName: string, from: VersionedObjectConstructor) {
-    let key = JSON.stringify([from.definition.name, categoryName]);
-    let tmp = this.cachedCategories.get(key);
-    if (!tmp) {
-      this.cachedCategories.set(key, tmp = this.buildCategoryCache(categoryName, from));
+      this._cachedCategories.set(key, tmp = this.buildCategoryCache(category, from));
     }
     return tmp;
   }
@@ -283,6 +358,7 @@ export class AspectCache {
     }
     return r;
   }
+
   private buildCategoryCache(categoryName: string, from: VersionedObjectConstructor): Map<string, Aspect.InstalledMethod> {
     let ret = new Map<string, Aspect.InstalledMethod>();
     let list = this.buildMethodList(categoryName, from);
@@ -297,110 +373,119 @@ export class AspectCache {
     });
     return ret;
   }
-  private installCategoryCache(cache: Map<string, Aspect.InstalledMethod>, on: VersionedObjectConstructorCache, from: VersionedObjectConstructor, local: boolean) {
-    cache.forEach((i, m) => {
-      if (local) {
-        if (i.transport) {
-          on.aspect.farMethods.set(m, Object.assign({}, i, { transport: Aspect.localTransport }));
-        }
-        else {
-          let localImpl = from.prototype[i.name];
-          if (typeof localImpl !== "function")
-            throw new Error(`implementation of local method ${i.name} must be a function, got ${typeof localImpl}`);
-          if (localImpl.length !== i.argumentTypes.length && localImpl.name)
-            throw new Error(`arguments count in implementation of local method ${i.name} doesn't match interface definition: ${localImpl.length} !== ${i.argumentTypes.length}`);
-            on.prototype[i.name] = localImpl; // TODO: protect localImpl;
-        }
-      }
-      else if (i.transport) {
-        on.aspect.farMethods.set(m, Object.assign({}, i as Aspect.InstalledFarMethod));
+
+  private installLocalCategoryCache(cache: Map<string, Aspect.InstalledMethod>, aspect_cstor: VersionedObjectConstructorCache, cstor: VersionedObjectConstructor) {
+    cache.forEach((local_method, category_name) => {
+      let localImpl = cstor.prototype[local_method.name];
+      if (!(local_method.name in cstor.prototype))
+        throw new Error(`local method ${local_method.name} is missing for category ${category_name} in ${cstor.name}`);
+      if (typeof localImpl !== "function")
+        throw new Error(`implementation of local method ${local_method.name} must be a function, got ${typeof localImpl}`);
+      if (local_method.transport) {
+        aspect_cstor.aspect.farMethods.set(category_name, Object.assign({}, local_method, { transport: Aspect.localTransport }));
       }
       else {
-        throw new Error(`${i.name} is not a far method`);
+        if (localImpl.length !== local_method.argumentTypes.length && localImpl.name)
+          throw new Error(`arguments count in implementation of local method ${local_method.name} doesn't match interface definition: ${localImpl.length} !== ${local_method.argumentTypes.length}`);
+        aspect_cstor.prototype[local_method.name] = localImpl; // TODO: protect localImpl;
       }
     });
   }
 
-
-  private uninstallAttribute(from: VersionedObjectConstructor, data: Aspect.InstalledAttribute) {
-    findReferences(data.type, (ref) => {
-      let attr = installedAttributesOnImpl.get(ref);
-      let refs = attr && attr.references;
-      let idx: number;
-      while (refs && (idx = refs.findIndex(r => r.class === from.definition.name && r.attribute === data.name)) !== -1)
-        refs.splice(idx, 1);
-    });
-    Object.defineProperty(from.prototype, data.name, {
-      enumerable: true,
-      get(this: VersionedObject) { throw new Error(`attribute value is removed`); },
-      set(this: VersionedObject, value) { throw new Error(`attribute value is removed`); }
+  private installFarCategoryCache(cache: Map<string, Aspect.InstalledMethod>, aspect_cstor: VersionedObjectConstructorCache, cstor: VersionedObjectConstructor, transport: FarTransport) {
+    cache.forEach((far_method, method_name) => {
+      if (!far_method.transport)
+        throw new Error(`${far_method.name} is not a far method`);
+      aspect_cstor.aspect.farMethods.set(method_name, Object.assign({}, far_method as Aspect.InstalledFarMethod, { transport: transport }));
     });
   }
-  private installAttribute(from: VersionedObjectConstructor, attribute: Aspect.Attribute) {
+
+  private install_attributes(
+    aspect_cstor: VersionedObjectConstructorCache,
+    installed_attributes: Set<VersionedObjectConstructorCache>,
+    pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
+  ) {
+    if (!installed_attributes.has(aspect_cstor)) {
+      let attributes = aspect_cstor.aspect.attributes;
+      let cstor: VersionedObjectConstructor | undefined = aspect_cstor.aspect.implementation;
+      attributes
+      while (cstor && cstor !== VersionedObject) {
+        for (let attribute of cstor.definition.attributes || []) {
+          const data = this.install_attribute(aspect_cstor, attribute, pending_relations);
+          attributes.set(data.name, data);
+        }
+        cstor = cstor.parent;
+      }
+      installed_attributes.add(aspect_cstor);
+    }
+  }
+
+  private install_attribute(
+    aspect_cstor: VersionedObjectConstructorCache,
+    attribute: Aspect.Attribute,
+    pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
+  ) {
+    let contains_sub_object: boolean | undefined = undefined;
+    let contains_types = Aspect.typeToAspectNames(attribute.type);
     const data: Aspect.InstalledAttribute = {
       name: attribute.name as keyof VersionedObject,
       validator: attribute.validator || this.createValidator(true, attribute.type),
       type: attribute.type,
-      relation: undefined
+      relation: undefined,
+      contains_vo: contains_types.length > 0,
     };
-    if (attribute.relation) {
-      if (attribute.type.type === "class")
-        data.relation = { class: attribute.type.name, attribute: attribute.relation };
-      else if ((attribute.type.type === "array" || attribute.type.type === "set") && attribute.type.itemType.type === "class")
-        data.relation = { class: attribute.type.itemType.name, attribute: attribute.relation };
-      else
-        throw new Error(`attribute type of a relation must be a class, an array of classes or a set of classes`);
+    for (let name of contains_types) {
+      let sub_aspect_cstor = this._aspects.get(name);
+      if (!sub_aspect_cstor)
+        throw new Error(`attribute ${aspect_cstor.aspect.name}.${attribute.name} requires class ${name} to work`);
+      let sub_aspect = sub_aspect_cstor.aspect;
+      if (contains_sub_object === undefined)
+        contains_sub_object = sub_aspect.is_sub_object;
+      else if (contains_sub_object !== sub_aspect.is_sub_object)
+        throw new Error(`attribute ${aspect_cstor.aspect.name}.${attribute.name} contains a mix of sub and non sub objects: ${contains_types.join(', ')}`);
+      sub_aspect.references.push({ class: aspect_cstor.aspect, attribute: data });
     }
-    findReferences(attribute.type, (ref) => {
-      let attr = installedAttributesOnImpl.get(ref);
-      if (attr) attr.references.push({ class: from.definition.name, attribute: attribute.name });
-    });
-    return data;
-  }
-  private installAttributeData(from: VersionedObjectConstructor, data: Aspect.InstalledAttribute) {
-    Object.defineProperty(from.prototype, data.name, {
+
+    Object.defineProperty(aspect_cstor.prototype, data.name, {
       enumerable: true,
       get(this: VersionedObject) { return this.__manager.attributeValue(data.name as keyof VersionedObject); },
       set(this: VersionedObject, value) {
-        let manager = this.manager();
-        value = validateValue(value, new AttributePath(manager.aspect().name, manager.id(), '.', data.name), data.validator, manager);
-        this.__manager.setAttributeValueFast(data.name as keyof VersionedObject, value, data);
+        let manager = this.__manager;
+        value = validateValue(value, new AttributePath(manager._aspect.name, manager.id(), '.', data.name), data.validator, manager);
+        manager.setAttributeValueFast(data.name as keyof VersionedObject, value, data);
       }
     });
+
+    if (attribute.relation)
+      pending_relations.push([aspect_cstor.aspect, data, attribute.relation]);
     return data;
   }
-  private installAttributes(from: VersionedObjectConstructor): { references: Aspect.Reference[], attributes: Map<string, Aspect.InstalledAttribute> } {
-    let ret = installedAttributesOnImpl.get(from.definition.name);
-    if (!ret) {
-      ret = {
-        attributes: from.parent ? new Map(this.installAttributes(from.parent).attributes) : new Map(),
-        references: [],
-        impls: new Set<VersionedObjectConstructor>(),
-      };
-      if (from.definition.attributes) from.definition.attributes.forEach(attribute => {
-        const data = this.installAttribute(from, attribute);
-        ret!.attributes.set(data.name, data);
-      });
-      installedAttributesOnImpl.set(from.definition.name, ret);
-    }
-    if (!ret.impls.has(from)) {
-      ret.impls.add(from);
-      if (from !== VersionedObject)
-        ret.attributes.forEach(data => this.installAttributeData(from, data));
-    }
-    return ret;
-  }
-  private installAspect(aspectName: string, on: VersionedObjectConstructorCache, from: VersionedObjectConstructor) {
-    function assertFound<T>(what: string, where: string, name: string, c: T | undefined) : T {
-      if (!c)
-        throw new Error(`${what} ${name} not found in ${where}`);
-      return c;
-    }
 
-    let aspect = assertFound('aspect', from.definition.name, aspectName, from.definition.aspects.find(a => a.name === aspectName));
-    let categories = on.aspect.categories;
-    aspect.categories.forEach(c => { categories.add(c); this.installCategoryCache(this.cachedCategory(c, from), on, from, true);  });
-    aspect.farCategories.forEach(c => { categories.add(c); this.installCategoryCache(this.cachedCategory(c, from), on, from, false); });
+  private install_attribute_relations(pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]) {
+    let relations: {
+      aspect: Aspect.Installed, attribute: Aspect.InstalledAttribute,
+      relation_aspect: Aspect.Installed, relation_attribute: Aspect.InstalledAttribute
+    }[] = [];
+    for (let [aspect, attribute, relation] of pending_relations) {
+      let contains_types = Aspect.typeToAspectNames(attribute.type);
+      if (contains_types.length !== 1)
+        throw new Error(`attribute ${aspect.name}.${attribute.name} type of a relation must be a class, an array of classes or a set of classes`);
+      let relation_aspect = this._aspects.get(contains_types[0])!.aspect;
+      let relation_attribute = relation_aspect.attributes.get(relation);
+      if (!relation_attribute)
+        throw new Error(`attribute ${aspect.name}.${attribute.name} contains a relation to an unknown attribute ${relation_aspect.name}.${relation}`);
+      attribute.relation = { class: relation_aspect, attribute: relation_attribute };
+    }
+    for (let [aspect, attribute] of pending_relations) {
+      let relation_aspect = attribute.relation!.class;
+      let relation_attribute = attribute.relation!.attribute;
+      if (!relation_attribute.relation)
+        throw new Error(`relation ${aspect.name}.${attribute.name} - ${relation_aspect.name}.${relation_attribute.name} is not bidirectional`);
+      if (relation_attribute.relation.class !== aspect)
+        throw new Error(`relation ${aspect.name}.${attribute.name} - ${relation_aspect.name}.${relation_attribute.name} is type incoherent`);
+      if (relation_attribute.relation.attribute !== attribute)
+        throw new Error(`relation ${aspect.name}.${attribute.name} - ${relation_aspect.name}.${relation_attribute.name} is attribute incoherent`);
+    }
   }
 
   private arrayValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*') : Aspect.TypeValidator {
@@ -463,12 +548,7 @@ function findReferences(type: Aspect.Type, apply: (ref: string) => void) {
     case 'dictionary': Object.keys(type.properties).forEach(k => findReferences(type.properties[k], apply)); break;
   }
 }
-/*
-function installPublicMethod(cc: ControlCenter, aspect: Aspect.Installed, publicMethod: Aspect.InstalledFarMethod, transport: PublicTransport) {
-  let prototype = aspect.implementation.prototype;
-  let publicImpl = localImplInPrototype(prototype, publicMethod);
-  transport.register(cc, aspect, publicMethod, protectPublicImpl(prototype, publicMethod, publicImpl));
-}*/
+
 function validate(
   reporter: Reporter, path: AttributePath,
   collection: any, validateItem: Aspect.TypeValidator,

@@ -5,21 +5,17 @@ declare var console: any;
 
 export type MemoryDataSourceTransaction = { tr: InMemoryDataSource.DataStoreTransaction };
 export class InMemoryDataSource extends DataSource {
-  constructor(manager: VersionedObjectManager<InMemoryDataSource>, private ds: InMemoryDataSource.DataStore) {
-    super(manager);
+  constructor(cc: ControlCenter, private ds: InMemoryDataSource.DataStore) {
+    super(cc);
   }
   static parent = DataSource;
   static definition = {
     is: "class",
     name: "InMemoryDataSource",
     version: 0,
+    is_sub_object: false,
     aspects: DataSource.definition.aspects
   };
-  static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
-  static installAspect(on: ControlCenter, name: 'server'): { new(ds?: InMemoryDataSource.DataStore): DataSource.Aspects.server };
-  static installAspect(on: ControlCenter, name: string): any {
-    return on.cache().createAspect(on, name, this);
-  }
 
   private _loads(
     component: AComponent, ds: InMemoryDataSource.DataStoreCRUD,
@@ -410,4 +406,15 @@ export namespace InMemoryDataSource {
       }
     }
   }
+}
+
+export namespace InMemoryDataSource {
+  export const Aspects = {
+    client: Aspect.disabled_aspect<DataSource.Aspects.server>("DataSource", "client", "InMemoryDataSource"),
+    server: <Aspect.FastConfiguration<DataSource.Aspects.server>> {
+      name: "DataSource", aspect: "server", cstor: InMemoryDataSource, categories: DataSource.Aspects.server.categories,
+      create(cc: ControlCenter, ds: InMemoryDataSource.DataStore) { return cc.create<DataSource.Aspects.server>("DataSource", this.categories, ds); },
+      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.server>("DataSource", this.categories); },
+    },
+  };
 }

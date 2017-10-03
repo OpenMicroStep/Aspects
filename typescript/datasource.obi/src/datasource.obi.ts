@@ -19,11 +19,11 @@ function pass(a) { return a; }
 
 export type ObiDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
 export class ObiDataSource extends DataSource {
-  constructor(manager: VersionedObjectManager<ObiDataSource>,
+  constructor(cc: ControlCenter,
     public db: OuiDB,
     config: Partial<ObiDataSource.Config>,
   ) {
-    super(manager);
+    super(cc);
     this.config = Object.assign({
       aspectClassname_to_ObiEntity: pass,
       obiEntity_to_aspectClassname: pass,
@@ -38,13 +38,9 @@ export class ObiDataSource extends DataSource {
     is: "class",
     name: "ObiDataSource",
     version: 0,
+    is_sub_object: false,
     aspects: DataSource.definition.aspects
   };
-  static installAspect(on: ControlCenter, name: 'client'): { new(): DataSource.Aspects.client };
-  static installAspect(on: ControlCenter, name: 'server'): { new(db?: OuiDB, config?: Partial<ObiDataSource.Config>): DataSource.Aspects.server };
-  static installAspect(on: ControlCenter, name: string): any {
-    return on.cache().createAspect(on, name, this);
-  }
 
   config: ObiDataSource.Config;
 
@@ -263,4 +259,17 @@ export class ObiDataSource extends DataSource {
       await tr.tr.rollback();
     }
   }
+}
+
+export namespace ObiDataSource {
+  export const Aspects = {
+    client: Aspect.disabled_aspect<DataSource.Aspects.server>("DataSource", "client", "ObiDataSource"),
+    server: <Aspect.FastConfiguration<DataSource.Aspects.server>> {
+      name: "DataSource", aspect: "server", cstor: ObiDataSource, categories: DataSource.Aspects.server.categories,
+      create(cc: ControlCenter, db: OuiDB, config: Partial<ObiDataSource.Config>) {
+        return cc.create<DataSource.Aspects.server>("DataSource", this.categories, db, config);
+      },
+      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.server>("DataSource", this.categories); },
+    },
+  };
 }

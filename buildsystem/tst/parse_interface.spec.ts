@@ -43,9 +43,7 @@ function person_and_cat() {
   let reporter = new Reporter();
   let elements = parseInterface(reporter, fs.readFileSync(path.join(__dirname, `data/person.md`), 'utf8'));
   assert.deepEqual(elements, {
-    "Person=":{
-       is:"class",
-      "name":"Person",
+    "Person=":{ is:"class", name:"Person", is_sub_object: false,
       "attributes=": { is:"group",
         "_firstName=": { is: "attribute", name: "_firstName", type: { is: "type", type: "primitive", "name": "string" }},
         "_lastName=" : { is: "attribute", name: "_lastName" , type: { is: "type", type: "primitive", "name": "string" }},
@@ -73,7 +71,7 @@ function person_and_cat() {
       "categories"   : ["=categories:core"],
       "farCategories": ["=categories:calculation"],
       "aspects" :[]},
-    "Cat=": { is:"class", name: "Cat",
+    "Cat=": { is:"class", name: "Cat", is_sub_object: false,
       "attributes=":{ is:"group",
         "_owner=": { is:"attribute", name: "_owner",
           type: { is:"type","type":"class", name: "Person"},

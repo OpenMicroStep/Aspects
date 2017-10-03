@@ -85,6 +85,7 @@ elementFactories.registerSimple('class', (reporter, name, definition, attrPath, 
 });
 export class ClassElement extends Element {
   superclass: string = "VersionedObject";
+  is_sub_object: boolean = false;
   attributes: AttributeElement[] = [];
   queries: QueryElement[] = [];
   categories: CategoryElement[] = [];
@@ -121,12 +122,8 @@ export class ClassElement extends Element {
         decl += `\n  ${category.__constImpl(this)}`;
       decl += `\n}`;
     }
-    decl += `\nexport declare namespace ${this.name} {`;
-    for (let aspect of this.aspects)
-      decl += `\n  function installAspect(on: ControlCenter, name: '${aspect.name}'): { new(): ${this.name}.Aspects.${aspect.name} };`;
-    if (this.aspects.length)
-      decl += `\n`;
-
+    decl += `
+export declare namespace ${this.name} {`;
     decl += `\n  function __${this.name}_c(name: string): {};`;
     for (let category of categories)
       decl += `\n  function __${this.name}_c(name: '${category.name}'): ${this.name}.Categories.${category.name};`;
@@ -149,12 +146,26 @@ export class ClassElement extends Element {
     this.categories.map(category => category.__declImpl(this, !!workaround)).join('')}${
     this.farCategories.map(category => category.__declImpl(this, !!workaround)).join('')}
   }
-  export namespace Aspects {
-    ${this.aspects.map(aspect => `export type ${aspect.name} = ${
+  export namespace Aspects {${this.aspects.map(aspect => `
+    export type ${aspect.name} = ${
       aspect.categories.concat(aspect.farCategories).map(c => `Categories.${c.name}`).join(' & ') || this.name
-    };`).join('\n    ')}
+    };`).join('')}
   }`;
-    decl += `\n}\n`;
+    decl += `\n}`;
+    decl += `
+export namespace ${this.name} {
+  export function create(cc: ControlCenter) { return cc.create<${this.name}>(${JSON.stringify(this.name)}); }
+  export const Aspects = {${this.aspects.map(aspect => `
+    ${aspect.name}: <Aspect.FastConfiguration<${this.name}.Aspects.${aspect.name}>> {
+      name: ${JSON.stringify(this.name)}, aspect: ${JSON.stringify(aspect.name)}, cstor: ${this.name}, categories: [${
+        aspect.categories.concat(aspect.farCategories).map(c => JSON.stringify(c.name)).join(", ")
+      }],
+      create(cc: ControlCenter) { return cc.create<${this.name}.Aspects.${aspect.name}>(${JSON.stringify(this.name)}, this.categories); },
+      factory(cc: ControlCenter) { return cc.aspectFactory<${this.name}.Aspects.${aspect.name}>(${JSON.stringify(this.name)}, this.categories); },
+    },`).join('')}
+  };
+}
+`;
     return decl;
   }
 
@@ -163,6 +174,7 @@ export class ClassElement extends Element {
       is: this.is,
       name: this.name,
       version: 0,
+      is_sub_object: this.is_sub_object,
       attributes: this.attributes.map(a => a.toJSON()),
       queries: this.queries.map(a => a.toJSON()),
       categories: this.categories.map(c => c.toJSON()),

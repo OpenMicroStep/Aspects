@@ -1,9 +1,8 @@
-import {ControlCenter, DataSource, DataSourceInternal, InMemoryDataSource, VersionedObject, VersionedObjectManager} from '@openmicrostep/aspects';
+import {ControlCenter, AspectConfiguration} from '@openmicrostep/aspects';
 import {
-  SqlDataSource, SqlMappedObject, SqlMappedAttribute, DBConnector, loadSqlMappers,
-  SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory, OracleDBConnectorFactory,
+  SqlDataSource, loadSqlMappers,
+  SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory,
 } from '@openmicrostep/aspects.sql';
-import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
@@ -64,11 +63,15 @@ function createSqlControlCenter(flux) {
     }
   });
 
-  let cc = new ControlCenter();
-  let C = Car.installAspect(cc, 'test1');
-  let P = People.installAspect(cc, 'test1');
-  let DB = SqlDataSource.installAspect(cc, "server");
-  let db = new DB(mappers, flux.context.connector, flux.context.connector.maker);
+  let cfg = new AspectConfiguration([
+    Car.Aspects.test1,
+    People.Aspects.test1,
+    SqlDataSource.Aspects.server,
+  ]);
+  let cc = new ControlCenter(cfg);
+  let C = Car.Aspects.test1.factory(cc);
+  let P = People.Aspects.test1.factory(cc);
+  let db = SqlDataSource.Aspects.server.create(cc, mappers, flux.context.connector, flux.context.connector.maker);
   Object.assign(flux.context, {
     Car: C,
     People: P,

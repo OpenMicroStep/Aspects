@@ -1,61 +1,30 @@
-import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, AspectCache, Aspect} from '@openmicrostep/aspects';
+import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
-import ConstraintType = DataSourceInternal.ConstraintType;
-import ObjectSet = DataSourceInternal.ObjectSet;
 
-const cache = new AspectCache();
-const cc = new ControlCenter(cache);
-Resource.installAspect(cc, "test1");
-Car.installAspect(cc, "test1");
-People.installAspect(cc, "test1");
+const cc = new ControlCenter(new AspectConfiguration([
+  Resource.Aspects.test1,
+  Car.Aspects.test1,
+  People.Aspects.test1,
+]));
 
-function serialize(s, map = new Map()) {
-  let r = s;
-  if (s && typeof s === "object") {
-    r = map.get(s);
-    if (!r) {
-      if (s instanceof VersionedObject)
-        s = `VersionedObject{${s.manager().aspect().name}/${s.id()}}`;
-      if (s instanceof Map)
-        s = [...s.entries()];
-      if (s instanceof Set)
-        s = [...s];
-      if (Array.isArray(s)) {
-        map.set(s, r = []);
-        s.forEach(e => r.push(serialize(e, map)));
-      }
-      else if (s.aspect && s.name && s.attributes)
-        map.set(s, r = { aspect: s.aspect, name: s.name });
-      else {
-        let k, v;
-        map.set(s, r = {});
-        for (k in s) {
-          v = s[k];
-          r[k] = serialize(v, map);
-        }
-        if (r.aspect && typeof r.aspect.name === "string")
-          r.aspect = r.aspect.name;
-        if (typeof r.leftAttribute === "object")
-          r.leftAttribute = r.leftAttribute.name;
-        if (typeof r.rightAttribute === "object")
-          r.rightAttribute = r.rightAttribute.name;
-        if (typeof r.attribute === "object")
-          r.attribute = r.attribute.name;
-      }
-    }
-  }
-  return r;
-}
 
-function parseScope(unsafe_scope: DataSourceInternal.Scope | string[]) {
-  return serialize(DataSourceInternal.parseScope(unsafe_scope, function *(type){
+function parseScope(unsafe_scope: DataSourceInternal.Scope | string[]): any {
+  let scope = DataSourceInternal.parseScope(unsafe_scope, function *(type){
     if (type !== '_')
       yield cc.aspectChecked(type);
     else
       yield* cc.installedAspects();
-  }));
+  });
+  let ret = {};
+  for (let t in scope.scope) {
+    let tv = scope.scope[t];
+    let rv = ret[t] = {};
+    for (let p in tv)
+      rv[p] = [...tv[p]];
+  }
+  return { scope: ret, sort: scope.sort };
 }
 
 function aspect_attr(type: string, attr: string) {
