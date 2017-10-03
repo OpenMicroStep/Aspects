@@ -110,7 +110,11 @@ export class OuiDB {
 
   async raw_insert(tr: DBConnectorTransaction, table: string, oid: number, cid: number, v)  {
     table = "TJ_VAL_" + table;
-    let sql_insert = this.maker.insert(table, ["VAL_INST", "VAL_CAR", "VAL"], this.maker.values([oid, cid, v]), []);
+    let sql_insert = this.maker.insert(table, [
+      "VAL_INST",
+      "VAL_CAR" ,
+      "VAL"     ,
+    ], this.maker.values([oid, cid, v]), []);
     await tr.insert(sql_insert, []);
   }
 
@@ -304,7 +308,13 @@ export class OuiDB {
   async loadSystemObis() {
     this.systemObiById.clear();
     this.systemObiByName.clear();
-    let sql_systemObis = this.maker.select(["VAL_INST", "VAL"], this.maker.from("TJ_VAL_STR"), [], this.maker.op(this.maker.quote("VAL_CAR"), ConstraintType.Equal, this.config.CarSystemNameId));
+    let sql_systemObis = this.maker.select([
+      this.maker.column("TJ_VAL_STR", "VAL_INST"),
+      this.maker.column("TJ_VAL_STR", "VAL"),
+    ],
+    this.maker.from("TJ_VAL_STR"), [],
+    this.maker.op(this.maker.quote("VAL_CAR"), ConstraintType.Equal, this.config.CarSystemNameId)
+  );
     let rows = await this.connector.select(sql_systemObis);
     let ids: number[] = [];
     for (let row of rows as { VAL_INST: number, VAL: string }[]) {
@@ -339,7 +349,11 @@ export class OuiDB {
   private async _loadObis(db: DBConnectorTransaction | DBConnector, ids: number[], into: Map<number, ObiDefinition>, unresolved = new Map<number, ObiDefinition>()) {
     let unresolved_ids: number[] = [];
     for (let table of this._valTables) {
-      let sql_car = this.maker.select(["VAL_INST", "VAL_CAR", "VAL"], this.maker.from(table), [], this.maker.op(this.maker.quote("VAL_INST"), ConstraintType.In, ids));
+      let sql_car = this.maker.select([
+        this.maker.column(table, "VAL_INST"),
+        this.maker.column(table, "VAL_CAR" ),
+        this.maker.column(table, "VAL"     ),
+      ], this.maker.from(table), [], this.maker.op(this.maker.quote("VAL_INST"), ConstraintType.In, ids));
       let rows = await db.select(sql_car);
       for (let row of rows as { VAL_INST: number, VAL_CAR: number, VAL: any }[]) {
         let obi = into.get(row.VAL_INST)!;
