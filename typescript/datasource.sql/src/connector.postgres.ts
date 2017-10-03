@@ -5,6 +5,14 @@ class PostgresSqlMaker extends SqlMaker {
     return `"${value.replace(/"/g, '""')}"`;
   }
 
+  value(value: any) : SqlBinding {
+    switch (typeof value) {
+      case 'boolean': return { sql: value ? "TRUE" : "FALSE", bind: [] };
+      case 'number': return { sql: value.toString(), bind: [] };
+      default: return { sql: '?', bind: [value !== undefined ? value : null] };
+    }
+  }
+
   value_null_typed(type: SqlMaker.NullType): string {
     switch (type) {
       case "string": return "NULL::text";
