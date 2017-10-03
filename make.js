@@ -43,10 +43,10 @@ module.exports =  {
     },
     npmPackage: { is: "component",
       dependencies: { is: "component",
-        "chai": "^3.5.0"
+        "chai": "^4.1.2"
       },
       devDependencies: { is: "component",
-        "@types/chai": "^3.4.29",
+        "@types/chai": "^4.0.4",
         "@openmicrostep/tests": "^0.1.0"
       }
     }
