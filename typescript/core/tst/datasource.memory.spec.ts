@@ -1,15 +1,15 @@
-import {ControlCenter, AspectConfiguration, InMemoryDataSource, DataSource} from '@openmicrostep/aspects';
+import {ControlCenter, AspectConfiguration, InMemoryDataSource, AspectSelection} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import {createTests} from './datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
 export const tests = { name: 'InMemoryDataSource', tests:
   createTests(function createControlCenter(flux) {
-    let cfg = new AspectConfiguration([
+    let cfg = new AspectConfiguration(new AspectSelection([
       Car.Aspects.test1,
       People.Aspects.test1,
       InMemoryDataSource.Aspects.server,
-    ]);
+    ]));
     let cc = new ControlCenter(cfg);
     let ds = new InMemoryDataSource.DataStore();
     let db = InMemoryDataSource.Aspects.server.create(cc, ds);

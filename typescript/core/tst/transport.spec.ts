@@ -1,4 +1,4 @@
-import {VersionedObjectCoder, ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration} from '@openmicrostep/aspects';
+import {ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -28,12 +28,12 @@ function createContext_C1(publicTransport: (json: string) => Promise<string>) {
       return inv;
     }
   };
-  let cc = new ControlCenter(new AspectConfiguration([
+  let cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
     Resource.Aspects.c1,
     Car.Aspects.c1,
     People.Aspects.c1,
     DataSource.Aspects.client,
-  ], default_transport));
+  ]), [], default_transport));
   let ret = {
     cc: cc,
     Resource  : Resource.Aspects.c1.factory(cc),
@@ -58,12 +58,12 @@ type ContextS1 = {
 
 function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string, DataSourceQuery>) {
   let ctx: any = {};
-  let cc = ctx.cc = new ControlCenter(new AspectConfiguration([
+  let cc = ctx.cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
     Resource.Aspects.s1,
     Car.Aspects.s1,
     People.Aspects.s1,
     InMemoryDataSource.Aspects.server,
-  ]));
+  ])));
   ctx.Resource   = Resource.Aspects.s1.factory(cc);
   ctx.Car        = Car.Aspects.s1.factory(cc);
   ctx.People     = People.Aspects.s1.factory(cc);

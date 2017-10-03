@@ -1,4 +1,4 @@
-import {ControlCenter, AspectConfiguration} from '@openmicrostep/aspects';
+import {ControlCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {Reporter, Parser} from '@openmicrostep/msbuildsystem.shared';
 import {SqliteDBConnectorFactory} from '@openmicrostep/aspects.sql';
 import {parseObis, ObiDefinition, OuiDB, ObiDataSource, StdDefinition} from '@openmicrostep/aspects.obi';
@@ -673,11 +673,11 @@ async function createObiControlCenter(flux) {
   await ouiDb.injectObis(test_obis);
   await ouiDb.loadSystemObis();
 
-  let cc = new ControlCenter(new AspectConfiguration([
+  let cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
     Car.Aspects.test1,
     People.Aspects.test1,
     ObiDataSource.Aspects.server,
-  ]));
+  ])));
   let db = ObiDataSource.Aspects.server.create(cc, ouiDb, {
     aspectClassname_to_ObiEntity: (classname: string) => `T_${classname}`,
     obiEntity_to_aspectClassname: (classname: string) => classname.substring(2),

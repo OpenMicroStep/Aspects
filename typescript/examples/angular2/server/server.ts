@@ -1,4 +1,4 @@
-import {ControlCenter, DataSource, AspectConfiguration, DataSourceQuery} from '@openmicrostep/aspects';
+import {ControlCenter, DataSource, AspectConfiguration, AspectSelection, DataSourceQuery} from '@openmicrostep/aspects';
 import {SqliteDBConnectorFactory, SqlDataSource, loadSqlMappers} from '@openmicrostep/aspects.sql';
 import {ExpressTransport} from '@openmicrostep/aspects.express';
 import {Person, DemoApp} from '../shared/index';
@@ -44,11 +44,11 @@ queries.set("allpersons", (reporter, query) => {
 });
 
 const router = express.Router();
-const cfg = new AspectConfiguration([
+const cfg = new AspectConfiguration(new AspectSelection([
   DemoApp.Aspects.server,
   Person.Aspects.server,
   SqlDataSource.Aspects.server,
-]);
+]));
 const transport = new ExpressTransport(router, async (cstor, id) => {
   const cc = new ControlCenter(cfg);
   const db = SqlDataSource.Aspects.server.create(cc, mappers, connector, connector.maker);

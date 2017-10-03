@@ -1,13 +1,13 @@
-import {ControlCenter, NotificationCenter, AspectConfiguration} from '@openmicrostep/aspects';
+import {ControlCenter, NotificationCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
 function basics() {
   let c0 = {};
   let c1 = {};
-  let cc = new ControlCenter(new AspectConfiguration([
+  let cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
     Resource.Aspects.test1,
-  ]));
+  ])));
   assert.instanceOf(cc.notificationCenter(), NotificationCenter);
   let R = cc.aspectFactory<Resource.Aspects.test1>("Resource");
   let r0 = new R();
@@ -63,10 +63,10 @@ function basics() {
 }
 
 function cannot_mix_cc() {
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Car.Aspects.test1,
     People.Aspects.test1,
-  ]);
+  ]));
   let cc1 = new ControlCenter(cfg);
   let cc2 = new ControlCenter(cfg);
   let c0 = {};

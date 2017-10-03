@@ -1,4 +1,4 @@
-import {ControlCenter, AspectConfiguration} from '@openmicrostep/aspects';
+import {ControlCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import './resource';
 import {Resource} from '../../../generated/aspects.interfaces';
 
@@ -11,17 +11,17 @@ class ResourceNative {
 };
 function setup10k() { // around 100ms
   let i = 1e4;
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Resource.Aspects.test1
-  ]);
+  ]));
   while (i-- > 0) {
     new ControlCenter(cfg);
   }
 }
 function new100k_factory() { // around 100ms
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Resource.Aspects.test1
-  ]);
+  ]));
   let cc = new ControlCenter(cfg);
   let R = Resource.Aspects.test1.factory(cc);
   let i = 1e5;
@@ -30,9 +30,9 @@ function new100k_factory() { // around 100ms
   }
 }
 function new100k_create() { // around 100ms
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Resource.Aspects.test1
-  ]);
+  ]));
   let cc = new ControlCenter(cfg);
   let i = 1e5;
   while (i-- > 0) {
@@ -40,9 +40,9 @@ function new100k_create() { // around 100ms
   }
 }
 function new100k_create_test1() { // around 100ms
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Resource.Aspects.test1
-  ]);
+  ]));
   let cc = new ControlCenter(cfg);
   let i = 1e5;
   while (i-- > 0) {
@@ -50,9 +50,9 @@ function new100k_create_test1() { // around 100ms
   }
 }
 function get3M() { // around 100ms
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Resource.Aspects.test1
-  ]);
+  ]));
   let cc = new ControlCenter(cfg);
   let R = Resource.Aspects.test1.factory(cc);
   let v = new R();
@@ -63,9 +63,9 @@ function get3M() { // around 100ms
   }
 }
 function set1M() { // around 100ms
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Resource.Aspects.test1
-  ]);
+  ]));
   let cc = new ControlCenter(cfg);
   let R = Resource.Aspects.test1.factory(cc);
   let v = new R();

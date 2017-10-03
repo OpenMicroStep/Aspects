@@ -1,4 +1,4 @@
-import {ControlCenter, AspectConfiguration} from '@openmicrostep/aspects';
+import {ControlCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {
   SqlDataSource, loadSqlMappers,
   SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory,
@@ -63,11 +63,11 @@ function createSqlControlCenter(flux) {
     }
   });
 
-  let cfg = new AspectConfiguration([
+  let cfg = new AspectConfiguration(new AspectSelection([
     Car.Aspects.test1,
     People.Aspects.test1,
     SqlDataSource.Aspects.server,
-  ]);
+  ]));
   let cc = new ControlCenter(cfg);
   let C = Car.Aspects.test1.factory(cc);
   let P = People.Aspects.test1.factory(cc);

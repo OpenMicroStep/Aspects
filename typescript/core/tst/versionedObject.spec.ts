@@ -1,14 +1,14 @@
-import {VersionedObject, VersionedObjectManager, ControlCenter, AspectConfiguration} from '@openmicrostep/aspects';
+import {VersionedObject, VersionedObjectManager, ControlCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import {tests as tests_perfs} from './versionedObject.perfs.spec';
 
-const cfg = new AspectConfiguration([
+const cfg = new AspectConfiguration(new AspectSelection([
   Resource.Aspects.test1,
   Car.Aspects.test1,
   People.Aspects.test1,
-]);
+]));
 function basics() {
   let cc = new ControlCenter(cfg);
   let R = Resource.Aspects.test1.factory(cc);

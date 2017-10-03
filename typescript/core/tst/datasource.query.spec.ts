@@ -1,15 +1,15 @@
-import {ControlCenter, DataSource, DataSourceInternal, VersionedObject, AspectConfiguration} from '@openmicrostep/aspects';
+import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import ConstraintType = DataSourceInternal.ConstraintType;
 import ObjectSet = DataSourceInternal.ObjectSet;
 
-const cc = new ControlCenter(new AspectConfiguration([
+const cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
   Resource.Aspects.test1,
   Car.Aspects.test1,
   People.Aspects.test1,
-]));
+])));
 
 function aspect_attr(type: string, attr: string) {
   let r =  cc.aspectChecked(type).attributes.get(attr);
@@ -746,10 +746,10 @@ function persons_with_cars_and_their_cars_1k() { // about 170ms
 }
 
 function makeObjects() {
-  let cc = new ControlCenter(new AspectConfiguration([
+  let cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
     Car.Aspects.test1,
     People.Aspects.test1,
-  ]));
+  ])));
   let C = Car.Aspects.test1.factory(cc);
   let P = People.Aspects.test1.factory(cc);
   let objects: VersionedObject[] = [];

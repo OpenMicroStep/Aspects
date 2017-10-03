@@ -1,13 +1,13 @@
-import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration} from '@openmicrostep/aspects';
+import {ControlCenter, DataSourceInternal, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
-const cc = new ControlCenter(new AspectConfiguration([
+const cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
   Resource.Aspects.test1,
   Car.Aspects.test1,
   People.Aspects.test1,
-]));
+])));
 
 
 function parseScope(unsafe_scope: DataSourceInternal.Scope | string[]): any {
