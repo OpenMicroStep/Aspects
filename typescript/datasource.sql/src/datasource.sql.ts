@@ -81,7 +81,7 @@ export class SqlDataSource extends DataSource {
             values.where = this.maker.op(this.maker.quote(last.key), ConstraintType.Equal, iddb);
           }
         }
-        values.sets.push(this.maker.set(this.maker.quote(last.value), nvdb));
+        values.sets.push(this.maker.set(last.value, nvdb));
         if (!isNew) {
           let ovdb = mapValue(this, mapper, attribute, ov);
           values.checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, ovdb));

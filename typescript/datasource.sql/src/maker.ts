@@ -172,10 +172,10 @@ export abstract class SqlMaker {
     return `${sql_column} ${asc ? 'ASC' : 'DESC'}`;
   }
 
-  set(sql_column: string, value: any) : SqlBinding {
+  set(column: string, value: any) : SqlBinding {
     if (value === undefined)
       value = null;
-    return { sql: `${sql_column} = ?`, bind: [value] };
+    return { sql: `${this.quote(column)} = ?`, bind: [value] };
   }
 
   protected _conditions(conditions: SqlBinding[], sql_op: string) : SqlBinding {
