@@ -82,7 +82,7 @@ Méthodes à implémenter par les dataSources.
 
 Démarre une transaction
 
-#### implLock(a: { tr: DataSourceTransaction, on: [0, *, string] }): void
+>#### implLock(a: { tr: DataSourceTransaction, on: [0, *, string] }): void
 
 Vérouille la datasource sur le tuple `on`. Tant que `implEndTransaction` n'a pas été appelée et que l'application tourne, personne ne peut prendre le véroux si le tuple `on`.
 
