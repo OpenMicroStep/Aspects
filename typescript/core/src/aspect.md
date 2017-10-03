@@ -1,3 +1,14 @@
+## class AspectSelection
+
+Hold the aspect selection by classes.
+
+#### `constructor(classes: { name: string, aspect: string, cstor: VersionedObjectConstructor }[])`
+Create a new aspect selection.
+
+__!__: throws in the following cases:
+
+ - _classes_ __MUST NOT__ contains to classes of the same name otherwise an exception is thrown
+
 ## class AspectConfiguration
 
 Hold the configuration of classes:
@@ -31,13 +42,12 @@ Here is a diagram of what is done
 
 ### Methods
 
-#### `constructor(classes: { name: string, aspect: string, cstor: VersionedObjectConstructor, farTransports?: { transport: FarTransport, categories: string[] }[] }[], defaultFarTransport?: FarTransport)`
+#### `constructor(selection: AspectSelection, farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[], defaultFarTransport?: FarTransport)`
 
 Create a new aspect configuration.  
 
 __!__: throws in the following cases:
 
- - _classes_ __MUST NOT__ contains to classes of the same name otherwise an exception is thrown
  - if _defaultFarTransport_ is not provided, all far categories must have the corresponding transport defined in _farTransport_, otherwise an exception is thrown
 
 #### `create(cc: ControlCenter, classname: string, categories: string[], ...args: any[]) : VersionnedObject`

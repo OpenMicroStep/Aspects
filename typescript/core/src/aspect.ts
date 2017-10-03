@@ -170,7 +170,6 @@ export namespace Aspect {
     name: string,
     aspect: string,
     cstor: VersionedObjectConstructor,
-    farTransports?: { transport: FarTransport, categories: string[] }[]
   }
   export type FastConfiguration<
     T extends VersionedObject = VersionedObject
@@ -211,12 +210,32 @@ voAttributes.set("_version", {
   contains_vo: false,
 });
 
+export class AspectSelection {
+  /** @internal */ _classes: { name: string, aspect: string, cstor: VersionedObjectConstructor }[];
+  constructor(classes: { name: string, aspect: string, cstor: VersionedObjectConstructor }[]) {
+    let uniq = new Set<string>();
+    for (let { name } of classes) {
+      if (uniq.has(name))
+        throw new Error(`an aspect with class name ${name} already exists`);
+      uniq.add(name);
+    }
+    this._classes = classes.slice(0);
+  }
+
+  classes(): Iterable<Readonly<{ name: string, aspect: string, cstor: VersionedObjectConstructor }>> {
+    return this._classes;
+  }
+}
 export class AspectConfiguration {
   private readonly _aspects = new Map<string, VersionedObjectConstructorCache>();
   private readonly _cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
 
-  constructor(classes: Aspect.Configuration[], defaultFarTransport?: FarTransport) {
-    for (let { name, aspect, cstor, farTransports } of classes) {
+  constructor(
+    selection: AspectSelection,
+    farTransports: { transport: FarTransport, classes: string[], farCategories: string[] }[] = [],
+    defaultFarTransport?: FarTransport
+  ) {
+    for (let { name, aspect, cstor } of selection.classes()) {
       let aspect_cstor = this._aspects.get(name);
       if (aspect_cstor)
         throw new Error(`an aspect with class name ${name} already exists`);
@@ -239,7 +258,7 @@ export class AspectConfiguration {
 
     let installed_attributes = new Set<VersionedObjectConstructorCache>();
     let pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][] = [];
-    for (let { name, aspect, cstor, farTransports } of classes) {
+    for (let { name, aspect, cstor } of selection.classes()) {
       let aspect_cstor = this._aspects.get(name)!;
 
       let categories = aspect_cstor.aspect.categories;
@@ -252,7 +271,7 @@ export class AspectConfiguration {
       });
       aspect_def.farCategories.forEach(category_name => {
         categories.add(category_name);
-        let ft = farTransports && farTransports.find(t => t.categories.indexOf(category_name) !== -1);
+        let ft = farTransports && farTransports.find(t => t.farCategories.indexOf(category_name) !== -1 && t.classes.indexOf(name) !== -1);
         let t = ft && ft.transport;
         if (!t)
           t = defaultFarTransport;
