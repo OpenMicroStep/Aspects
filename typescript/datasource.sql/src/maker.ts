@@ -219,7 +219,9 @@ export abstract class SqlMaker {
       case ConstraintType.LessThan:           return { sql: `${sql_column} < ?`       , bind: [value] };
       case ConstraintType.LessThanOrEqual:    return { sql: `${sql_column} <= ?`      , bind: [value] };
       case ConstraintType.Text:               return { sql: `${sql_column} LIKE ?`    , bind: [`%${value}%`] };
-      case ConstraintType.In:                 return { sql: `${sql_column} IN (${value.map(v => '?').join(',')})`    , bind: value };
+      case ConstraintType.In:                 return value.length > 0
+        ? { sql: `${sql_column} IN (${value.map(v => '?').join(',')})`    , bind: value }
+        : { sql: `1 = 0`    , bind: [] };
       case ConstraintType.NotIn:              return { sql: `${sql_column} NOT IN (${value.map(v => '?').join(',')})`, bind: value };
       case ConstraintType.Exists:             return { sql: `${sql_column} ${value ? 'NOT NULL' : 'IS NULL'}`, bind: [] };
     }
