@@ -140,7 +140,7 @@ export class OuiDB {
       ]));
     let rows = await tr.select(sql_select);
     for (let row of rows)
-      reporter.diagnostic({ type: "error", msg: `cannot delete (${row["VAL_INST"]} is still linked to ${oid})` });
+      reporter.diagnostic({ is: "error", msg: `cannot delete (${row["VAL_INST"]} is still linked to ${oid})` });
 
     for (let table of this._valTables) {
       let sql_delete = maker.delete(table, maker.op(this.maker.column(table, "VAL_INST"), ConstraintType.Equal, oid));

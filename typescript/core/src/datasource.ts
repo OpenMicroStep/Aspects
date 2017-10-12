@@ -98,9 +98,9 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
   async distantQuery(request) : Promise<Result<{ e: EncodedVersionedObjects, results: { [s: string]: Identifier[] } }>> {
     let creator = this._queries && this._queries.get(request.id);
     if (!creator)
-      return new Result([{ is: "diagnostic", type: "error", msg: `request ${request.id} doesn't exists` }]);
+      return new Result([{ is: "error", msg: `request ${request.id} doesn't exists` }]);
     let reporter = new Reporter();
-    reporter.transform.push((d) => { d.type = "error"; return d; });
+    reporter.transform.push((d) => { d.is = "error"; return d; });
     let query = await creator(reporter, request, this.controlCenter());
     if (reporter.failed)
       return Result.fromDiagnostics(reporter.diagnostics);
@@ -231,7 +231,7 @@ async function safeScope(
     if (strictScope) {
       for (let extra of extras.values()) {
         for (let a of extra) {
-          reporter.diagnostic({ type: "error", msg: `attribute ${a} can't be loaded` });
+          reporter.diagnostic({ is: "error", msg: `attribute ${a} can't be loaded` });
         }
       }
     }
@@ -262,7 +262,7 @@ async function safeQuery(
       }
     })());
     if (reporter.failed)
-      return Result.fromItemsWithoutValue([...res.items(), ...Result.toDiagItems(reporter.diagnostics)]);
+      return Result.fromItemsWithoutValue([...res.items(), ...reporter.diagnostics]);
   }
   return res;
 }
@@ -284,7 +284,7 @@ async function safeLoad(
       }
     })());
     if (reporter.failed)
-      return Result.fromItemsWithoutValue([...res.items(), ...Result.toDiagItems(reporter.diagnostics)]);
+      return Result.fromItemsWithoutValue([...res.items(), ...reporter.diagnostics]);
   }
   return res;
 }

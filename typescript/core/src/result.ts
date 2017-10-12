@@ -6,16 +6,12 @@ export class Result<T = any> {
   /** @internal */ _values: T[] = [];
   /** @internal */ _diagnostics: Diagnostic[] = [];
 
-  static toDiagItems(diagnostics: Diagnostic[]) : Result.ItemDiagnostic[] {
-    return diagnostics.map((d: Result.ItemDiagnostic) => { d.is = "diagnostic"; return d; });
-  }
-
   static fromDiagnostics<T = any>(diagnostics: Diagnostic[]) : Result<T> {
-    return new Result(this.toDiagItems(diagnostics));
+    return new Result([...diagnostics]);
   }
 
   static fromDiagnosticsAndValue<T>(diagnostics: Diagnostic[], value: T) : Result<T> {
-    return new Result([...this.toDiagItems(diagnostics), { is: "value", value: value }]);
+    return new Result([...diagnostics, { is: "value", value: value }]);
   }
 
   static fromValue<T>(value: T) : Result<T> {
@@ -36,10 +32,10 @@ export class Result<T = any> {
   constructor(items: Result.Item[]) {
     this._items = items;
     for (let item of items) {
-      switch (item.is) {
-        case 'diagnostic': this._diagnostics.push(item); break;
-        case 'value': this._values.push(item.value); break;
-      }
+      if (item.is === 'value')
+        this._values.push(item.value);
+      else
+        this._diagnostics.push(item);
     }
   }
 
@@ -79,7 +75,7 @@ export class Result<T = any> {
 }
 
 export namespace Result {
-  export type ItemDiagnostic = { is: 'diagnostic' } & Diagnostic;
+  export type ItemDiagnostic = Diagnostic;
   export type ItemValue<T> = { is: 'value', value: T };
   export type Item = ItemDiagnostic | ItemValue<any>;
 }

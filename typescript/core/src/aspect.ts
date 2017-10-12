@@ -497,7 +497,7 @@ export class AspectConfiguration {
         return validate(reporter, path, value, validateItem, min, max);
       }
       else
-        path.diagnostic(reporter, { type: "warning", msg: `attribute must be an array`});
+        path.diagnostic(reporter, { is: "warning", msg: `attribute must be an array`});
       return undefined;
     }};
   }
@@ -510,7 +510,7 @@ export class AspectConfiguration {
         return validate(reporter, path, value, validateItem, min, max);
       }
       else
-        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a set`});
+        path.diagnostic(reporter, { is: "warning", msg: `attribute must be a set`});
       return undefined;
     }};
   }
@@ -556,9 +556,9 @@ function validate(
 ) {
   path.pushArray();
   if (collection.size < min)
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must contains at least ${min} elements`});
+    path.diagnostic(reporter, { is: "warning", msg: `attribute must contains at least ${min} elements`});
   if (max !== '*' && collection.size > max)
-    path.diagnostic(reporter, { type: "warning", msg: `attribute must contains at most ${max} elements`});
+    path.diagnostic(reporter, { is: "warning", msg: `attribute must contains at most ${max} elements`});
   let i = 0;
   collection.forEach((v) => validateItem.validate(reporter, path.setArrayKey(i++), v));
   path.popArray();

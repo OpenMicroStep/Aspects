@@ -149,14 +149,14 @@ export class InMemoryDataSource extends DataSource {
       if (lVersion === VersionedObjectManager.DeletedVersion) {
         let dbId = this.ds.toDSId(lObject.id());
         if (!tr.delete(dbId))
-          diags.push({ type: "error", msg: `cannot delete ${lObject.id()}: object not found` });
+          diags.push({ is: "error", msg: `cannot delete ${lObject.id()}: object not found` });
         return undefined;
       }
       else if (lVersion !== VersionedObjectManager.NoVersion) { // Update
         let dbId = this.ds.toDSId(lObject.id());
         let dObject = tr.get(dbId);
         if (!dObject)
-          diags.push({ type: "error", msg: `cannot update ${lObject.id()}: object not found` });
+          diags.push({ is: "error", msg: `cannot update ${lObject.id()}: object not found` });
         if (dObject) {
           dObject = tr.willUpdate(dObject);
           dObject.version++;
@@ -167,7 +167,7 @@ export class InMemoryDataSource extends DataSource {
             let dbv = dObject.attributes.get(k);
             let exv = lManager._versionAttributes.get(k);
             if (!areEquals(exv, dbv))
-              diags.push({ type: "error", msg: `cannot update ${lObject.id()}: attribute ${k} mismatch` });
+              diags.push({ is: "error", msg: `cannot update ${lObject.id()}: attribute ${k} mismatch` });
             else
               dObject.attributes.set(k, tr.toDSValue(lv, create));
           }
@@ -195,7 +195,7 @@ export class InMemoryDataSource extends DataSource {
     function create(vo) : InMemoryDataSource.DataStoreObject | undefined {
       if (objects.has(vo))
         return save(vo)!;
-      diags.push({ type: "error", msg: `cannot save, the object ${vo.id()} is not is the save list` });
+      diags.push({ is: "error", msg: `cannot save, the object ${vo.id()} is not is the save list` });
       return undefined;
     };
 

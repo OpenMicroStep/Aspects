@@ -250,7 +250,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let a = this._aspect.attributes.get(attribute);
     let path = new AttributePath(this.name(), this.id(), '.', attribute);
     if (!a)
-      path.diagnostic(reporter, { type: "error", msg: `attribute doesn't exists` });
+      path.diagnostic(reporter, { is: "error", msg: `attribute doesn't exists` });
     else
       a.validator.validate(reporter, path, value, this);
     return reporter.diagnostics;
@@ -336,7 +336,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       let a = this._aspect.attributes.get(k);
       path.set(k);
       if (!a)
-        path.diagnostic(reporter, { type: "error", msg: `attribute doesn't exists` });
+        path.diagnostic(reporter, { is: "error", msg: `attribute doesn't exists` });
       else {
         let s = reporter.snapshot();
         a.validator.validate(reporter, path, v, this);

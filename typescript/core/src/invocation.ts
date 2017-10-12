@@ -39,19 +39,19 @@ export namespace Invocation {
         ret = farMethod.returnValidator.validate(reporter, new AttributePath(farMethod.name, ":return"), ret);
         hasResult = nb === reporter.diagnostics.length; // no new diagnostic
       }
-      let items: Result.Item[] = reporter.diagnostics.map((d: Result.ItemDiagnostic) => { d.is = "diagnostic"; return d; });
+      let items: Result.Item[] = reporter.diagnostics;
       if (!reporter.failed && result) // if reporter failed, we can't trust result items
         items.push(...result.items());
       else if (!reporter.failed && hasResult)
         items.push({ is: "value", value: ret });
       callback(new Result<R>(items));
     };
-    reporter.transform.push((d) => { d.type = "error"; return d; });
+    reporter.transform.push((d) => { d.is = "error"; return d; });
 
     let manager = receiver.manager();
     let farMethod = manager.aspect().farMethods.get(method);
     if (!farMethod)
-      reporter.diagnostic({ type: "error", msg: `method ${method} doesn't exists on ${manager.name()}` });
+      reporter.diagnostic({ is: "error", msg: `method ${method} doesn't exists on ${manager.name()}` });
     else {
       let argValidator = farMethod.argumentValidators[0];
       let arg = argValidator ? argValidator.validate(reporter, new AttributePath(farMethod.name, ":", 0), argument) : undefined;
@@ -62,7 +62,7 @@ export namespace Invocation {
             if (err)
               reporter.error(err);
             else
-              reporter.diagnostic({ type: "error", msg: `unknown error` });
+              reporter.diagnostic({ is: "error", msg: `unknown error` });
             exit();
           })
         return;

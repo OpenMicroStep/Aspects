@@ -7,9 +7,9 @@ export namespace Validation {
 export const validateId: V.Validator0<Identifier> = {
   validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
     if (typeof value !== "string" && typeof value !== "number")
-      path.diagnostic(reporter, { type: "warning", msg: `an identifier must be a string or a number, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `an identifier must be a string or a number, got ${typeof value}` });
     else if (value === "")
-      path.diagnostic(reporter, { type: "warning", msg: `an identifier can't be an empty string ` });
+      path.diagnostic(reporter, { is: "warning", msg: `an identifier can't be an empty string ` });
     else
       return value;
     return undefined;
@@ -19,7 +19,7 @@ export const validateId: V.Validator0<Identifier> = {
 export const validateVersion: V.Validator0<number> = {
   validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
     if (typeof value !== "number" || !Number.isInteger(value))
-      path.diagnostic(reporter, { type: "warning", msg: `a version must be an integer, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `a version must be an integer, got ${typeof value}` });
     else
       return value;
     return undefined;
@@ -29,7 +29,7 @@ export const validateVersion: V.Validator0<number> = {
 export const validateHasValue: V.Validator0<any> = {
   validate: function validateHasValue(reporter: Reporter, path: AttributePath, value: any) {
     if (value === undefined)
-      path.diagnostic(reporter, { type: "warning", msg: `required` });
+      path.diagnostic(reporter, { is: "warning", msg: `required` });
     return value;
   }
 };
@@ -44,16 +44,16 @@ export function classValidator(classname: string, allowUndefined: boolean) : Asp
       if (!aspect && classname === "VersionedObject")
         return value;
       else if (!aspect)
-        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, unable to find aspect`});
+        path.diagnostic(reporter, { is: "warning", msg: `attribute must be a ${classname}, unable to find aspect`});
       else if (value instanceof aspect.implementation)
         return value;
       else
-        path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.manager().name()}`});
+        path.diagnostic(reporter, { is: "warning", msg: `attribute must be a ${classname}, got ${value.manager().name()}`});
     }
     else if (typeof value === "object")
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${value.constructor ? value.constructor.name : value}`});
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be a ${classname}, got ${value.constructor ? value.constructor.name : value}`});
     else
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a ${classname}, got ${typeof value}`});
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be a ${classname}, got ${typeof value}`});
     return value;
   }}
 }
@@ -87,7 +87,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateString(reporter: Reporter, path: AttributePath, value: any) {
       if (typeof value === "string")
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a string, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be a string, got ${typeof value}` });
       return undefined;
     }
   },
@@ -95,7 +95,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateInteger(reporter: Reporter, path: AttributePath, value: any) {
       if (typeof value === "number" && Number.isInteger(value))
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be an integer, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be an integer, got ${typeof value}` });
       return undefined;
     }
   },
@@ -103,7 +103,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateBoolean(reporter: Reporter, path: AttributePath, value: any) {
       if (typeof value === "boolean")
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be an boolean, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be an boolean, got ${typeof value}` });
       return undefined;
     }
   },
@@ -111,7 +111,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateDecimal(reporter: Reporter, path: AttributePath, value: any) {
       if (typeof value === "number" && Number.isFinite(value))
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a decimal, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be a decimal, got ${typeof value}` });
       return undefined;
     }
   },
@@ -119,7 +119,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateDictionary(reporter: Reporter, path: AttributePath, value: any) {
       if (typeof value === "object")
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a dictionary, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be a dictionary, got ${typeof value}` });
       return undefined;
     }
   },
@@ -127,7 +127,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateObject(reporter: Reporter, path: AttributePath, value: any) {
       if (typeof value === "object")
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be an object, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be an object, got ${typeof value}` });
       return undefined;
     }
   },
@@ -135,7 +135,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateDate(reporter: Reporter, path: AttributePath, value: any) {
       if (value instanceof Date)
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a Date, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be a Date, got ${typeof value}` });
       return undefined;
     }
   },
@@ -143,7 +143,7 @@ export const primitiveValidators: {[s in Aspect.PrimaryType]: Aspect.TypeValidat
     validate: function validateLocalDate(reporter: Reporter, path: AttributePath, value: any) {
       if (value instanceof Date)
         return value;
-      path.diagnostic(reporter, { type: "warning", msg: `attribute must be a Date, got ${typeof value}` });
+      path.diagnostic(reporter, { is: "warning", msg: `attribute must be a Date, got ${typeof value}` });
       return undefined;
     }
   },

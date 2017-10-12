@@ -87,7 +87,7 @@ export class ObiDataSource extends DataSource {
             value = versions.get(value)!._id;
           }
           else {
-            reporter.diagnostic({ type: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
+            reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
             return;
           }
         }
@@ -102,7 +102,7 @@ export class ObiDataSource extends DataSource {
       if (value instanceof VersionedObject) {
         let state = value.manager().state();
         if (state === VersionedObjectManager.State.NEW) {
-          reporter.diagnostic({ type: "error", msg: `cannot save ${attribute.name}: referenced object is not saved` });
+          reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved` });
           return;
         }
         else {
@@ -131,7 +131,7 @@ export class ObiDataSource extends DataSource {
       let obi_ENT = this.config.aspectClassname_to_ObiEntity(aspect.name);
       let obi = this.db.systemObiByName.get(obi_ENT);
       if (!obi) {
-        reporter.diagnostic({ type: "error", msg: `cannot found ${obi_ENT} obi definition` });
+        reporter.diagnostic({ is: "error", msg: `cannot found ${obi_ENT} obi definition` });
         return;
       }
 
@@ -143,7 +143,7 @@ export class ObiDataSource extends DataSource {
         let car = this.db.systemObiByName.get(obi_car_name);
         if (!car) {
           if (!a.relation)
-            reporter.diagnostic({ type: "error", msg: `caracteristic ${obi_car_name} not found` });
+            reporter.diagnostic({ is: "error", msg: `caracteristic ${obi_car_name} not found` });
           return;
         }
         let type = getOne(car, car_type) as ObiDefinition;
@@ -178,7 +178,7 @@ export class ObiDataSource extends DataSource {
             break;
           }
           default:
-            reporter.diagnostic({ type: "error", msg: `unsupported attribute type ${a.type.type} by obi` });
+            reporter.diagnostic({ is: "error", msg: `unsupported attribute type ${a.type.type} by obi` });
           }
       };
 

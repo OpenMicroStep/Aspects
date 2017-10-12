@@ -77,7 +77,7 @@ _end:`;
   let reporter = new Reporter();
   parse(reporter, def);
   assert.deepEqual(reporter.diagnostics, [
-    { "type": "error", "row": 5, "col": 5, "msg": "a new entity name was expected" },
+    { "is": "error", "row": 5, "col": 5, "msg": "a new entity name was expected" },
   ]);
 }
 
@@ -88,7 +88,7 @@ _id: 1`;
   let reporter = new Reporter();
   parse(reporter, def);
   assert.deepEqual(reporter.diagnostics, [
-    { "type": "error", "row": 3, "col": 6, "msg": "_end: was expected" },
+    { "is": "error", "row": 3, "col": 6, "msg": "_end: was expected" },
   ]);
 }
 function decode_error_end3() {
@@ -99,7 +99,7 @@ _id: 1
   let reporter = new Reporter();
   parse(reporter, def);
   assert.deepEqual(reporter.diagnostics, [
-    { "type": "error", "row": 4, "col": 0, "msg": "_end: was expected" },
+    { "is": "error", "row": 4, "col": 0, "msg": "_end: was expected" },
   ]);
 }
 function decode_error_collision0() {
@@ -115,7 +115,7 @@ _end:
   let reporter = new Reporter();
   parse(reporter, def);
   assert.deepEqual(reporter.diagnostics, [
-    { "type": "error", "row": 7, "col": 7, "msg": "cannot extends objects in the same definition: { _id: 1 }" },
+    { "is": "error", "row": 7, "col": 7, "msg": "cannot extends objects in the same definition: { _id: 1 }" },
   ]);
 }
 function decode_ENT() {

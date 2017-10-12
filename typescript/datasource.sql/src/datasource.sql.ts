@@ -91,7 +91,7 @@ export class SqlDataSource extends DataSource {
     for (let [k, nv] of manager.localAttributes()) {
       if (nv instanceof VersionedObject && nv.manager().state() === VersionedObjectManager.State.NEW) {
         if (!objects.has(nv)) {
-          reporter.diagnostic({ type: "error", msg: `cannot save ${k}: referenced object is not saved and won't be` });
+          reporter.diagnostic({ is: "error", msg: `cannot save ${k}: referenced object is not saved and won't be` });
           continue;
         }
         if (!tr.versions.has(nv))
