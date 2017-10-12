@@ -1,3 +1,4 @@
+require('source-map-support').install();
 import {tests as versionedobject_tests} from './versionedObject.spec';
 import {tests as notificationCenter_tests} from './notificationCenter.spec';
 import {tests as controlCenter_tests} from './controlCenter.spec';

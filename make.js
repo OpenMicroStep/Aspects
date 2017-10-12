@@ -151,6 +151,11 @@ module.exports =  {
       targets: ["aspects core"],
       components: ["=test", "=::aspects core::", "=node"],
       interfaces: ["=Files:core:tst ? interface"],
+      npmPackage: { is: "component",
+        "dependencies": { is: "component",
+          "source-map-support": "^0.4.0",
+        },
+      },
     },
     "aspects express=": {
       is: 'target',
