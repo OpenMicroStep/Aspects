@@ -67,13 +67,13 @@ export class TypeElement extends Element {
 
   toJSON() {
     let r: Partial<TypeElement> = { is: this.is };
-    this.name                     && (r.name = this.name);
-    this.itemType !== undefined   && (r.itemType = this.itemType);
-    this.types !== undefined      && (r.types = this.types);
-    this.properties !== undefined && (r.properties = this.properties);
-    this.type !== undefined       && (r.type = this.type);
-    this.min !== undefined        && (r.min = this.min);
-    this.max !== undefined        && (r.max = this.max);
+    if (this.name                    ) r.name = this.name;
+    if (this.itemType !== undefined  ) r.itemType = this.itemType;
+    if (this.types !== undefined     ) r.types = this.types;
+    if (this.properties !== undefined) r.properties = this.properties;
+    if (this.type !== undefined      ) r.type = this.type;
+    if (this.min !== undefined       ) r.min = this.min;
+    if (this.max !== undefined       ) r.max = this.max;
     return r;
   }
 }

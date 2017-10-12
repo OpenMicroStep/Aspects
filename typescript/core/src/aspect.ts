@@ -462,10 +462,6 @@ export class AspectConfiguration {
   }
 
   private install_attribute_relations(pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]) {
-    let relations: {
-      aspect: Aspect.Installed, attribute: Aspect.InstalledAttribute,
-      relation_aspect: Aspect.Installed, relation_attribute: Aspect.InstalledAttribute
-    }[] = [];
     for (let [aspect, attribute, relation] of pending_relations) {
       let contains_types = Aspect.typeToAspectNames(attribute.type);
       if (contains_types.length !== 1)

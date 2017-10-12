@@ -1,4 +1,4 @@
-import {ControlCenter, NotificationCenter, Identifier, VersionedObject, VersionedObjectConstructor, VersionedObjectManager, DataSource, InMemoryDataSource} from './core';
+import {ControlCenterContext, Identifier, VersionedObject, VersionedObjectManager} from './core';
 
 export namespace Transport {
 
@@ -18,24 +18,24 @@ export interface Decoder {
   decode(s: any): any;
 }
 export interface ObjectCoding<I, O, E extends Encoder, D extends Decoder> {
-  is: string | undefined,
-  canEncode(e: E, s) : s is I,
-  encode(e: E, s: I): O,
-  canDecode(d: D, s) : s is O,
-  decode(d: D, s: O): I,
+  is: string | undefined;
+  canEncode(e: E, s) : s is I;
+  encode(e: E, s: I): O;
+  canDecode(d: D, s) : s is O;
+  decode(d: D, s: O): I;
 };
 export type ObjectFlatCoding<I, O> = ObjectCoding<I, O, FlatEncoder, FlatDecoder>;
 
-const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
+const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[] = [
   { is: "Map",
-    canEncode(e, s) { return s instanceof Map },
+    canEncode(e, s) { return s instanceof Map; },
     encode(e, s) {
       let r: any = { __is__: "Map", entries: [] };
       for (let [k, v] of s)
         r.entries.push([e.encode(k), e.encode(v)]);
       return r;
     },
-    canDecode(d, s) { return s && s.__is__ === this.is },
+    canDecode(d, s) { return s && s.__is__ === this.is; },
     decode(d, s) {
       let r = new Map();
       for (let [k, v] of s.entries)
@@ -44,14 +44,14 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
     },
   } as ObjectFlatCoding<Map<any, any>, { __is__: "Map", entries: [any, any][] }>,
   { is: "Set",
-    canEncode(e, s) { return s instanceof Set },
+    canEncode(e, s) { return s instanceof Set; },
     encode(e, s) {
       let r: any = { __is__: "Set", entries: [] };
       for (let v of s)
         r.entries.push(e.encode(v));
       return r;
     },
-    canDecode(d, s) { return s && s.__is__ === this.is },
+    canDecode(d, s) { return s && s.__is__ === this.is; },
     decode(d, s) {
       let r = new Set();
       for (let v of s.entries)
@@ -70,18 +70,18 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
     },
   } as ObjectFlatCoding<Date, { __is__: "Date", v: number }>,
   { is: "VersionedObject",
-    canEncode(e, s) { return s instanceof VersionedObject },
+    canEncode(e, s) { return s instanceof VersionedObject; },
     encode(e, s) {
       let r: any;
       let m = s.manager();
       m = (m as any)._manager || m; // bypass UnregisteredVersionedObjectManager
-      let id = m.id()
+      let id = m.id();
       if (VersionedObjectManager.isLocalId(id))
         throw new Error(`reference to locally defined object ${id}`);
       r = { __is__: "VersionedObject", is: m.name(), id: m.id() };
       return r;
     },
-    canDecode(d, s) { return s && s.__is__ === this.is },
+    canDecode(d, s) { return s && s.__is__ === this.is; },
     decode(d, s) {
       let id = s.id;
       if (VersionedObjectManager.isLocalId(id))
@@ -99,10 +99,10 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
     },
   } as ObjectFlatCoding<VersionedObject, { __is__: "VersionedObject", is: string, id: Identifier }>,
   { is: undefined,
-    canEncode(e, s) { return s.constructor === Object },
-    canDecode(d, s) { return s.constructor === Object },
+    canEncode(e, s) { return s.constructor === Object; },
+    canDecode(d, s) { return s.constructor === Object; },
     encode(e, s) {
-      let k, v, r= {};
+      let k, v, r = {};
       for (k in s) {
         if (k.startsWith("__is__"))
           k = "__is__\\" + k.substring(6);
@@ -124,8 +124,8 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
     }
   } as ObjectFlatCoding<object, object>,
   { is: undefined,
-    canEncode(e, s) { return Array.isArray(s) },
-    canDecode(d, s) { return Array.isArray(s) },
+    canEncode(e, s) { return Array.isArray(s); },
+    canDecode(d, s) { return Array.isArray(s); },
     encode(e, s) {
       let r: any[] = [] ;
       for (let v of s)
@@ -146,8 +146,8 @@ declare class Buffer {
 }
 if (typeof Buffer !== "undefined") { // nodejs
   jsonEncoders.push({ is: "Binary",
-    canEncode(e, s) { return s instanceof Buffer },
-    canDecode(d, s) { return s && s.__is__ === "Binary" },
+    canEncode(e, s) { return s instanceof Buffer; },
+    canDecode(d, s) { return s && s.__is__ === "Binary"; },
     encode(e, s) {
       let r: any[] = [];
       for (var i = 0; i < s.length; i++) {
@@ -161,18 +161,18 @@ if (typeof Buffer !== "undefined") { // nodejs
         r.push(d.decode(v));
       return r;
     },
-  } as ObjectFlatCoding<Buffer,  EncodedBinary>)
+  } as ObjectFlatCoding<Buffer,  EncodedBinary>);
 }
 
-if (typeof Uint8Array !== "undefined") { //JS
+if (typeof Uint8Array !== "undefined") { // JS
     jsonEncoders.push({ is: "Binary",
-    canEncode(e, s) { return s instanceof Uint8Array },
-    canDecode(d, s) { return s && s.__is__ === "Binary" },
+    canEncode(e, s) { return s instanceof Uint8Array; },
+    canDecode(d, s) { return s && s.__is__ === "Binary"; },
     encode(e, s) {
       let r: any[] = [] ;
       for (let v of s)
         r.push(e.encode(v));
-      return { __is__: "Binary", data:r  };
+      return { __is__: "Binary", data: r  };
     },
     decode(d, s) {
       let r: any = [] ;
@@ -180,7 +180,7 @@ if (typeof Uint8Array !== "undefined") { //JS
         r.push(d.decode(v));
       return r;
     },
-  } as ObjectFlatCoding<Uint8Array,  EncodedBinary>)
+  } as ObjectFlatCoding<Uint8Array,  EncodedBinary>);
 }
 
 
@@ -225,10 +225,10 @@ export abstract class FlatCoder<T> {
           let enc = s.constructor && self.encoderByCstor.get(s.constructor);
           if (!enc) {
             for (enc of self.encoders) {
-              if (enc.canEncode(this, s)) break
+              if (enc.canEncode(this, s)) break;
               else enc = undefined;
             }
-            if(!enc)
+            if (!enc)
               throw new Error(`cannot encode ${s.constructor.name}`);
             if (s.constructor)
               self.encoderByCstor.set(s.constructor, enc);
@@ -240,7 +240,7 @@ export abstract class FlatCoder<T> {
         }
         return r;
       }
-    }
+    };
     return encoder.encode(s);
   }
   protected decodeWithCC(s: any, ccc: ControlCenterContext, ccAllowed: Set<VersionedObject> | undefined) {
@@ -251,7 +251,7 @@ export abstract class FlatCoder<T> {
       decode(s: any): any {
         if (s && typeof s === "object") {
           if (s.__is__) {
-            let enc = self.encoderByName.get(s.__is__)
+            let enc = self.encoderByName.get(s.__is__);
             if (!enc) throw new Error(`cannot decode ${s.__is__}`);
             return enc.decode(this, s);
           }
@@ -262,7 +262,7 @@ export abstract class FlatCoder<T> {
         }
         return s;
       }
-    }
+    };
     return decoder.decode(s);
   }
 }
