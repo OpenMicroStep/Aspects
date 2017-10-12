@@ -23,17 +23,16 @@ export class ExpressTransport implements PublicTransport {
       this.app.use(path, this.text_middleware);
     this.app[isA0Void ? "get" : "post"](path, (req, res) => {
       let id = req.params.id;
-      this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id, req).then(async (entity) => {
-        let cc = entity.controlCenter();
+      this.findObject(cstor, /^[0-9]+$/.test(id) ? parseInt(id) : id, req).then(entity => entity.controlCenter().safe(async ccc => {
         let inv: Result<any> | undefined;
-        let json = await coder.decode_handle_encode(cc, isA0Void ? undefined : req.body, async (decoded) => {
-          inv = await Invocation.farPromise(entity, method.name, decoded);
+        let json = await coder.decode_handle_encode(ccc, isA0Void ? undefined : req.body, async (decoded) => {
+          inv = await Invocation.farPromise(ccc, { to: entity, method: method.name }, decoded);
           return inv.items();
         });
         res.set('Content-Type', 'application/json');
         res.status(inv && inv.hasDiagnostics() ? 400 : 200);
         res.send(json);
-      }).catch((error) => {
+      })).catch((error) => {
         console.info(error);
         res.status(501).send(error);
       });

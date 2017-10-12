@@ -84,14 +84,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   isRegistered() { return this._components.size > 0; }
 
-  /** @internal */ evenIfUnregistered() : this {
-    return this; // easy access to manager even if the object is not registered
-  }
-
-  /** @internal */ registerComponent(component: AComponent) {
-    this._components.add(component);
-  }
-
   hasChanges(scope?: string[]) : boolean;
   hasChanges(scope?: (keyof T)[]) : boolean;
   hasChanges(scope?: (keyof T)[]) {
@@ -216,7 +208,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       throw new Error(`cannot change identifier to a local identifier`);
     if (!VersionedObjectManager.isLocalId(this._id))
       throw new Error(`id can't be modified once assigned (not local)`);
-    this._controlCenter.changeObjectId(this._id, id);
+    this._controlCenter._changeObjectId(this._object, this._id, id);
     this._id = id; // local -> real id (ie. object _id attribute got loaded)
     if (this._version === VersionedObjectManager.NoVersion)
       this._version = VersionedObjectManager.UndefinedVersion;
@@ -428,35 +420,16 @@ export namespace VersionedObjectManager {
   }
   /** @internal */
   export function UnregisteredVersionedObjectManager<T extends VersionedObject>(this: any, manager: VersionedObjectManager<T>) {
-    this._manager = manager;
+    this._id = manager.id();
   }
-  function isRegisteredCheck(this: any) {
-    throw new Error(`you must register this object (${this.id()}) before using it`);
+  function throw_is_dead_error(this: any) {
+    throw new Error(`this object (${this._id}) was totally unregistered and thus is considered DEAD !`);
   }
   for (let k of Object.getOwnPropertyNames(VersionedObjectManager.prototype)) {
     let prop = { ...Object.getOwnPropertyDescriptor(VersionedObjectManager.prototype, k) };
-    prop.value = isRegisteredCheck;
+    prop.value = throw_is_dead_error;
     Object.defineProperty(UnregisteredVersionedObjectManager.prototype, k, prop);
   }
-  UnregisteredVersionedObjectManager.prototype.id = function() {
-    return this._manager.id();
-  };
-  UnregisteredVersionedObjectManager.prototype.controlCenter = function() {
-    return this._manager.controlCenter();
-  };
-  UnregisteredVersionedObjectManager.prototype.aspect = function() {
-    return this._manager.aspect();
-  };
-  UnregisteredVersionedObjectManager.prototype.name = function() {
-    return this._manager.name();
-  };
-  UnregisteredVersionedObjectManager.prototype.registerComponent = function(component: AComponent) {
-    this._manager._object.__manager = this._manager;
-    this._manager.registerComponent(component);
-  };
-  UnregisteredVersionedObjectManager.prototype.evenIfUnregistered = function() {
-    return this._manager;
-  };
 }
 export class VersionedObject {
   static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
@@ -506,21 +479,6 @@ export class VersionedObject {
   version(): number { return this.__manager.localVersion(); }
   manager(): VersionedObjectManager<this> { return this.__manager; }
   controlCenter(): ControlCenter { return this.__manager.controlCenter(); }
-
-  farCallback<O extends VersionedObject, R>(this: O, method: never, argument: any, callback: (envelop: Result<R>) => void) {
-    Invocation.farCallback(this, method, argument, callback);
-  }
-  farEvent<O extends VersionedObject>(this: O, method: never, argument: any, eventName: string, onObject?: Object) {
-    Invocation.farEvent(this, method, argument, eventName, onObject);
-  }
-  farPromise<O extends VersionedObject, R>(this: O, method: never, argument: any) : Promise<Result<R>> {
-    return Invocation.farPromise(this, method, argument, );
-  }
-  farAsync<O extends VersionedObject, R>(this: O, method: never, argument: any) : (flux: Flux<{ envelop: Result<R> }>) => void {
-    return (flux: Flux<{ envelop: Result<R> }>) => {
-      Invocation.farAsync(flux, this, method, argument);
-    };
-  }
 
   static __c(name: string): any {}
   static __i<T extends VersionedObject>(name: string): any {}

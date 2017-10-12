@@ -8,19 +8,19 @@ DemoApp.category('far', <DemoApp.ImplCategories.far<DemoApp>>{
   giveMeANumber(): number {
     return Math.random();
   },
-  pass(value) {
+  pass({}, value) {
     return value;
   },
-  p0(): Person {
-    let p0 = this.controlCenter().create<Person.Categories.core>("Person", ['core']);
+  p0({ context: { ccc }}): Person {
+    let p0 = ccc.create<Person.Categories.core>("Person", ['core']);
     p0.manager().setId(0);
     p0._firstName = "Linus";
     p0._lastName = "git";
     p0.manager().setVersion(0);
     return p0;
   },
-  arr_p0_1(): Person[] {
-    let p0 = this.controlCenter().create<Person.Categories.core>("Person", ['core']);
+  arr_p0_1({ context: { ccc }}): Person[] {
+    let p0 = ccc.create<Person.Categories.core>("Person", ['core']);
     p0.manager().setId(0);
     p0._firstName = "Linus";
     p0._lastName = "Torvalds";

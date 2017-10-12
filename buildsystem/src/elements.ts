@@ -154,14 +154,13 @@ export declare namespace ${this.name} {`;
     decl += `\n}`;
     decl += `
 export namespace ${this.name} {
-  export function create(cc: ControlCenter) { return cc.create<${this.name}>(${JSON.stringify(this.name)}); }
+  export function create(ccc: ControlCenterContext) { return ccc.create<${this.name}>(${JSON.stringify(this.name)}); }
   export const Aspects = {${this.aspects.map(aspect => `
     ${aspect.name}: <Aspect.FastConfiguration<${this.name}.Aspects.${aspect.name}>> {
       name: ${JSON.stringify(this.name)}, aspect: ${JSON.stringify(aspect.name)}, cstor: ${this.name}, categories: [${
         aspect.categories.concat(aspect.farCategories).map(c => JSON.stringify(c.name)).join(", ")
       }],
-      create(cc: ControlCenter) { return cc.create<${this.name}.Aspects.${aspect.name}>(${JSON.stringify(this.name)}, this.categories); },
-      factory(cc: ControlCenter) { return cc.aspectFactory<${this.name}.Aspects.${aspect.name}>(${JSON.stringify(this.name)}, this.categories); },
+      create(ccc: ControlCenterContext) { return ccc.create<${this.name}.Aspects.${aspect.name}>(${JSON.stringify(this.name)}, this.categories); },
     },`).join('')}
   };
 }
@@ -224,17 +223,6 @@ export class QueryElement extends Element {
   }
 }
 
-const farMethods = <((clazz: string, method: string, argument: string, ret: string) => string)[]>[
-  (clazz: string, method: string, argument: string, ret: string) =>
-    `farCallback(this: ${clazz}, method: '${method}', argument: ${argument}, callback: (envelop: Result<${ret}>) => void);`,
-  (clazz: string, method: string, argument: string, ret: string) =>
-    `farEvent(this: ${clazz}, method: '${method}', argument: ${argument}, eventName: string, onObject?: Object);`,
-  (clazz: string, method: string, argument: string, ret: string) =>
-    `farPromise(this: ${clazz}, method: '${method}', argument: ${argument}): Promise<Result<${ret}>>;`,
-  //(clazz: string, method: string, argument: string, ret: string) =>
-  //  `farAsync(this: ${clazz}, method: '${method}', argument: ${argument}): (flux: Flux<{ envelop: Result<${clazz}, ${ret}> }>) => void;`
-];
-
 elementFactories.registerSimple('category', (reporter, name, definition, attrPath, parent) => {
   return new CategoryElement('category', name, parent);
 });
@@ -259,25 +247,31 @@ export class CategoryElement extends Element {
   }
   __decl(clazz: ClassElement, workaround: boolean) {
     return `
-    export type ${this.name} = ${clazz.name} & ${workaround ? `typeof ${this.__constName(clazz)} & ` : ''}{
-${this.is === 'farCategory' ? this.__declFarMethods(clazz.name) : this.__declMethods()}    }`;
+    export type ${this.name} = ${clazz.name} & ${workaround ? `typeof ${this.__constName(clazz)} & ` : ''}{${
+      this.is === 'farCategory' ? this.__declFarMethods(clazz.name) : this.__declMethods()}
+    }`;
   }
   __declImpl(clazz: ClassElement, workaround: boolean) {
     return `
-    export type ${this.name}<C extends ${clazz.name} = ${clazz.name}> = ${workaround ? `typeof ${this.__constNameImpl(clazz)} & ` : ''}{
-${this.is === 'farCategory' ? this.__declImplFarMethods('C') : this.__declImplMethods('C')}    }`;
+    export type ${this.name}<C extends ${clazz.name} = ${clazz.name}> = ${workaround ? `typeof ${this.__constNameImpl(clazz)} & ` : ''}{${
+      this.is === 'farCategory' ? this.__declImplFarMethods('C') : this.__declImplMethods('C')}
+    }`;
   }
   __declMethods() {
-    return this.methods.map(method => `      ${method.name}(${method.__declArguments().join(', ')}): ${method.__declReturn()};\n`).join('');
+    return this.methods.map(method => `
+      ${method.name}(${method.__declArguments().join(', ')}): ${method.__declReturn()};`).join('');
   }
   __declFarMethods(clazz: string) {
-    return this.methods.map(method => farMethods.map(f => `      ${f(clazz, method.name, method.__declFarArgument(), method.__declReturn())}\n`).join('')).join('');
+    return this.methods.map(method => `
+      ${method.name}: Aspect.Invokable<${method.__declFarArgument()}, ${method.__declReturn()}>;`).join('');
   }
   __declImplMethods(clazz: string) {
-    return this.methods.map(method => `      ${method.name}: (this: ${clazz}${method.__declArguments().map(a => `, ${a}`).join('')}) => ${method.__declReturn()};\n`).join('');
+    return this.methods.map(method => `
+      ${method.name}: (this: ${clazz}${method.__declArguments().map(a => `, ${a}`).join('')}) => ${method.__declReturn()};`).join('');
   }
   __declImplFarMethods(clazz: string) {
-    return this.methods.map(method => `      ${method.name}: FarImplementation<${clazz}, ${method.__declFarArgument()}, ${method.__declReturn()}>;\n`).join('');
+    return this.methods.map(method => `
+      ${method.name}: Aspect.FarImplementation<${clazz}, ${method.__declFarArgument()}, ${method.__declReturn()}>;`).join('');
   }
 
   toJSON(){

@@ -1,12 +1,11 @@
 import {
-  ControlCenter, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
-  Validation,
+  ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
+  Validation, Result,
 } from './core';
-import {Async} from '@openmicrostep/async';
 import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
 
 export interface FarTransport {
-  remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any>;
+  remoteCall(ccc: ControlCenterContext, to: VersionedObject, method: string, args: any[]): Promise<any>;
 }
 
 export interface PublicTransport {
@@ -21,17 +20,8 @@ export interface Aspect {
 };
 export namespace Aspect {
   export const farTransportStub: FarTransport = {
-    remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
-      return Promise.reject(`transport not installed`);
-    }
-  };
-
-  export const localTransport: FarTransport = {
-    remoteCall(to: VersionedObject, method: string, args: any[]): Promise<any> {
-      let impl = to[method];
-      if (typeof impl === "function")
-        return fastSafeCall(to[method], to, args[0]);
-      return Promise.reject(`method ${method} not found on ${to.manager().name()}`);
+    remoteCall(ccc, to: VersionedObject, method: string, args: any[]): Promise<any> {
+      return Promise.reject(new Error(`transport not installed`));
     }
   };
 
@@ -87,7 +77,6 @@ export namespace Aspect {
       get cstor() { return throw_disabled(); },
       get categories() { return throw_disabled(); },
       create: throw_disabled,
-      factory: throw_disabled,
     };
   }
 
@@ -175,9 +164,10 @@ export namespace Aspect {
     T extends VersionedObject = VersionedObject
   > = Configuration & {
     categories: string[],
-    create(cc: ControlCenter, ...args) : T,
-    factory(cc: ControlCenter) : Factory<T>,
+    create(ccc: ControlCenterContext, ...args) : T,
   }
+  export type Invokable<A0, R> = { to: VersionedObject, method: string, _check?: { _a0: A0, _r: R } };
+  export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, ctx: { context: { ccc: ControlCenterContext } }, arg: A) => R | Result<R> | Promise<R | Result<R>>);
 }
 
 export interface VersionedObjectConstructorCache extends VersionedObjectConstructor {
@@ -312,13 +302,6 @@ export class AspectConfiguration {
     return cstor.aspect;
   }
 
-  aspectFactory<T extends VersionedObject>(cc: ControlCenter, classname: string, categories: string[]) : Aspect.Factory<T> {
-    let cstor = this._cstor(classname, categories);
-    return function factory (...args) {
-      return new cstor!(cc, ...args);
-    } as any;
-  }
-
   *aspects(): IterableIterator<Aspect.Installed> {
     for (let cstor of this._aspects.values())
       yield cstor.aspect;
@@ -382,7 +365,14 @@ export class AspectConfiguration {
       if (typeof localImpl !== "function")
         throw new Error(`implementation of local method ${local_method.name} must be a function, got ${typeof localImpl}`);
       if (local_method.transport) {
-        aspect_cstor.aspect.farMethods.set(category_name, Object.assign({}, local_method, { transport: Aspect.localTransport }));
+        aspect_cstor.aspect.farMethods.set(category_name, Object.assign({}, local_method, {
+          transport: {
+            remoteCall(ccc, to: VersionedObject, method: string, args: any[]): Promise<any> {
+              return fastSafeCall(ccc, localImpl, to, args[0]);
+            }
+          } as FarTransport
+        }));
+        this.installCanFarInvokable(aspect_cstor, local_method.name);
       }
       else {
         if (localImpl.length !== local_method.argumentTypes.length && localImpl.name)
@@ -397,6 +387,17 @@ export class AspectConfiguration {
       if (!far_method.transport)
         throw new Error(`${far_method.name} is not a far method`);
       aspect_cstor.aspect.farMethods.set(method_name, Object.assign({}, far_method as Aspect.InstalledFarMethod, { transport: transport }));
+      this.installCanFarInvokable(aspect_cstor, method_name);
+    });
+  }
+
+  private installCanFarInvokable(aspect_cstor: VersionedObjectConstructorCache, method_name: string) {
+    Object.defineProperty(aspect_cstor.prototype, method_name, {
+      enumerable: false,
+      configurable: false,
+      get() {
+        return { to: this, method: method_name };
+      },
     });
   }
 
@@ -408,7 +409,6 @@ export class AspectConfiguration {
     if (!installed_attributes.has(aspect_cstor)) {
       let attributes = aspect_cstor.aspect.attributes;
       let cstor: VersionedObjectConstructor | undefined = aspect_cstor.aspect.implementation;
-      attributes
       while (cstor && cstor !== VersionedObject) {
         for (let attribute of cstor.definition.attributes || []) {
           const data = this.install_attribute(aspect_cstor, attribute, pending_relations);
@@ -574,18 +574,9 @@ function validateValue(value, path: AttributePath, validator: Aspect.AttributeTy
   return value;
 }
 
-function fastSafeCall(farImpl: Function, self, arg0): Promise<any> {
+function fastSafeCall(ccc: ControlCenterContext, farImpl: Aspect.FarImplementation<VersionedObject, any, any>, self, arg0): Promise<any> {
   try {
-    if (farImpl.length === 0) return Promise.resolve(farImpl.call(self));
-    else if (farImpl.length === 1) return Promise.resolve(farImpl.call(self, arg0));
-    else {
-      return new Promise((resolve) => {
-        Async.run<{ result: any}>({ result: undefined }, [
-          (p) => { farImpl.call(self, p, arg0); },
-          (p) => { resolve(p.context.result); p.continue(); }
-        ]);
-      });
-    }
+    return Promise.resolve(farImpl.call(self, { context: { ccc: ccc } }, arg0));
   } catch (e) {
     return Promise.reject(e);
   }

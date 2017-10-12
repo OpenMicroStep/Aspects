@@ -12,10 +12,9 @@ export const tests = { name: 'InMemoryDataSource', tests:
     ]));
     let cc = new ControlCenter(cfg);
     let ds = new InMemoryDataSource.DataStore();
-    let db = InMemoryDataSource.Aspects.server.create(cc, ds);
+    let ccc = cc.registerComponent({});
+    let db = InMemoryDataSource.Aspects.server.create(ccc, ds);
     Object.assign(flux.context, {
-      Car: Car.Aspects.test1.factory(cc),
-      People: People.Aspects.test1.factory(cc),
       db: db,
       cc: cc
     });

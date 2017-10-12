@@ -1,4 +1,4 @@
-import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
+import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, ControlCenterContext, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
 import {Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
@@ -157,11 +157,11 @@ export class SqlDataSource extends DataSource {
     }
   }
 
-  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
+  execute(db: DBConnectorCRUD, set: ObjectSet, ccc: ControlCenterContext): Promise<VersionedObject[]> {
     let ctx: SqlMappedSharedContext = {
       cstor: SqlMappedQuery,
       db: db,
-      component: component,
+      ccc: ccc,
       controlCenter: this.controlCenter(),
       maker: this.maker,
       mappers: this.mappers,
@@ -170,11 +170,11 @@ export class SqlDataSource extends DataSource {
     };
     return SqlQuery.execute(ctx, set);
   }
-  _ctx(tr: SqlDataSourceTransaction | undefined, component: AComponent) : SqlMappedSharedContext {
+  _ctx(tr: SqlDataSourceTransaction | undefined, ccc: ControlCenterContext) : SqlMappedSharedContext {
     return {
       cstor: SqlMappedQuery,
       db: tr ? tr.tr : this.connector,
-      component: component,
+      ccc: ccc,
       controlCenter: this.controlCenter(),
       maker: this.maker,
       mappers: this.mappers,
@@ -183,63 +183,46 @@ export class SqlDataSource extends DataSource {
     };
   }
 
-  async implQuery({ tr, sets }: { tr?: SqlDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
-    let component = {};
-    this.controlCenter().registerComponent(component);
-    try {
-      let ret = {};
-      let ctx = this._ctx(tr, component);
-      await Promise.all(sets
-        .filter(s => s.name)
-        .map(s => SqlQuery.execute(ctx, s)
-        .then((objects) => ret[s.name!] = objects))
-        );
-      return ret;
-    }
-    finally {
-      this.controlCenter().unregisterComponent(component);
-    }
+  async implQuery({ context: { ccc } }, { tr, sets }: { tr?: SqlDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
+    let ret = {};
+    let ctx = this._ctx(tr, ccc);
+    return Promise.all(sets
+      .filter(s => s.name)
+      .map(s => SqlQuery.execute(ctx, s)
+      .then((objects) => ret[s.name!] = objects))
+    ).then(() => ret);
   }
 
-  async implLoad({tr, objects, scope}: {
+  async implLoad({ context: { ccc } }, {tr, objects, scope}: {
     tr?: SqlDataSourceTransaction;
     objects: VersionedObject[];
     scope: DataSourceInternal.ResolvedScope;
   }): Promise<VersionedObject[]> {
-    let component = {};
-    try {
-      this.controlCenter().registerComponent(component);
-      this.controlCenter().registerObjects(component, objects);
-
-      let types = new Map<Aspect.Installed, VersionedObject[]>();
-      for (let object of objects) {
-        let aspect = object.manager().aspect();
-        let list = types.get(aspect);
-        if (!list)
-          types.set(aspect, list = []);
-        list.push(object);
-      }
-      let sets = new Set<ObjectSet>();
-      for (let [aspect, list] of types) {
-        let set = new ObjectSet(aspect.name);
-        set.addType({ type: ConstraintType.MemberOf, value: aspect });
-        set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", list));
-        sets.add(set);
-      }
-      let set = new ObjectSet('load');
-      if (sets.size > 1) {
-        set.addType({ type: ConstraintType.UnionOf, value: sets });
-      }
-      else {
-        set = sets.values().next().value;
-      }
-      set.scope = scope;
-      await SqlQuery.execute(this._ctx(tr, component), set);
-      return objects;
+    let types = new Map<Aspect.Installed, VersionedObject[]>();
+    for (let object of objects) {
+      let aspect = object.manager().aspect();
+      let list = types.get(aspect);
+      if (!list)
+        types.set(aspect, list = []);
+      list.push(object);
     }
-    finally {
-      this.controlCenter().unregisterComponent(component);
+    let sets = new Set<ObjectSet>();
+    for (let [aspect, list] of types) {
+      let set = new ObjectSet(aspect.name);
+      set.addType({ type: ConstraintType.MemberOf, value: aspect });
+      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", list));
+      sets.add(set);
     }
+    let set = new ObjectSet('load');
+    if (sets.size > 1) {
+      set.addType({ type: ConstraintType.UnionOf, value: sets });
+    }
+    else {
+      set = sets.values().next().value;
+    }
+    set.scope = scope;
+    await SqlQuery.execute(this._ctx(tr, ccc), set);
+    return objects;
   }
 
   async implBeginTransaction(): Promise<SqlDataSourceTransaction> {
@@ -247,7 +230,7 @@ export class SqlDataSource extends DataSource {
     return { tr: tr, versions: new Map<VersionedObject, { _id: Identifier, _version: number }>() };
   }
 
-  async implSave({tr, objects}: { tr: SqlDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
+  async implSave({ context: { ccc } }, {tr, objects}: { tr: SqlDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
     let reporter = new Reporter();
     for (let obj of objects) {
       try {
@@ -260,7 +243,7 @@ export class SqlDataSource extends DataSource {
     return Result.fromDiagnostics(reporter.diagnostics);
   }
 
-  async implEndTransaction({tr, commit}: { tr: SqlDataSourceTransaction, commit: boolean }) : Promise<void> {
+  async implEndTransaction({ context: { ccc } }, {tr, commit}: { tr: SqlDataSourceTransaction, commit: boolean }) : Promise<void> {
     if (commit) {
       await tr.tr.commit();
       tr.versions.forEach((v, vo) => {
@@ -277,13 +260,12 @@ export class SqlDataSource extends DataSource {
 
 export namespace SqlDataSource {
   export const Aspects = {
-    client: Aspect.disabled_aspect<DataSource.Aspects.server>("DataSource", "client", "SqlDataSource"),
+    client: Aspect.disabled_aspect<DataSource.Aspects.client>("DataSource", "client", "SqlDataSource"),
     server: <Aspect.FastConfiguration<DataSource.Aspects.server>> {
       name: "DataSource", aspect: "server", cstor: SqlDataSource, categories: DataSource.Aspects.server.categories,
-      create(cc: ControlCenter, mappers: { [s: string]: SqlMappedObject }, connector: DBConnector) {
-        return cc.create<DataSource.Aspects.server>("DataSource", this.categories, mappers, connector);
+      create(ccc: ControlCenterContext, mappers: { [s: string]: SqlMappedObject }, connector: DBConnector) {
+        return ccc.create<DataSource.Aspects.server>("DataSource", this.categories, mappers, connector);
       },
-      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.server>("DataSource", this.categories); },
     },
   };
 }

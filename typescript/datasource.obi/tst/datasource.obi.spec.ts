@@ -678,7 +678,8 @@ async function createObiControlCenter(flux) {
     People.Aspects.test1,
     ObiDataSource.Aspects.server,
   ])));
-  let db = ObiDataSource.Aspects.server.create(cc, ouiDb, {
+  let ccc = cc.registerComponent({});
+  let db = ObiDataSource.Aspects.server.create(ccc, ouiDb, {
     aspectClassname_to_ObiEntity: (classname: string) => `T_${classname}`,
     obiEntity_to_aspectClassname: (classname: string) => classname.substring(2),
     aspectAttribute_to_ObiCar: (attribute: string) => `t${attribute}`,
@@ -696,8 +697,6 @@ async function createObiControlCenter(flux) {
 
   Object.assign(flux.context, {
     connector: connector,
-    Car: Car.Aspects.test1.factory(cc),
-    People: People.Aspects.test1.factory(cc),
     db: db,
     cc: cc
   });

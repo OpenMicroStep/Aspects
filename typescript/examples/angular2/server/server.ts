@@ -51,8 +51,9 @@ const cfg = new AspectConfiguration(new AspectSelection([
 ]));
 const transport = new ExpressTransport(router, async (cstor, id) => {
   const cc = new ControlCenter(cfg);
-  const db = SqlDataSource.Aspects.server.create(cc, mappers, connector, connector.maker);
-  const demoapp: DemoApp = DemoApp.Aspects.server.create(cc);
+  const ccc = cc.registerComponent({});
+  const db = SqlDataSource.Aspects.server.create(ccc, mappers, connector, connector.maker);
+  const demoapp: DemoApp = DemoApp.Aspects.server.create(ccc);
   db.setQueries(queries);
   demoapp.manager().setId('__root');
   db.manager().setId('__dataSource');
@@ -62,7 +63,7 @@ const transport = new ExpressTransport(router, async (cstor, id) => {
   if (id === db.id())
       return Promise.resolve(db);
   let [name, dbid] = id.toString().split(':');
-  return db.farPromise('safeQuery', { name: "q", where: { _id: dbid, $instanceof: name } })
+  return ccc.farPromise(db.safeQuery, { name: "q", where: { _id: dbid, $instanceof: name } })
     .then((envelop) => {
       if (envelop.hasOneValue())
         return Promise.resolve(envelop.value()["q"][0]);

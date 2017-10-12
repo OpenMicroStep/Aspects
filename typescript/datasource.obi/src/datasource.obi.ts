@@ -1,4 +1,4 @@
-import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
+import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, ControlCenterContext, DataSourceInternal, AComponent, Result} from '@openmicrostep/aspects';
 import {Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
@@ -44,10 +44,10 @@ export class ObiDataSource extends DataSource {
 
   config: ObiDataSource.Config;
 
-  _ctx(db: DBConnectorCRUD, component: AComponent) : ObiSharedContext {
+  _ctx(db: DBConnectorCRUD, ccc: ControlCenterContext) : ObiSharedContext {
     return {
       db: db,
-      component: component,
+      ccc: ccc,
       config: this.config,
       cstor: ObiQuery,
       controlCenter: this.controlCenter(),
@@ -62,12 +62,12 @@ export class ObiDataSource extends DataSource {
     };
   }
 
-  execute(db: DBConnectorCRUD, set: ObjectSet, component: AComponent): Promise<VersionedObject[]> {
-    let ctx = this._ctx(db, component);
+  execute(db: DBConnectorCRUD, set: ObjectSet, ccc: ControlCenterContext): Promise<VersionedObject[]> {
+    let ctx = this._ctx(db, ccc);
     return ObiQuery.execute(ctx, set);
   }
 
-  async save(tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
+  async save({ context: { ccc } }, tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
     const insert = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
       if (value instanceof VersionedObject) {
         let state = value.manager().state();
@@ -78,7 +78,7 @@ export class ObiDataSource extends DataSource {
           else if (objects.has(value)) {
             let n = reporter.diagnostics.length;
             try {
-              await this.save(tr, reporter, objects, versions, value);
+              await this.save(ccc, tr, reporter, objects, versions, value);
             } catch (e) {
               reporter.error(e || `unknown error`);
             }
@@ -191,14 +191,14 @@ export class ObiDataSource extends DataSource {
     }
   }
 
-  async implQuery({ tr, sets }: { tr?: ObiDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
+  async implQuery({ context: { ccc } }, { tr, sets }: { tr?: ObiDataSourceTransaction, sets: ObjectSet[] }): Promise<{ [k: string]: VersionedObject[] }> {
     let component = {};
     this.controlCenter().registerComponent(component);
     try {
       let ret = {};
       await Promise.all(sets
         .filter(s => s.name)
-        .map(s => this.execute(tr ? tr.tr : this.db.connector, s, component)
+        .map(s => this.execute(tr ? tr.tr : this.db.connector, s, ccc)
         .then(obs => ret[s.name!] = obs))
         );
       return ret;
@@ -208,24 +208,16 @@ export class ObiDataSource extends DataSource {
     }
   }
 
-  async implLoad({tr, objects, scope}: {
+  async implLoad({ context: { ccc } }, {tr, objects, scope}: {
     tr?: ObiDataSourceTransaction;
     objects: VersionedObject[];
     scope: DataSourceInternal.ResolvedScope;
   }): Promise<VersionedObject[]> {
-    let component = {};
-    try {
-      this.controlCenter().registerComponent(component);
-      this.controlCenter().registerObjects(component, objects);
-      let set = new ObjectSet('load');
-      set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
-      set.scope = scope;
-      await ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, component), set);
-      return objects;
-    }
-    finally {
-      this.controlCenter().unregisterComponent(component);
-    }
+    let set = new ObjectSet('load');
+    set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
+    set.scope = scope;
+    await ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, ccc), set);
+    return objects;
   }
 
   async implBeginTransaction(): Promise<ObiDataSourceTransaction> {
@@ -233,12 +225,12 @@ export class ObiDataSource extends DataSource {
     return { tr: tr, versions: new Map<VersionedObject, { _id: Identifier, _version: number }>() };
   }
 
-  async implSave({tr, objects}: { tr: ObiDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
+  async implSave({ context: { ccc } }, {tr, objects}: { tr: ObiDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
     let reporter = new Reporter();
     for (let obj of objects) {
       try {
         if (!tr.versions.has(obj))
-          await this.save(tr.tr, reporter, objects, tr.versions, obj);
+          await this.save(ccc, tr.tr, reporter, objects, tr.versions, obj);
       } catch (e) {
         reporter.error(e || `unknown error`);
       }
@@ -246,7 +238,7 @@ export class ObiDataSource extends DataSource {
     return Result.fromDiagnostics(reporter.diagnostics);
   }
 
-  async implEndTransaction({tr, commit}: { tr: ObiDataSourceTransaction, commit: boolean }) : Promise<void> {
+  async implEndTransaction({ context: { ccc } }, {tr, commit}: { tr: ObiDataSourceTransaction, commit: boolean }) : Promise<void> {
     if (commit) {
       await tr.tr.commit();
       tr.versions.forEach((v, vo) => {
@@ -263,13 +255,12 @@ export class ObiDataSource extends DataSource {
 
 export namespace ObiDataSource {
   export const Aspects = {
-    client: Aspect.disabled_aspect<DataSource.Aspects.server>("DataSource", "client", "ObiDataSource"),
+    client: Aspect.disabled_aspect<DataSource.Aspects.client>("DataSource", "client", "ObiDataSource"),
     server: <Aspect.FastConfiguration<DataSource.Aspects.server>> {
       name: "DataSource", aspect: "server", cstor: ObiDataSource, categories: DataSource.Aspects.server.categories,
-      create(cc: ControlCenter, db: OuiDB, config: Partial<ObiDataSource.Config>) {
-        return cc.create<DataSource.Aspects.server>("DataSource", this.categories, db, config);
+      create(ccc: ControlCenterContext, db: OuiDB, config: Partial<ObiDataSource.Config>) {
+        return ccc.create<DataSource.Aspects.server>("DataSource", this.categories, db, config);
       },
-      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.server>("DataSource", this.categories); },
     },
   };
 }

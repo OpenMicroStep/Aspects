@@ -31,7 +31,7 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
     }
     set query(value) {
         this._query = value;
-        dataSource.farEvent('query', { id: "allpersons", text: value }, 'queryResults', this);
+        Invocation.farEvent(dataSource.query, { id: "allpersons", text: value }, 'queryResults', this);
     }
 
     ngAfterViewInit() {
@@ -52,8 +52,6 @@ export class PersonListComponent implements AfterViewInit, OnDestroy {
     }
     queryResults(notification: Notification) {
         let persons = notification.info.invocation.result().persons;
-        controlCenter.unregisterObjects(this, this.persons);
-        this.persons = persons;
-        controlCenter.registerObjects(this, this.persons);
+        this.persons = controlCenter.ccc(this).swapObjects(this.persons, persons);
     }
 }

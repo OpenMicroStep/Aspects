@@ -750,14 +750,13 @@ function makeObjects() {
     Car.Aspects.test1,
     People.Aspects.test1,
   ])));
-  let C = Car.Aspects.test1.factory(cc);
-  let P = People.Aspects.test1.factory(cc);
+  let ccc = cc.registerComponent({});
   let objects: VersionedObject[] = [];
-  objects.push(Object.assign(new C(), { _name: "Renault", _model: "Clio 3" }));
-  objects.push(Object.assign(new C(), { _name: "Renault", _model: "Clio 2" }));
-  objects.push(Object.assign(new C(), { _name: "Peugeot", _model: "3008 DKR" }));
-  objects.push(Object.assign(new P(), { _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons" }));
-  objects.push(Object.assign(new P(), { _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons" }));
+  objects.push(Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 3" }));
+  objects.push(Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 2" }));
+  objects.push(Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "3008 DKR" }));
+  objects.push(Object.assign(People.Aspects.test1.create(ccc), { _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons" }));
+  objects.push(Object.assign(People.Aspects.test1.create(ccc), { _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons" }));
   return objects;
 }
 function applyWhere() {

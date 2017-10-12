@@ -120,10 +120,11 @@ module.exports =  {
       interfaces: [{
         is: "group",
         elements: ["=Files:core:src ? interface"],
-        customHeader: `import {
-            Aspect, ControlCenter,
+        customHeader: `
+          import {
+            Aspect, ControlCenter, ControlCenterContext,
             VersionedObject, VersionedObjectConstructor,
-            FarImplementation, Result,
+            Result,
             DataSourceInternal, DataSourceQueries, DataSourceTransaction, DataSourceOptionalTransaction,
             ImmutableList, ImmutableSet, ImmutableObject,
             SafeValidators, EncodedVersionedObjects

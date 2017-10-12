@@ -11,10 +11,8 @@ const cfg = new AspectConfiguration(new AspectSelection([
 ]));
 function basics() {
   let cc = new ControlCenter(cfg);
-  let R = Resource.Aspects.test1.factory(cc);
-  let C = Car.Aspects.test1.factory(cc);
-  let P = People.Aspects.test1.factory(cc);
-  let v1 = new R();
+  let ccc = cc.registerComponent({});
+  let v1 = Resource.Aspects.test1.create(ccc);
   assert.instanceOf(v1, Resource);
   assert.instanceOf(v1, VersionedObject);
   assert.equal(v1.version(), -1);
@@ -22,7 +20,7 @@ function basics() {
   assert(VersionedObjectManager.isLocalId(v1.id()));
   assert.equal(v1.manager().controlCenter(), cc);
 
-  let v2 = new R();
+  let v2 = Resource.Aspects.test1.create(ccc);
   assert.instanceOf(v2, Resource);
   assert.instanceOf(v2, VersionedObject);
   assert.equal(v2.version(), -1);
@@ -30,7 +28,7 @@ function basics() {
   assert(VersionedObjectManager.isLocalId(v2.id()));
   assert.notEqual(v1.id(), v2.id());
 
-  let c1 = new C();
+  let c1 = Car.Aspects.test1.create(ccc);
   assert.notInstanceOf(c1, People);
   assert.instanceOf(c1, Car);
   assert.instanceOf(c1, Resource);
@@ -47,7 +45,7 @@ function basics() {
   assert.equal(c1.name(), `MyCar - MyModel`);
   assert.equal(c1.model(), `MyModel`);
 
-  let p1 = new P();
+  let p1 = People.Aspects.test1.create(ccc);
   assert.notInstanceOf(p1, Car);
   assert.instanceOf(p1, People);
   assert.instanceOf(p1, Resource);
@@ -79,21 +77,19 @@ function basics() {
 
 function shared() {
   let cc = new ControlCenter(cfg);
-  let C = Car.Aspects.test1.factory(cc);
-
-  let c0 = new C();
-  let c1 = c0.controlCenter().create<Car.Categories.local>("Car", ['local']);
-  assert.instanceOf(c1, Car);
+  cc.safe(ccc => {
+    let c1 = ccc.create<Car.Categories.local>("Car", ['local']);
+    assert.instanceOf(c1, Car);
+  });
 }
 
 function relation_1_n() {
   let cc = new ControlCenter(cfg);
-  let C = Car.Aspects.test1.factory(cc);
-  let P = People.Aspects.test1.factory(cc);
+  let ccc = cc.registerComponent({});
 
-  let c0 = new C();
-  let c1 = new C();
-  let p0 = new P();
+  let c0 = Car.Aspects.test1.create(ccc);
+  let c1 = Car.Aspects.test1.create(ccc);
+  let p0 = People.Aspects.test1.create(ccc);
 
   c0._owner = p0;
   assert.equal(c0._owner, p0);
@@ -117,12 +113,11 @@ function relation_1_n() {
 
 function relation_n_n() {
   let cc = new ControlCenter(cfg);
-  let C = Car.Aspects.test1.factory(cc);
-  let P = People.Aspects.test1.factory(cc);
+  let ccc = cc.registerComponent({});
 
-  let c0 = new C();
-  let c1 = new C();
-  let p0 = new P();
+  let c0 = Car.Aspects.test1.create(ccc);
+  let c1 = Car.Aspects.test1.create(ccc);
+  let p0 = People.Aspects.test1.create(ccc);
 
   assert.sameMembers([...p0._drivenCars], []);
   assert.sameMembers([...c0._drivers], []);

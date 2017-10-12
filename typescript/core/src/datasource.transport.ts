@@ -1,5 +1,5 @@
 import {
-  ControlCenter,
+  ControlCenter, ControlCenterContext,
   Identifier, VersionedObject, VersionedObjectManager
 } from './core';
 
@@ -27,7 +27,7 @@ export class VersionedObjectCoder {
     let id = vo.id();
     if (!this.encodedWithLocalId.has(id)) {
       this.encodedWithLocalId.set(id, vo);
-      let m = vo.manager().evenIfUnregistered();
+      let m = vo.manager();
       let r: EncodedVersionedObject = {
         is: m.name(),
         real_id: id,
@@ -49,7 +49,7 @@ export class VersionedObjectCoder {
     if (value === undefined || value === null)
       return null;
     if (value instanceof VersionedObject) {
-      let m = value.manager().evenIfUnregistered();
+      let m = value.manager();
       return { is: "vo", v: [m.name(), m.id()] };
     }
     else if (value instanceof Set) {
@@ -89,23 +89,23 @@ export class VersionedObjectCoder {
     throw new Error(`you can't call takeEncodedVersionedObjects twice`);
   }
 
-  private _decodeValue(cc: ControlCenter, value: EncodedValue): any {
+  private _decodeValue(ccc: ControlCenterContext, value: EncodedValue): any {
     if (value === undefined || value === null)
       return undefined;
     if (typeof value === "object") {
       if (value instanceof Array) {
         let r: any[] = [];
         for (let v of value)
-          r.push(this._decodeValue(cc, v));
+          r.push(this._decodeValue(ccc, v));
         return r;
       }
       else {
         switch (value.is) {
           case 'vo': {
             let [name, id] = value.v;
-            let vo = cc.find(id) || this.encodedWithLocalId.get(id);
+            let vo = this.encodedWithLocalId.get(id) || ccc.find(id);
             if (!vo) {
-              vo = cc.create(name);
+              vo = ccc.create(name);
               if (VersionedObjectManager.isLocalId(id))
                 throw new Error(`reference to an unknown locally defined object ${value.v}`);
               vo.manager().setId(id);
@@ -115,7 +115,7 @@ export class VersionedObjectCoder {
           case 'set': {
             let r = new Set();
             for (let v of value.v)
-              r.add(this._decodeValue(cc, v));
+              r.add(this._decodeValue(ccc, v));
             return r;
           }
           case 'date': {
@@ -125,7 +125,7 @@ export class VersionedObjectCoder {
             let r = {};
             let o = value.v;
             for (let k in o)
-              r[k] = this._decodeValue(cc, o[k]);
+              r[k] = this._decodeValue(ccc, o[k]);
             return r;
           }
         }
@@ -135,39 +135,41 @@ export class VersionedObjectCoder {
     return value;
   }
 
-  decodeEncodedVersionedObjects(cc: ControlCenter, data: EncodedVersionedObjects, allow_decode_unknown_local_id: boolean): VersionedObject[] {
+  decodeEncodedVersionedObjects(ccc: ControlCenterContext, data: EncodedVersionedObjects, allow_unknown_local_id: boolean): VersionedObject[] {
     let ret: VersionedObject[] = [];
     for (let s of data) {
+      let is_local = VersionedObjectManager.isLocalId(s.real_id);
       let l = this.encodedWithLocalId.get(s.local_id);
-      let is_local = VersionedObjectManager.isLocalId(s.local_id);
       if (!l && !is_local)
-        l = cc.find(s.local_id);
+        l = ccc.find(s.real_id);
       if (!l) {
-        l = cc.create(s.is);
+        l = ccc.create(s.is);
         if (!is_local)
           l.manager().setId(s.real_id);
-        else if (allow_decode_unknown_local_id) {
-          this.encodedWithLocalId.set(s.local_id, l);
-          this.decodedWithLocalId.set(l, s.local_id);
+        else if (allow_unknown_local_id) {
+          this.encodedWithLocalId.set(s.real_id, l);
+          this.decodedWithLocalId.set(l, s.real_id);
           s.real_id = l.id();
         }
         else
           throw new Error(`reference to locally defined object ${s.local_id}`);
-        cc.registerObject(this, l);
       }
-      else {
+      else if (!is_local)
         l.manager().setId(s.real_id);
+      else {
+        this.encodedWithLocalId.set(s.real_id, l);
+        s.real_id = l.id();
       }
     }
     for (let s of data) {
-      let r = cc.findChecked(s.real_id);
+      let r = ccc.findChecked(s.real_id);
       let m = r.manager();
       let ra = new Map<keyof VersionedObject, any>();
       for (let k of Object.keys(s.version_attributes))
-        ra.set(k as keyof VersionedObject, this._decodeValue(cc, s.version_attributes[k]));
+        ra.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
       m.mergeWithRemoteAttributes(ra, s.version);
       for (let k of Object.keys(s.local_attributes))
-        m.setAttributeValue(k as keyof VersionedObject, this._decodeValue(cc, s.local_attributes[k]));
+        m.setAttributeValue(k as keyof VersionedObject, this._decodeValue(ccc, s.local_attributes[k]));
       ret.push(r);
     }
     return ret;

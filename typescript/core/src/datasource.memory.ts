@@ -1,4 +1,4 @@
-import {DataSource, areEquals, VersionedObject, VersionedObjectManager, Result, Identifier, ControlCenter, DataSourceInternal, AComponent, Aspect, ImmutableMap} from './core';
+import {DataSource, areEquals, VersionedObject, VersionedObjectManager, Result, Identifier, ControlCenter, DataSourceInternal, ControlCenterContext, Aspect, ImmutableMap} from './core';
 import {Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
@@ -18,21 +18,19 @@ export class InMemoryDataSource extends DataSource {
   };
 
   private _loads(
-    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD,
+    ccc: ControlCenterContext, ds: InMemoryDataSource.DataStoreCRUD,
     scope: DataSourceInternal.ResolvedScope, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
-    this._load(component, ds, scope, '.', '', lObject, dObject);
+    this._load(ccc, ds, scope, '.', '', lObject, dObject);
   }
 
   private _load(
-    component: AComponent, ds: InMemoryDataSource.DataStoreCRUD,
+    ccc: ControlCenterContext, ds: InMemoryDataSource.DataStoreCRUD,
     scope: DataSourceInternal.ResolvedScope, path: string, npath: string, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
-    let cc = this.controlCenter();
     let lManager = lObject.manager();
     let aspect = lManager.aspect();
     let remoteAttributes = new Map<keyof VersionedObject, any>();
-    cc.registerObject(component, lObject);
     function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
       let cls_scope = scope[aspect.name];
       if (!cls_scope)
@@ -46,9 +44,9 @@ export class InMemoryDataSource extends DataSource {
       if (v instanceof InMemoryDataSource.DataStoreObject) {
         let dObject = v;
         let lId = this.ds.fromDSId(dObject.id);
-        let lObject = cc.findOrCreate(lId, dObject.is);
+        let lObject = ccc.findOrCreate(lId, dObject.is);
         let spath = `${npath}${a.name}.`;
-        this._load(component, ds, scope, spath, spath, lObject, dObject);
+        this._load(ccc, ds, scope, spath, spath, lObject, dObject);
       }
     };
     for (let a of attributes(aspect, scope, path)) {
@@ -60,19 +58,16 @@ export class InMemoryDataSource extends DataSource {
       else {
         load(a, v);
       }
-      remoteAttributes.set(a.name as keyof VersionedObject, ds.fromDSValue(cc, component, v));
+      remoteAttributes.set(a.name as keyof VersionedObject, ds.fromDSValue(ccc, v));
     }
     lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
   }
 
-  implQuery({ tr, sets }: { tr?: InMemoryDataSource.DataStoreTransaction, sets: ObjectSet[] }): { [k: string]: VersionedObject[] } {
+  implQuery({ context: { ccc } }, { tr, sets }: { tr?: InMemoryDataSource.DataStoreTransaction, sets: ObjectSet[] }): { [k: string]: VersionedObject[] } {
     let ds = tr || this.ds;
     let ret = {};
-    let cc = this.controlCenter();
-    let component = {};
-    cc.registerComponent(component);
     let res = DataSourceInternal.applySets(sets, ds.objectsAsArray(), true, {
-      aspect: (vo: InMemoryDataSource.DataStoreObject) => cc.aspectChecked(vo.is),
+      aspect: (vo: InMemoryDataSource.DataStoreObject) => this.controlCenter().aspectChecked(vo.is),
       has: (vo: InMemoryDataSource.DataStoreObject, attribute: string) => vo.has(attribute),
       get: (vo: InMemoryDataSource.DataStoreObject, attribute: string) => {
         if (attribute === "_id")
@@ -95,37 +90,32 @@ export class InMemoryDataSource extends DataSource {
     res.forEach((objs, set) => {
       ret[set.name] = objs.map(dObject => {
         let lId = this.ds.fromDSId(dObject.id);
-        let lObject = cc.findOrCreate(lId, dObject.is);
+        let lObject = ccc.findOrCreate(lId, dObject.is);
         if (set.scope)
-          this._loads(component, ds, set.scope, lObject, dObject);
+          this._loads(ccc, ds, set.scope, lObject, dObject);
         return lObject;
       });
     });
-    cc.unregisterComponent(component);
     return ret;
   }
 
-  implLoad({tr, objects, scope}: {
+  implLoad({ context: { ccc } }, {tr, objects, scope}: {
     tr?: InMemoryDataSource.DataStoreTransaction;
     objects: VersionedObject[];
     scope: DataSourceInternal.ResolvedScope;
   }): VersionedObject[] {
     let ds = tr || this.ds;
-    let cc = this.controlCenter();
-    let component = {};
     let ret: VersionedObject[] = [];
-    cc.registerComponent(component);
     if (objects) {
       for (let lObject of objects) {
         let dbId = this.ds.toDSId(lObject.id());
         let dObject = ds.get(dbId);
         if (dObject) {
-          this._loads(component, ds, scope, lObject, dObject);
+          this._loads(ccc, ds, scope, lObject, dObject);
           ret.push(lObject);
         }
       }
     }
-    cc.unregisterComponent(component);
     return ret;
   }
 
@@ -133,10 +123,8 @@ export class InMemoryDataSource extends DataSource {
     return this.ds.beginTransaction();
   }
 
-  implSave({tr, objects}: { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
-    let cc = this.controlCenter();
+  implSave({ context: { ccc } }, {tr, objects}: { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
     let diags: Diagnostic[] = [];
-    let component = {};
 
     const save = (lObject: VersionedObject): InMemoryDataSource.DataStoreObject | undefined => {
       let dVersion = tr.versions.get(lObject);
@@ -173,9 +161,8 @@ export class InMemoryDataSource extends DataSource {
           }
           if (diags.length > n) {
             let remoteAttributes = new Map<keyof VersionedObject, any>();
-            cc.registerObject(component, lObject);
             for (let k of lManager._localAttributes.keys())
-              remoteAttributes.set(k, tr.fromDSValue(cc, component, dObject.attributes.get(k)));
+              remoteAttributes.set(k, tr.fromDSValue(ccc, dObject.attributes.get(k)));
             lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
           }
         }
@@ -199,15 +186,12 @@ export class InMemoryDataSource extends DataSource {
       return undefined;
     };
 
-    cc.registerComponent(component);
-    for (let lObject of objects) {
+    for (let lObject of objects)
       save(lObject);
-    }
-    cc.unregisterComponent(component);
     return Promise.resolve(Result.fromDiagnostics(diags));
   }
 
-  async implEndTransaction({tr, commit}: { tr: InMemoryDataSource.DataStoreTransaction, commit: boolean }) : Promise<void> {
+  async implEndTransaction({ context: { ccc } }, {tr, commit}: { tr: InMemoryDataSource.DataStoreTransaction, commit: boolean }) : Promise<void> {
     if (commit) {
       tr.commit();
       tr.versions.forEach((v, vo) => {
@@ -253,7 +237,7 @@ export namespace InMemoryDataSource {
     get(id: Identifier) : DataStoreObject | undefined;
     fixValue(value): any;
     toDSValue(value, create?: (o: VersionedObject) => DataStoreObject | undefined): any;
-    fromDSValue(cc: ControlCenter, cmp: AComponent, value): any;
+    fromDSValue(ccc: ControlCenterContext, value): any;
   }
 
   function fixDSValue(value, fix: (value: DataStoreObject) => any): any {
@@ -284,15 +268,10 @@ export namespace InMemoryDataSource {
     return fixVOValue(value, fix);
   }
 
-  function fromDSValue(ds: DataStore, tr: DataStoreCRUD, cc: ControlCenter, cmp: AComponent, value): any {
+  function fromDSValue(ds: DataStore, tr: DataStoreCRUD, ccc: ControlCenterContext, value): any {
     const fix = (value: DataStoreObject) => {
       let lId = ds.fromDSId(value.id);
-      let vo = cc.find(lId);
-      if (!vo) {
-        vo = cc.findOrCreate(lId, value.is);
-        cc.registerObject(cmp, vo);
-      }
-      return vo;
+      return ccc.findOrCreate(lId, value.is);
     };
     return fixDSValue(value, fix);
   }
@@ -338,7 +317,7 @@ export namespace InMemoryDataSource {
     }
     fixValue(value): any { return value; }
     toDSValue(value, create?: (value: VersionedObject) => DataStoreObject | undefined): any { return toDSValue(this, this, value, create); }
-    fromDSValue(cc: ControlCenter, cmp: AComponent, value): any { return fromDSValue(this, this, cc, cmp, value); }
+    fromDSValue(ccc: ControlCenterContext, value): any { return fromDSValue(this, this, ccc, value); }
   }
 
   export class DataStoreTransaction implements DataStoreCRUD {
@@ -387,7 +366,7 @@ export namespace InMemoryDataSource {
       return fixDSValue(value, value => this.ds.get(value.id));
     }
     toDSValue(value, create?: (value: VersionedObject) => DataStoreObject | undefined): any { return toDSValue(this.ds, this, value, create); }
-    fromDSValue(cc: ControlCenter, cmp: AComponent, value): any { return fromDSValue(this.ds, this, cc, cmp, value); }
+    fromDSValue(ccc: ControlCenterContext, value): any { return fromDSValue(this.ds, this, ccc, value); }
 
     commit() {
       let fix = value => this.ds.get(value.id) || value;
@@ -410,11 +389,10 @@ export namespace InMemoryDataSource {
 
 export namespace InMemoryDataSource {
   export const Aspects = {
-    client: Aspect.disabled_aspect<DataSource.Aspects.server>("DataSource", "client", "InMemoryDataSource"),
+    client: Aspect.disabled_aspect<DataSource.Aspects.client>("DataSource", "client", "InMemoryDataSource"),
     server: <Aspect.FastConfiguration<DataSource.Aspects.server>> {
       name: "DataSource", aspect: "server", cstor: InMemoryDataSource, categories: DataSource.Aspects.server.categories,
-      create(cc: ControlCenter, ds: InMemoryDataSource.DataStore) { return cc.create<DataSource.Aspects.server>("DataSource", this.categories, ds); },
-      factory(cc: ControlCenter) { return cc.aspectFactory<DataSource.Aspects.server>("DataSource", this.categories); },
+      create(ccc: ControlCenterContext, ds: InMemoryDataSource.DataStore) { return ccc.create<DataSource.Aspects.server>("DataSource", this.categories, ds); },
     },
   };
 }

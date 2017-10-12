@@ -223,7 +223,7 @@ function _traverseScope(
   path: string, n_path: string,
   for_each: (manager: VersionedObjectManager, path: string, attributes: ImmutableSet<Aspect.InstalledAttribute>) => void
 ) {
-  let manager = object.manager().evenIfUnregistered();
+  let manager = object.manager();
   let attributes = ResolvedScope.scope_at_type_path(scope, manager.name(), path);
   for_each(manager, path, attributes);
   for (let attribute of attributes) {

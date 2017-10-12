@@ -1,4 +1,4 @@
-import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
+import {Aspect, ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectConstructor, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
 
 export class Resource extends VersionedObject {
   _name: string | undefined;
@@ -77,12 +77,11 @@ export declare namespace Resource {
   }
 }
 export namespace Resource {
-  export function create(cc: ControlCenter) { return cc.create<Resource>("Resource"); }
+  export function create(ccc: ControlCenterContext) { return ccc.create<Resource>("Resource"); }
   export const Aspects = {
     test1: <Aspect.FastConfiguration<Resource.Aspects.test1>> {
       name: "Resource", aspect: "test1", cstor: Resource, categories: ["local"],
-      create(cc: ControlCenter) { return cc.create<Resource.Aspects.test1>("Resource", this.categories); },
-      factory(cc: ControlCenter) { return cc.aspectFactory<Resource.Aspects.test1>("Resource", this.categories); },
+      create(ccc: ControlCenterContext) { return ccc.create<Resource.Aspects.test1>("Resource", this.categories); },
     },
   };
 }
@@ -194,12 +193,11 @@ export declare namespace Car {
   }
 }
 export namespace Car {
-  export function create(cc: ControlCenter) { return cc.create<Car>("Car"); }
+  export function create(ccc: ControlCenterContext) { return ccc.create<Car>("Car"); }
   export const Aspects = {
     test1: <Aspect.FastConfiguration<Car.Aspects.test1>> {
       name: "Car", aspect: "test1", cstor: Car, categories: ["local"],
-      create(cc: ControlCenter) { return cc.create<Car.Aspects.test1>("Car", this.categories); },
-      factory(cc: ControlCenter) { return cc.aspectFactory<Car.Aspects.test1>("Car", this.categories); },
+      create(ccc: ControlCenterContext) { return ccc.create<Car.Aspects.test1>("Car", this.categories); },
     },
   };
 }

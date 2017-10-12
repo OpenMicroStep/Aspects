@@ -7,13 +7,12 @@ export interface Encoder {
 }
 export interface FlatEncoder extends Encoder {
   encode(s: any, keepAttributes?: boolean): any;
-  cc: ControlCenter;
+  ccc: ControlCenterContext;
   encodedVo: Set<VersionedObject>;
 }
 export interface FlatDecoder extends Decoder {
-  cc: ControlCenter;
+  ccc: ControlCenterContext;
   ccAllowed: Set<VersionedObject> | undefined;
-  component: {};
 }
 export interface Decoder {
   decode(s: any): any;
@@ -87,9 +86,9 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[]= [
       let id = s.id;
       if (VersionedObjectManager.isLocalId(id))
         throw new Error(`reference to locally defined object ${id}`);
-      let vo = d.cc.find(id);
+      let vo = d.ccc.find(id);
       if (!vo) {
-        vo = d.cc.create(s.is);
+        vo = d.ccc.create(s.is);
         vo.manager().setId(s.id);
         if (d.ccAllowed)
           d.ccAllowed.add(vo);
@@ -199,30 +198,24 @@ export abstract class FlatCoder<T> {
   abstract encode(value: any) : T;
   abstract decode(value: T) : any;
 
-  async encode_transport_decode(cc: ControlCenter, encodeMe: any, transport: (encodedMe: T) => Promise<T>) : Promise<any> {
-    let component = {};
-    cc.registerComponent(component);
-    let encodedMe = this.encodeWithCC(encodeMe, cc);
+  async encode_transport_decode(ccc: ControlCenterContext, encodeMe: any, transport: (encodedMe: T) => Promise<T>) : Promise<any> {
+    let encodedMe = this.encodeWithCC(encodeMe, ccc);
     let decodeMe = await transport(this.encode(encodedMe));
-    let decodedMe = this.decodeWithCC(this.decode(decodeMe), cc, component, undefined);
-    cc.unregisterComponent(component);
+    let decodedMe = this.decodeWithCC(this.decode(decodeMe), ccc, undefined);
     return decodedMe;
   }
 
-  async decode_handle_encode(cc: ControlCenter, decodeMe: T, handle: (decodedMe: any) => Promise<any>) : Promise<T> {
-    let component = {};
-    cc.registerComponent(component);
-    let decodedMe = this.decodeWithCC(this.decode(decodeMe), cc, component, new Set());
+  async decode_handle_encode(ccc: ControlCenterContext, decodeMe: T, handle: (decodedMe: any) => Promise<any>) : Promise<T> {
+    let decodedMe = this.decodeWithCC(this.decode(decodeMe), ccc, new Set());
     let encodeMe = await handle(decodedMe);
-    let encodedMe = this.encodeWithCC(encodeMe, cc);
-    cc.unregisterComponent(component);
+    let encodedMe = this.encodeWithCC(encodeMe, ccc);
     return this.encode(encodedMe);
   }
 
-  protected encodeWithCC(s: any, cc: ControlCenter) {
+  protected encodeWithCC(s: any, ccc: ControlCenterContext) {
     const self = this;
     const encoder: FlatEncoder = {
-      cc: cc,
+      ccc: ccc,
       encodedVo: new Set(),
       encode(s: any, keepAttributes?: boolean): any {
         let r = s;
@@ -250,12 +243,11 @@ export abstract class FlatCoder<T> {
     }
     return encoder.encode(s);
   }
-  protected decodeWithCC(s: any, cc: ControlCenter, component: {}, ccAllowed: Set<VersionedObject> | undefined) {
+  protected decodeWithCC(s: any, ccc: ControlCenterContext, ccAllowed: Set<VersionedObject> | undefined) {
     const self = this;
     const decoder: FlatDecoder = {
-      cc: cc,
+      ccc: ccc,
       ccAllowed: ccAllowed,
-      component: component,
       decode(s: any): any {
         if (s && typeof s === "object") {
           if (s.__is__) {

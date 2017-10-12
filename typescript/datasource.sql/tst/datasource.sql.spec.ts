@@ -69,12 +69,9 @@ function createSqlControlCenter(flux) {
     SqlDataSource.Aspects.server,
   ]));
   let cc = new ControlCenter(cfg);
-  let C = Car.Aspects.test1.factory(cc);
-  let P = People.Aspects.test1.factory(cc);
-  let db = SqlDataSource.Aspects.server.create(cc, mappers, flux.context.connector, flux.context.connector.maker);
+  let ccc = cc.registerComponent({});
+  let db = SqlDataSource.Aspects.server.create(ccc, mappers, flux.context.connector, flux.context.connector.maker);
   Object.assign(flux.context, {
-    Car: C,
-    People: P,
     db: db,
     cc: cc
   });

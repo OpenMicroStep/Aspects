@@ -1,4 +1,4 @@
-import { Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, AComponent, ImmutableSet, ImmutableList } from '@openmicrostep/aspects';
+import { Aspect, ControlCenterContext, VersionedObject, Identifier, ControlCenter, DataSourceInternal, AComponent } from '@openmicrostep/aspects';
 import { SqlBinding, SqlBindingW, SqlMaker } from './index';
 import { SqlInsert, SqlValue, SqlPath, SqlMappedAttribute, SqlMappedObject } from './mapper';
 import ObjectSet = DataSourceInternal.ObjectSet;
@@ -39,7 +39,7 @@ export interface SqlMappedSharedContext extends SqlQuerySharedContext<SqlMappedS
 }
 export interface SqlQuerySharedContext<C extends SqlQuerySharedContext<C, Q>, Q extends SqlQuery<C>> {
   cstor: { new(ctx: C, set: ObjectSet): Q },
-  component: AComponent,
+  ccc: ControlCenterContext,
   controlCenter: ControlCenter,
   maker: SqlMaker,
   queries: Map<ObjectSet, Q>,
@@ -641,7 +641,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   }
 
   async execute(): Promise<VersionedObject[]> {
-    let cc = this.ctx.controlCenter;
+    let ccc = this.ctx.ccc;
     let maker = this.ctx.maker;
     let remotes = new Map<VersionedObject, Map<string, any>>();
     let ret: VersionedObject[] = [];
@@ -654,11 +654,10 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let scope_path = scope_at_type_path(this.set.scope, type, path);
       let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(db_id));
       let version = row[prefix + "_version"];
-      let vo = cc.findOrCreate(id, type);
+      let vo = ccc.findOrCreate(id, type);
       let remoteAttributes = remotes.get(vo);
       if (!remoteAttributes)
         remotes.set(vo, remoteAttributes = new Map<string, any>());
-      cc.registerObject(this.ctx.component, vo);
 
       let rtype = row[prefix + "__ris"];
       if (rtype) {
@@ -666,7 +665,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let rdb_id = rtype && row[prefix + "__rid"];
         let rmapper = this.ctx.mappers[rtype]!;
         let rid = rmapper.fromDbKey(rmapper.attribute_id().fromDbKey(rdb_id));
-        let rvo = cc.find(rid)!;
+        let rvo = ccc.find(rid)!;
         let rremoteAttributes = remotes.get(rvo)!;
         let rset = rremoteAttributes.get(rname);
         if (rset instanceof Set)
@@ -685,7 +684,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           let k = a.name;
           let v = row[prefix + k];
           v = mapper.get(k)!.fromDb(v);
-          v = this.loadValue(cc, this.ctx.component, a.type, v);
+          v = this.loadValue(ccc, a.type, v);
           remoteAttributes.set(k, v);
         }
         else {
@@ -789,18 +788,14 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return ret;
   }
 
-  private loadValue(cc: ControlCenter, component: AComponent, type: Aspect.Type, value) {
+  private loadValue(ccc: ControlCenterContext, type: Aspect.Type, value) {
     if (value === null)
       value = undefined;
     else if (type.type === "class" && value !== undefined) {
       let classname = type.name;
       let mapper = this.ctx.mappers[classname];
       let subid = mapper.fromDbKey(value);
-      value = cc.find(subid);
-      if (!value) {
-        value = cc.findOrCreate(subid, classname);
-        cc.registerObject(component, value);
-      }
+      value = ccc.findOrCreate(subid, classname);
     }
     return value;
   }

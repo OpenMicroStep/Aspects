@@ -23,10 +23,10 @@ function new100k_factory() { // around 100ms
     Resource.Aspects.test1
   ]));
   let cc = new ControlCenter(cfg);
-  let R = Resource.Aspects.test1.factory(cc);
+  let ccc = cc.registerComponent({});
   let i = 1e5;
   while (i-- > 0) {
-    new R();
+    ccc.unregisterObject(Resource.Aspects.test1.create(ccc));
   }
 }
 function new100k_create() { // around 100ms
@@ -34,9 +34,10 @@ function new100k_create() { // around 100ms
     Resource.Aspects.test1
   ]));
   let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
   let i = 1e5;
   while (i-- > 0) {
-    cc.create("Resource");
+    ccc.unregisterObject(ccc.create("Resource"));
   }
 }
 function new100k_create_test1() { // around 100ms
@@ -44,9 +45,10 @@ function new100k_create_test1() { // around 100ms
     Resource.Aspects.test1
   ]));
   let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
   let i = 1e5;
   while (i-- > 0) {
-    Resource.Aspects.test1.create(cc);
+    ccc.unregisterObject(Resource.Aspects.test1.create(ccc));
   }
 }
 function get3M() { // around 100ms
@@ -54,8 +56,8 @@ function get3M() { // around 100ms
     Resource.Aspects.test1
   ]));
   let cc = new ControlCenter(cfg);
-  let R = Resource.Aspects.test1.factory(cc);
-  let v = new R();
+  let ccc = cc.registerComponent({});
+  let v = Resource.Aspects.test1.create(ccc);
   v._name = "this is cool";
   let i = 3 * 1e6;
   while (i-- > 0) {
@@ -67,8 +69,8 @@ function set1M() { // around 100ms
     Resource.Aspects.test1
   ]));
   let cc = new ControlCenter(cfg);
-  let R = Resource.Aspects.test1.factory(cc);
-  let v = new R();
+  let ccc = cc.registerComponent({});
+  let v = Resource.Aspects.test1.create(ccc);
   let i = 1e6;
   while (i-- > 0) {
     v._name = `${i}`;

@@ -13,7 +13,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
   }
 
   uniqueKey() {
-    return { ...super.uniqueKey(), customHeader: this.src.customHeader, header: this.src.header };
+    return { ...super.uniqueKey(), customHeader: this.src.customHeader, header: this.src.header, v: 103 };
   }
 
   do_build(step: Step<{}>) {
@@ -39,7 +39,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
         });
       }),
       (step: Step<{}>) => {
-        let r = this.src.customHeader || `import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
+        let r = this.src.customHeader || `import {Aspect, ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectConstructor, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';`;
         r += `\n${this.src.header}\n`;
         root.__classes.forEach(cls => {
           r += cls.__decl();

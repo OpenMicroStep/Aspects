@@ -11,22 +11,23 @@ const cfg = new AspectConfiguration(new AspectSelection([
   DataSource.Aspects.client,
 ]), [], xhr);
 export const controlCenter = new ControlCenter(cfg);
-export const dataSource = DataSource.Aspects.client.create(controlCenter);
-export const app = DemoApp.Aspects.client.create(controlCenter);
+const ccc = controlCenter.registerComponent({});
+export const dataSource = DataSource.Aspects.client.create(ccc);
+export const app = DemoApp.Aspects.client.create(ccc);
 platformBrowserDynamic().bootstrapModule(AppModule);
 
 app.manager().setId('__root');
 dataSource.manager().setId('__dataSource');
 
-app
-  .farPromise('giveMeANumber', void 0)
+ccc
+  .farPromise(app.giveMeANumber, void 0)
   .then(n => console.info(n.value()));
 
 
-app
-  .farPromise('pass', { date: new Date() })
+ccc
+  .farPromise(app.pass, { date: new Date() })
   .then(n => console.info(n.value()));
 
-app
-  .farPromise('p0', void 0)
+ccc
+  .farPromise(app.p0, void 0)
   .then(n => console.info(n.value()));

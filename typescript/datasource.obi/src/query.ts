@@ -1,4 +1,4 @@
-import {Aspect, VersionedObject, Identifier, DataSourceInternal, AComponent} from '@openmicrostep/aspects';
+import {Aspect, VersionedObject, Identifier, DataSourceInternal, ControlCenterContext} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlBinding, SqlQuery, SqlQuerySharedContext, DBConnectorCRUD} from '@openmicrostep/aspects.sql';
@@ -273,7 +273,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
   }
 
   async execute(): Promise<VersionedObject[]> {
-    let cc = this.ctx.controlCenter;
+    let ccc = this.ctx.ccc;
     let maker = this.ctx.maker;
     let remotes = new Map<VersionedObject, Map<string, any>>();
     let idsByPathType = new Map<string, Map<Aspect.Installed, number[]>>();
@@ -286,11 +286,10 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let {__is, _id, _version, _path } = row as { __is: number, _id: number, _version: number, _path?: string };
         let isname = this.ctx.systemObiById.get(__is)!.system_name;
         let aname = this.ctx.config.obiEntity_to_aspectClassname(isname);
-        let vo = cc.findOrCreate(_id, aname);
+        let vo = ccc.findOrCreate(_id, aname);
         let manager = vo.manager();
         let path_n = _path || "";
         _path = _path || ".";
-        cc.registerObject(this.ctx.component, vo);
         let idsByType = idsByPathType.get(_path);
         if (!idsByType)
           idsByPathType.set(_path, idsByType = new Map<Aspect.Installed, number[]>());
@@ -344,11 +343,11 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       let row_values = await this.ctx.db.select(sql_select);
       for (let row of row_values) {
         let {__is, _id, car, val, direct} = row as {__is?: number, _id: number, car: number, val: any, direct: boolean};
-        let vo = cc.find(_id)!;
+        let vo = ccc.find(_id)!;
         let remoteAttributes = remotes.get(vo)!;
         let a = (direct ? car2attr_d : car2attr_r).get(car)!;
         val = this.ctx.config.obiValue_to_aspectValue(val, a.name);
-        val = this.loadValue(this.ctx.component, val, __is);
+        val = this.loadValue(ccc, val, __is);
         if (a.type.type === "set" || a.type.type === "array") {
           let c = remoteAttributes.get(a.name);
           if (a.type.type === "set")
@@ -398,16 +397,15 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     return ret;
   }
 
-  loadValue(component: AComponent, value, is: number | undefined) {
+  loadValue(ccc: ControlCenterContext, value, is: number | undefined) {
     if (typeof is === "number") {
       let subid = value;
-      value = this.ctx.controlCenter.find(subid);
+      value = ccc.find(subid);
       if (!value) {
         let obi_is = this.ctx.systemObiById.get(is)!;
         let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
-        value = this.ctx.controlCenter.create(classname);
+        value = ccc.create(classname);
         value.manager().setId(subid);
-        this.ctx.controlCenter.registerObject(component, value);
       }
     }
     return value;

@@ -1,4 +1,4 @@
-import {Aspect, ControlCenter, VersionedObject, VersionedObjectConstructor, FarImplementation, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
+import {Aspect, ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectConstructor, Result, ImmutableList, ImmutableSet, ImmutableObject} from '@openmicrostep/aspects';
 
 export class Person extends VersionedObject {
   _firstName: string | undefined;
@@ -186,9 +186,7 @@ export declare namespace Person {
       birthDate(): Date;
     }
     export type calculation = Person & {
-      farCallback(this: Person, method: 'age', argument: undefined, callback: (envelop: Result<number>) => void);
-      farEvent(this: Person, method: 'age', argument: undefined, eventName: string, onObject?: Object);
-      farPromise(this: Person, method: 'age', argument: undefined): Promise<Result<number>>;
+      age: Aspect.Invokable<undefined, number>;
     }
   }
   export namespace ImplCategories {
@@ -199,14 +197,14 @@ export declare namespace Person {
       birthDate: (this: C) => Date;
     }
     export type calculation<C extends Person = Person> = {
-      age: FarImplementation<C, undefined, number>;
+      age: Aspect.FarImplementation<C, undefined, number>;
     }
   }
   export namespace Aspects {
   }
 }
 export namespace Person {
-  export function create(cc: ControlCenter) { return cc.create<Person>("Person"); }
+  export function create(ccc: ControlCenterContext) { return ccc.create<Person>("Person"); }
   export const Aspects = {
   };
 }
@@ -251,7 +249,7 @@ export declare namespace Cat {
   }
 }
 export namespace Cat {
-  export function create(cc: ControlCenter) { return cc.create<Cat>("Cat"); }
+  export function create(ccc: ControlCenterContext) { return ccc.create<Cat>("Cat"); }
   export const Aspects = {
   };
 }
