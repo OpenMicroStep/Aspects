@@ -67,7 +67,7 @@ export class ObiDataSource extends DataSource {
     return ObiQuery.execute(ctx, set);
   }
 
-  async save({ context: { ccc } }, tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
+  async save(ccc: ControlCenterContext, tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
     const insert = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
       if (value instanceof VersionedObject) {
         let state = value.manager().state();
