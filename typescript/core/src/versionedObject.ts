@@ -118,6 +118,15 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
   }
 
+  filter_anonymize(key: string, value: any)  : void;
+  filter_anonymize<K extends keyof T>(key: K, value: T[K]) : void;
+  filter_anonymize<K extends keyof T>(key: K, value: T[K]) {
+    if (this._localAttributes.has(key))
+      this._localAttributes.set(key, value);
+    if (this._versionAttributes.has(key))
+      this._versionAttributes.set(key, value);
+  }
+
   versionVersion(): number { return this._version; }
   versionAttributes(): VersionedObjectManager.ROAttributes<T> { return this._versionAttributes; }
 
