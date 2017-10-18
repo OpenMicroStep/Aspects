@@ -284,7 +284,7 @@ module.exports =  {
       "msbuildsystem", "build", "-p", "MSBuildSystem/@msbuildsystem", "-p", "buildsystem", "-w", "dist/bs-aspects/"
     ]) },
     "tests-bs=": { is: "task", components: ["=cmd"], cmd: Value([
-      "mstests", "-c", "-t", "5000", ...tests_buildsystem("dist/bs-aspects")
+      "mstests", "-c", "-t", "20000", ...tests_buildsystem("dist/bs-aspects")
     ]) },
     "build-aspects=": { is: "task", components: ["=cmd"], cmd: Value([
       "node", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.cli/index.js", "build", "-w", "dist/aspects/",
@@ -294,7 +294,7 @@ module.exports =  {
     ]) },
     "tests-aspects=": { is: "task", components: ["=cmd"],
       env: { is: "component", "OCI_LIB_DIR": "/opt/oracle/instantclient", "OCI_INC_DIR": "/opt/oracle/instantclient/sdk/include" },
-      cmd: Value(["mstests", "-c", ...tests_aspects("dist/aspects")]),
+      cmd: Value(["mstests", "-c", "-t", "20000", ...tests_aspects("dist/aspects")]),
     },
 
     "coverage-local=": { is: "task", components: ["=cmd"], env: { is: "component", NYC_CWD: "dist/aspects/js/node_modules/@openmicrostep" }, cmd:
