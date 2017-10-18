@@ -9,7 +9,7 @@ node_js:
 services:
   - docker
 
-before_install:  
+before_install:
   - sudo /etc/init.d/mysql stop
   - sudo /etc/init.d/postgresql stop
   - docker-compose up -d
@@ -18,5 +18,6 @@ before_install:
 script:
   - npm install -q -g @openmicrostep/msbuildsystem.cli
   - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
-  - git clone https://github.com/OpenMicroStep/MSBuildSystem.git
+  - git submodule sync --recursive
+  - git submodule update --init --recursive
   - msbuildsystem build -w dist/travis/ --target build --env travis --no-progress

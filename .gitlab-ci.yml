@@ -9,10 +9,14 @@ variables:
   MYSQL_ROOT_PASSWORD: "my-secret-pw"
   POSTGRES_PASSWORD: "my-secret-pw"
 
+before_script:
+ - apk add --no-cache git
+ - git submodule sync --recursive
+ - git submodule update --init --recursive
+
 .build_tpl: &build_tpl
   stage: build
   script:
-   - apk add --no-cache git
    - npm install -q -g @openmicrostep/msbuildsystem.cli
    - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
    - msbuildsystem build -w dist/gitlab/ --target build --env gitlab --no-progress
@@ -32,7 +36,6 @@ deploy:
     - tags
   script:
    - echo "$NPM_AUTH" >> ~/.npmrc
-   - apk add --no-cache git python g++
    - npm install -q -g @openmicrostep/msbuildsystem.cli
    - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
    - msbuildsystem build -w dist/gitlab/ --target deploy --env gitlab --no-progress
