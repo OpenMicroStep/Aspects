@@ -1,0 +1,3 @@
+[submodule "MSBuildSystem"]
+	path = MSBuildSystem
+	url = https://github.com/OpenMicroStep/MSBuildSystem.git

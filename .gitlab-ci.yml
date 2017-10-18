@@ -15,7 +15,6 @@ variables:
    - apk add --no-cache git
    - npm install -q -g @openmicrostep/msbuildsystem.cli
    - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
-   - git clone https://github.com/OpenMicroStep/MSBuildSystem.git
    - msbuildsystem build -w dist/gitlab/ --target build --env gitlab --no-progress
 
 build-6:
@@ -36,5 +35,4 @@ deploy:
    - apk add --no-cache git python g++
    - npm install -q -g @openmicrostep/msbuildsystem.cli
    - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
-   - git clone https://github.com/OpenMicroStep/MSBuildSystem.git
    - msbuildsystem build -w dist/gitlab/ --target deploy --env gitlab --no-progress
