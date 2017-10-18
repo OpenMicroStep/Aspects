@@ -220,11 +220,20 @@ export class AspectConfiguration {
   private readonly _aspects = new Map<string, VersionedObjectConstructorCache>();
   private readonly _cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
 
-  constructor(
+  constructor(options: {
     selection: AspectSelection,
-    farTransports: { transport: FarTransport, classes: string[], farCategories: string[] }[] = [],
+    farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
     defaultFarTransport?: FarTransport
-  ) {
+  })
+  constructor(selection: AspectSelection)
+  constructor(options: AspectSelection | {
+    selection: AspectSelection,
+    farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
+    defaultFarTransport?: FarTransport
+  }) {
+    if (options instanceof AspectSelection)
+      options = { selection: options };
+    let { selection, farTransports, defaultFarTransport } = options;
     for (let { name, aspect, cstor } of selection.classes()) {
       let aspect_cstor = this._aspects.get(name);
       if (aspect_cstor)

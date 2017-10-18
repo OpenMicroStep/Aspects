@@ -28,12 +28,15 @@ function createContext_C1(publicTransport: (json: string) => Promise<string>) {
       return inv;
     }
   };
-  let cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
-    Resource.Aspects.c1,
-    Car.Aspects.c1,
-    People.Aspects.c1,
-    DataSource.Aspects.client,
-  ]), [], default_transport));
+  let cc = new ControlCenter(new AspectConfiguration({
+    selection: new AspectSelection([
+      Resource.Aspects.c1,
+      Car.Aspects.c1,
+      People.Aspects.c1,
+      DataSource.Aspects.client,
+    ]),
+    defaultFarTransport: default_transport
+  }));
   let ccc = cc.registerComponent({});
   let ret = {
     cc: cc,

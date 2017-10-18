@@ -5,11 +5,14 @@ import { AppModule } from './app.module';
 import {Person, DemoApp} from '../shared/index';
 
 const xhr = new XHRTransport();
-const cfg = new AspectConfiguration(new AspectSelection([
-  DemoApp.Aspects.client,
-  Person.Aspects.client,
-  DataSource.Aspects.client,
-]), [], xhr);
+const cfg = new AspectConfiguration({
+  selection: new AspectSelection([
+    DemoApp.Aspects.client,
+    Person.Aspects.client,
+    DataSource.Aspects.client,
+  ]),
+  defaultFarTransport: xhr
+});
 export const controlCenter = new ControlCenter(cfg);
 const ccc = controlCenter.registerComponent({});
 export const dataSource = DataSource.Aspects.client.create(ccc);
