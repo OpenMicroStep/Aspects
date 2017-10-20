@@ -9,20 +9,21 @@ import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsyste
 function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
   let ret = { add: [] as T[], del: [] as T[] };
   switch (type.type) {
-      case 'set':
-        if (newV) for (let n of newV)
-          if (!oldV || !oldV.has(n))
-            ret.add.push(n);
-        if (oldV) for (let o of oldV)
-          if (!newV || !newV.has(o))
-            ret.del.push(o);
-        break;
-      case 'class':
-        if (oldV !== newV) {
-          if (oldV) ret.del.push(oldV);
-          if (newV) ret.add.push(newV);
-        }
-        break;
+    case 'set':
+      if (newV) for (let n of newV)
+        if (!oldV || !oldV.has(n))
+          ret.add.push(n);
+      if (oldV) for (let o of oldV)
+        if (!newV || !newV.has(o))
+          ret.del.push(o);
+      break;
+    case 'class':
+    case 'or':
+      if (oldV !== newV) {
+        if (oldV) ret.del.push(oldV);
+        if (newV) ret.add.push(newV);
+      }
+      break;
     default: throw new Error(`unsupported relation type ${type.type}`);
   }
 
