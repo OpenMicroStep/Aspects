@@ -276,7 +276,7 @@ function sort_on_mult() {
         '.': ['+_cars']
       },
     });
-  }, `cannot sort on '_cars' (multiple values)`);
+  }, `cannot sort on '_cars' (it is not a single value)`);
 }
 
 function sort_compatible() {

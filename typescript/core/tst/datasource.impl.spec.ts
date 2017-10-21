@@ -121,6 +121,7 @@ function query_ne_peugeots(f: Flux<Context>) {
 function query_in_c2(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, $in: [c2] } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value()['cars'], [c2]);
     f.continue();
   });
@@ -260,8 +261,9 @@ function query_cars_peoples_constraint_on_relation(f: Flux<Context>) {
   let p0_cpy = { id: p0.id(), _firstname: p0._firstname, _lastname: p0._lastname, _birthDate: p0._birthDate };
   c0.manager().unload();
   ccc.farPromise(db.rawQuery, { results: [
-    { name: "peoples", where: { $instanceOf: People, _cars: { $has: c0 } }, scope: ['_firstname', '_lastname', '_birthDate', '_cars'] },
+    { name: "peoples", where: { $instanceOf: People, _cars: { $contains: c0 } }, scope: ['_firstname', '_lastname', '_birthDate', '_cars'] },
   ]}).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     let peoples = envelop.value()['peoples'];
     assert.equal(peoples.length, 1);
     let lp0 = peoples[0] as typeof p0;

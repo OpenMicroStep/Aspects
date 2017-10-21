@@ -214,7 +214,7 @@ export class ObiDataSource extends DataSource {
     scope: DataSourceInternal.ResolvedScope;
   }): Promise<VersionedObject[]> {
     let set = new ObjectSet('load');
-    set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, "_id", objects));
+    set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, Aspect.attribute_id, objects));
     set.scope = scope;
     await ObiQuery.execute(this._ctx(tr ? tr.tr : this.db.connector, ccc), set);
     return objects;

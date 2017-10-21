@@ -218,7 +218,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     this.columns_ordered.push(name);
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any): SqlBinding {
+  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
     value = Array.isArray(value) ? value.map(v => this.mapValue(var_attribute, v)) : this.mapValue(var_attribute, value);
     return this.ctx.maker.op(this.buildVariable(var_set, var_attribute), operator, value);
   }
@@ -226,6 +226,14 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   buildVariable(var_set: ObjectSet, var_attribute: string): string {
     let q = this.ctx.queries.get(var_set)!;
     return q.sql_column(var_attribute);
+  }
+
+  mapContraintType(type: ConstraintType) : any {
+    if (type === ConstraintType.Contains)
+      return ConstraintType.Equal;
+    if (type === ConstraintType.NotContains)
+      return ConstraintType.NotEqual;
+    return type;
   }
 
   buildConstraint(constraint: DataSourceInternal.Constraint, prefix: string): SqlBinding {
@@ -238,14 +246,16 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     }
     else if (constraint instanceof DataSourceInternal.ConstraintValue) {
       let lset = this.set.variable(prefix + constraint.leftVariable)!;
-      return this.buildConstraintValue(lset, constraint.leftAttribute, constraint.type, constraint.value);
+      let type = this.mapContraintType(constraint.type);
+      return this.buildConstraintValue(lset, constraint.leftAttribute.name, type, constraint.value);
     }
     else if (constraint instanceof DataSourceInternal.ConstraintVariable) {
       let lset = this.set.variable(prefix + constraint.leftVariable)!;
       let rset = this.set.variable(prefix + constraint.rightVariable)!;
-      let lc = this.buildVariable(lset, constraint.leftAttribute);
-      let rc = this.buildVariable(rset, constraint.rightAttribute);
-      return this.ctx.maker.compare(lc, constraint.type, rc);
+      let lc = this.buildVariable(lset, constraint.leftAttribute.name);
+      let rc = this.buildVariable(rset, constraint.rightAttribute.name);
+      let type = this.mapContraintType(constraint.type);
+      return this.ctx.maker.compare(lc, type, rc);
     }
     throw new Error(`unsupported constraint`);
   }
@@ -303,7 +313,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
         case ConstraintType.InstanceOf:
           this.setInitialType(c.value.name, true);
           break;
-        case ConstraintType.UnionOf:
+        case ConstraintType.Union:
           let queries: SqlQuery<SharedContext>[] = [];
           for (let s of c.value) {
             let q = await SqlQuery.build(this.ctx, s);
@@ -311,7 +321,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
           }
           this.setInitialUnion(queries);
           break;
-        case ConstraintType.UnionOfAlln: {
+        case ConstraintType.UnionForAlln: {
           let u_0 = c.value[0];
           let u_n = c.value[1];
           let u_np1 = c.value[2];
@@ -469,7 +479,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let s = q_n.set.clone(`${q_n.set._name}[${i}]`);
         let sids = [...nids.values()].map(i => i._id);
         s.typeConstraints.splice(0, 1); // Remove the recursion type
-        s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", sids));
+        s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, Aspect.attribute_id, sids));
         let q = await SqlQuery.build(this.ctx, s);
         q.addLazyAttributes(info.attributes.values());
         let from: SqlBinding = maker.from_sub(q.sql_select(), q_n.initialFromTable!);
@@ -483,7 +493,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let fids = [...ids.values()].map(i => i._id);
       let s = q_n.set.clone(`${q_n.set._name}[*]`);
       s.typeConstraints.splice(0, 1); // Remove the recursion type
-      s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", fids));
+      s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, Aspect.attribute_id, fids));
       let q_all = await SqlQuery.build(this.ctx, s);
       q_all.addLazyAttributes(info.attributes.values());
       this.addInitialFrom(maker.from_sub(q_all.sql_select(), alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
@@ -573,7 +583,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return monoAttributes.values();
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any): SqlBinding {
+  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
     if (operator === ConstraintType.Text && var_attribute === "_id") {
       // TODO: add support for external full text search ?
       let constraints: SqlBinding[] = [];
@@ -590,8 +600,6 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       return this.ctx.maker.or(constraints);
     }
     else {
-      if (operator === ConstraintType.Has)
-        operator = ConstraintType.Equal;
       return super.buildConstraintValue(var_set, var_attribute, operator, value);
     }
   }

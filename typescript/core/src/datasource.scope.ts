@@ -41,17 +41,16 @@ type ParseScopeContext = {
   aspectsForType: (type: string) => Iterable<Aspect.Installed>,
 };
 
-function areEquals(a: Aspect.InstalledAttribute[], b: Aspect.InstalledAttribute[]) {
+
+export function attribute_name_type_are_equals(ai: Aspect.InstalledAttribute, bi: Aspect.InstalledAttribute) : boolean {
+  return ai === bi || (ai.name === bi.name && ai.type_sign === bi.type_sign);
+}
+
+export function attributes_name_type_are_equals(a: Aspect.InstalledAttribute[], b: Aspect.InstalledAttribute[]) {
   if (a.length !== b.length)
     return false;
   for (var i = 0; i < a.length; i++) {
-    var ai = a[i];
-    var bi = b[i];
-    if (ai !== bi && (
-      ai.name !== bi.name ||
-      ai.relation !== bi.relation ||
-      ai.type.type !== bi.type.type
-    ))
+    if (!attribute_name_type_are_equals(a[i], b[i]))
       return false;
   }
   return true;
@@ -107,8 +106,8 @@ function parseScopeAttr(ctx: ParseScopeContext,
   }
 
   if (sort_match && cnt === ctx.safe_aspect_path_cnt) {
-    if (Aspect.typeIsMultiple(safe_attribute.type))
-      throw new Error(`cannot sort on '${safe_attribute.name}' (multiple values)`);
+    if (!Aspect.typeIsSingleValue(safe_attribute.type))
+      throw new Error(`cannot sort on '${safe_attribute.name}' (it is not a single value)`);
 
     let idx = ctx.safe_aspect_path_idx + ctx.safe_aspect_path_cnt;
     let asc = sort_match[1] === '+';
@@ -116,7 +115,7 @@ function parseScopeAttr(ctx: ParseScopeContext,
     path.push(safe_attribute);
     if (idx < ctx.sort.length) {
       let other = ctx.sort[idx];
-      if (other.asc !== asc || !areEquals(other.path, path))
+      if (other.asc !== asc || !attributes_name_type_are_equals(other.path, path))
         throw new Error(`incompatible sorts`);
     }
     else {
@@ -229,7 +228,7 @@ function _traverseScope(
   for (let attribute of attributes) {
     if (Aspect.typeIsClass(attribute.type)) {
       let s_path = `${n_path}${attribute.name}.`;
-      if (Aspect.typeIsMultiple(attribute.type)) {
+      if (Aspect.typeIsMultValue(attribute.type)) {
         let l_values: any = manager.localAttributes().get(attribute.name as keyof VersionedObject);
         if (l_values) for (let v of l_values)
           _traverseScope(scope, v, s_path, s_path, for_each);

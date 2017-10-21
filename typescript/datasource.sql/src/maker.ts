@@ -207,7 +207,7 @@ export abstract class SqlMaker {
     return this._conditions(conditions, " OR ");
   }
 
-  op(sql_column: string, operator: DataSourceInternal.ConstraintOnValueTypes, value): SqlBinding {
+  op(sql_column: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
     switch (operator) {
       case ConstraintType.Equal:
         if (value === null || value === undefined)
@@ -228,13 +228,13 @@ export abstract class SqlMaker {
     throw new Error(`unsupported op operator ${ConstraintType[operator]}`);
   }
 
-  op_bind(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenColumnsTypes, value): SqlBinding {
+  op_bind(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
     let b = this.op(sql_column.sql, operator, value) as SqlBindingM;
     b.bind.unshift(...sql_column.bind);
     return b;
   }
 
-  compare(sql_columnLeft: string, operator: DataSourceInternal.ConstraintBetweenColumnsTypes, sql_columnRight: string): SqlBinding {
+  compare(sql_columnLeft: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: string): SqlBinding {
     switch (operator) {
       case ConstraintType.Equal:              return { sql: `${sql_columnLeft} = ${sql_columnRight}` , bind: [] };
       case ConstraintType.NotEqual:           return { sql: `${sql_columnLeft} <> ${sql_columnRight}`, bind: [] };
@@ -246,7 +246,7 @@ export abstract class SqlMaker {
     throw new Error(`unsupported compare operator ${ConstraintType[operator]}`);
   }
 
-  compare_bind(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenSetTypes, sql_columnRight: SqlBinding): SqlBinding {
+  compare_bind(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: SqlBinding): SqlBinding {
     let b: SqlBindingM;
     switch (operator) {
       case ConstraintType.In:

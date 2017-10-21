@@ -1,4 +1,4 @@
-import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
+import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration, AspectSelection, Result} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -60,7 +60,8 @@ function serialize(s, map = new Map()) {
 
 function parseRequest(req) {
   let sets = DataSourceInternal.parseRequest(req, cc);
-  return sets.map(s => serialize(s));
+  assert.deepEqual(sets.diagnostics(), []);
+  return sets.value().map(s => serialize(s));
 }
 
 function resources_sets() {
@@ -294,27 +295,27 @@ function no_instanceof_scope_model() {
 
 function recursion() {
   let sets = parseRequest({
-    "X=": { $instanceOf: "Resource", _id: 0 },
-    "Y=": { $instanceOf: "Resource" },
-    "resources=": {
+    "X=": { $instanceOf: "People", _id: 0 },
+    "Y=": { $instanceOf: "People" },
+    "fathers=": {
       $unionForAlln: "=U(n)",
       "U(0)=": "=X",
       "U(n + 1)=": {
         $out: "=y",
         "x=": { $elementOf: "=U(n)" },
         "y=": { $elementOf: "=Y" },
-        "=y.parent": { $eq: "=x" },
+        "=y._father": { $eq: "=x" },
       }
     },
     results: [{
-      name: "resources",
-      where: "=resources",
+      name: "fathers",
+      where: "=fathers",
       scope: ['_name']
     }]
   });
   let u_0 = Object.assign(new ObjectSet("X"), {
     typeConstraints: [
-      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } }
     ],
     constraints: [
       { type: ConstraintType.Equal, leftVariable: "X", leftAttribute: "_id", value: 0 },
@@ -322,37 +323,37 @@ function recursion() {
   });
   let u_n = Object.assign(new ObjectSet("U(n)"), {
     typeConstraints: [
-      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } }
     ],
   });
   u_n.typeConstraints.unshift({ type: ConstraintType.Recursion, value: u_n });
   let u_np1: any = Object.assign(new ObjectSet("y"), {
     typeConstraints: [
-      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } }
     ],
     constraints: [
-      { type: ConstraintType.Equal, leftVariable: "y", leftAttribute: "parent", rightVariable: "x", rightAttribute: "_id" },
+      { type: ConstraintType.Equal, leftVariable: "y", leftAttribute: "_father", rightVariable: "x", rightAttribute: "_id" },
     ],
     variables: [],
   });
   let x = Object.assign(new ObjectSet("x"), {
     typeConstraints: [
       { type: ConstraintType.Recursion, value: u_n },
-      { type: ConstraintType.InstanceOf, value: { name: "Resource", aspect: "test1" } }
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } }
     ],
   });
   u_np1.variables.push(["x", x]);
   assert.deepEqual(sets, [
-    Object.assign(new ObjectSet("resources"), {
+    Object.assign(new ObjectSet("fathers"), {
       typeConstraints: [
-        { type: ConstraintType.UnionOfAlln, value: [u_0, u_n, u_np1] }
+        { type: ConstraintType.UnionForAlln, value: [u_0, u_n, u_np1] }
       ],
       constraints: [],
-      name: "resources",
+      name: "fathers",
       sort: [],
       scope: {
-        Resource: {
-          ".": [aspect_attr("Resource", "_name")],
+        People: {
+          ".": [aspect_attr("People", "_name")],
         }
       },
     })
@@ -477,7 +478,7 @@ function persons_and_their_cars() {
   assert.deepEqual<any>(sets, [
     Object.assign(new ObjectSet("union"), {
       typeConstraints: [
-        { type: ConstraintType.UnionOf, value: [c, persons] },
+        { type: ConstraintType.Union, value: [c, persons] },
       ],
       name: "union",
       sort: [],
@@ -759,23 +760,27 @@ function makeObjects() {
   objects.push(Object.assign(People.Aspects.test1.create(ccc), { _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons" }));
   return objects;
 }
+function assertResult(r: Result<any>, expected) {
+  assert.deepEqual(r.diagnostics(), []);
+  assert.deepEqual(r.value(), expected);
+}
 function applyWhere() {
   let objects = makeObjects();
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: Car }, objects, cc), objects.slice(0, 3));
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: Car, _name: "Renault" }, objects, cc), objects.slice(0, 2));
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: People }, objects, cc), objects.slice(3, 5));
-  assert.deepEqual(DataSourceInternal.applyWhere({ $instanceOf: People, _firstname: "Lisa" }, objects, cc), objects.slice(3, 4));
+  assertResult(DataSourceInternal.applyWhere({ $instanceOf: Car }, objects, cc), objects.slice(0, 3));
+  assertResult(DataSourceInternal.applyWhere({ $instanceOf: Car, _name: "Renault" }, objects, cc), objects.slice(0, 2));
+  assertResult(DataSourceInternal.applyWhere({ $instanceOf: People }, objects, cc), objects.slice(3, 5));
+  assertResult(DataSourceInternal.applyWhere({ $instanceOf: People, _firstname: "Lisa" }, objects, cc), objects.slice(3, 4));
 }
 
 function applyRequest() {
   let objects = makeObjects();
-  assert.deepEqual(DataSourceInternal.applyRequest(
+  assertResult(DataSourceInternal.applyRequest(
     { name: "cars", where: { $instanceOf: Car } }, objects, cc),
     { cars: objects.slice(0, 3) });
-  assert.deepEqual(DataSourceInternal.applyRequest(
+  assertResult(DataSourceInternal.applyRequest(
     { name: "Renaults", where: { $instanceOf: Car, _name: "Renault" } }, objects, cc),
     { Renaults: objects.slice(0, 2) });
-  assert.deepEqual(DataSourceInternal.applyRequest(
+  assertResult(DataSourceInternal.applyRequest(
     {
       "cars=": { $instanceOf: Car },
       "renaults=": { _name: "Renault", $in: "=cars" },

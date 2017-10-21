@@ -89,7 +89,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let s = q_n.set.clone(`${q_n.set._name}[${i}]`);
         let sids = [...nids.values()].map(i => i._id);
         s.typeConstraints.splice(0, 1); // Remove the recursion type
-        s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", sids));
+        s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, Aspect.attribute_id, sids));
         let q = await SqlQuery.build(this.ctx, s) as ObiQuery;
         let from: SqlBinding = maker.from_sub(q.sql_select_id(), q_n.initialFromTable!);
         q_n.from.sql = from.sql;
@@ -102,7 +102,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       let fids = [...ids.values()].map(i => i._id);
       let s = q_n.set.clone(`${q_n.set._name}[*]`);
       s.typeConstraints.splice(0, 1); // Remove the recursion type
-      s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, "_id", fids));
+      s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, Aspect.attribute_id, fids));
       let q_all = await SqlQuery.build(this.ctx, s) as ObiQuery;
       this.addInitialFrom(maker.from_sub(q_all.sql_select_id(), alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
     }
@@ -222,7 +222,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     }
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintOnValueTypes, value: any): SqlBinding {
+  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
     if (operator === ConstraintType.Text && var_attribute === "_id") {
       // obi make full text search on the whole object attributes easy and fast
       let alias = this.nextAlias();
@@ -231,8 +231,6 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       return maker.op(maker.column(alias, "VAL"), ConstraintType.Text, value);
     }
     else {
-      if (operator === ConstraintType.Has)
-        operator = ConstraintType.Equal;
       return super.buildConstraintValue(var_set, var_attribute, operator, value);
     }
   }

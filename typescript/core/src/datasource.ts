@@ -11,7 +11,8 @@ export {DataSource} from '../../../generated/aspects.interfaces';
 DataSource.category('local', <DataSource.ImplCategories.local<DataSource>>{
   /// category core
   filter(objects: VersionedObject[], arg1) {
-    return DataSourceInternal.applyWhere(arg1, objects, this.controlCenter());
+    let res = DataSourceInternal.applyWhere(arg1, objects, this.controlCenter());
+    return !res.hasDiagnostics() ? res.value() : [];
   }
 });
 type ExtDataSource = { _queries?: DataSourceQueries, _safeValidators?: SafeValidators };
@@ -21,7 +22,7 @@ export type DataSourceQuery = (
   reporter: Reporter,
   query: { id: string, [s: string]: any },
   cc: ControlCenter
-) => DataSourceInternal.Request | Promise<DataSourceInternal.Request>;
+) => DataSourceInternal.RequestDefinition | Promise<DataSourceInternal.RequestDefinition>;
 export type DataSourceQueries = Map<string, DataSourceQuery>;
 DataSource.category('initServer', <DataSource.ImplCategories.initServer<DataSource & ExtDataSource>>{
   setQueries(queries) {
@@ -232,11 +233,13 @@ async function safeQuery(
 ) : Promise<Result<{ [k: string]: VersionedObject[] }>> {
   let reporter = new Reporter();
   let sets = DataSourceInternal.parseRequest(<any>request, db.controlCenter());
-  let res = await ccc.farPromise(db.implQuery, { tr: undefined, sets: sets });
+  if (sets.hasDiagnostics())
+    return Result.fromResultWithoutValue(sets);
+  let res = await ccc.farPromise(db.implQuery, { tr: undefined, sets: sets.value() });
   if (res.hasOneValue()) {
     let v = res.value();
     await safeScope(ccc, reporter, db, all, (function*(): Iterable<[VersionedObject, DataSourceInternal.ResolvedScope]> {
-      for (let set of sets) {
+      for (let set of sets.value()) {
         let objects = v[set.name!];
         for (let object of objects)
           yield [object, set.scope!];
@@ -330,14 +333,16 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
       reporter.diagnostics.push(...end.diagnostics());
     }
 
-    return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects); // TODO: clean object scope
+    return Result.fromReporterAndValue(reporter, objects); // TODO: clean object scope
   }
 });
 
 DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.implementation>>{
   rawQuery({ context: { ccc } }, request: { [k: string]: any }) {
     let sets = DataSourceInternal.parseRequest(<any>request, this.controlCenter());
-    return ccc.farPromise(this.implQuery, { tr: undefined, sets: sets });
+    if (!sets.hasDiagnostics())
+      return ccc.farPromise(this.implQuery, { tr: undefined, sets: sets.value() });
+    return Promise.resolve(Result.fromResultWithoutValue(sets));
   },
   rawLoad({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
     let rscope = DataSourceInternal.resolveScopeForObjects(w.scope,  this.controlCenter(), w.objects);

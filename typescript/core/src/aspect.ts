@@ -25,26 +25,34 @@ export namespace Aspect {
     }
   };
 
+  function type_is_or(type: Type, v: (type: Type) => boolean) : boolean {
+    if (type.type === "or") {
+      for (let t of type.types) {
+        if (!v(t))
+          return false;
+      }
+      return type.types.length > 0;
+    }
+    return false;
+  }
+  export function typeIsSingleValue(type: Type) : boolean {
+    if (type.type === "class" || type.type === "primitive")
+      return true;
+    return type_is_or(type, typeIsSingleValue);
+  }
+  export function typeIsMultValue(type: Type) : boolean {
+    if (type.type === "set" || type.type === "array")
+      return true;
+    return type_is_or(type, typeIsMultValue);
+  }
+
   export function typeIsClass(type: Type) : boolean {
     if (type.type === "class")
       return true;
 
     if (type.type === "array" || type.type === "set")
       return typeIsClass(type.itemType);
-
-    if (type.type === "or") {
-      for (let t of type.types) {
-        if (t.type !== "class")
-          return false;
-      }
-      return type.types.length > 0;
-    }
-
-    return false;
-  }
-
-  export function typeIsMultiple(type: Type) : boolean {
-    return type.type === "array" || type.type === "set";
+    return type_is_or(type, typeIsClass);
   }
 
   export function typeToAspectNames(type: Type) : string[] {
@@ -135,6 +143,7 @@ export namespace Aspect {
   export interface InstalledAttribute {
     name: string;
     type: Type;
+    type_sign: string;
     validator: AttributeTypeValidator;
     relation: Reference | undefined;
     contains_vo: boolean;
@@ -146,6 +155,7 @@ export namespace Aspect {
     is_sub_object: boolean;
     references: Reference[];
     categories: Set<string>;
+    attribute_ref: InstalledAttribute;
     attributes: Map<string, InstalledAttribute>;
     farMethods: Map<string, InstalledFarMethod>;
     implementation: VersionedObjectConstructor;
@@ -168,6 +178,23 @@ export namespace Aspect {
   }
   export type Invokable<A0, R> = { to: VersionedObject, method: string, _check?: { _a0: A0, _r: R } };
   export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, ctx: { context: { ccc: ControlCenterContext } }, arg: A) => R | Result<R> | Promise<R | Result<R>>);
+
+  export const attribute_id: Aspect.InstalledAttribute = {
+    name: "_id",
+    type: { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
+    type_sign: "primitive:identifier",
+    validator: Validation.validateId,
+    relation: undefined,
+    contains_vo: false,
+  };
+  export const attribute_version: Aspect.InstalledAttribute = {
+    name: "_version",
+    type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
+    type_sign: "primitive:number",
+    validator: Validation.validateVersion,
+    relation: undefined,
+    contains_vo: false,
+  };
 }
 
 export interface VersionedObjectConstructorCache extends VersionedObjectConstructor {
@@ -183,22 +210,26 @@ function nameClass<T extends { new(...args): any }>(name: string, parent: string
   return cls;
 }
 
-
 const voAttributes = new Map<string, Aspect.InstalledAttribute>();
-voAttributes.set("_id", {
-  name: "_id",
-  type: { is: "type", type: "primitive", name: "any" as Aspect.PrimaryType },
-  validator: Validation.validateId,
-  relation: undefined,
-  contains_vo: false,
-});
-voAttributes.set("_version", {
-  name: "_version",
-  type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
-  validator: Validation.validateVersion,
-  relation: undefined,
-  contains_vo: false,
-});
+voAttributes.set("_id", Aspect.attribute_id);
+voAttributes.set("_version", Aspect.attribute_version);
+
+function build_type_sign(a: Aspect.Type) {
+  switch (a.type) {
+    case 'class':
+    case 'primitive':
+      return `${a.type}:${a.name}`;
+    case 'set':
+      return `<${build_type_sign(a.itemType)}>`;
+    case 'array':
+      return `[${build_type_sign(a.itemType)}]`;
+    case 'or':
+      return `(${a.types.map(t => build_type_sign(t)).join(',')})`;
+    case 'dictionary':
+      return `{${Object.keys(a.properties).map(k => `${k}=${build_type_sign(a.properties[k])}`).join(',')})`;
+  }
+  return 'void';
+}
 
 export class AspectSelection {
   /** @internal */ _classes: { name: string, aspect: string, cstor: VersionedObjectConstructor }[];
@@ -247,6 +278,14 @@ export class AspectConfiguration {
           is_sub_object: cstor.definition.is_sub_object,
           references: [],
           categories: new Set(),
+          attribute_ref: {
+            name: "_id",
+            type: { is: "type", type: "class", name: name },
+            type_sign: `class:${name}`,
+            validator: Validation.validateId,
+            relation: undefined,
+            contains_vo: false,
+          },
           attributes: new Map(voAttributes),
           farMethods: new Map(),
           implementation: cstor,
@@ -440,6 +479,7 @@ export class AspectConfiguration {
       name: attribute.name as keyof VersionedObject,
       validator: attribute.validator || this.createValidator(true, attribute.type),
       type: attribute.type,
+      type_sign: build_type_sign(attribute.type),
       relation: undefined,
       contains_vo: contains_types.length > 0,
     };
