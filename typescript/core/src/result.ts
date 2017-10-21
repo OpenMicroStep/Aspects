@@ -1,5 +1,5 @@
 import { ImmutableList } from './core';
-import { Diagnostic} from '@openmicrostep/msbuildsystem.shared';
+import { Diagnostic, Reporter } from '@openmicrostep/msbuildsystem.shared';
 
 export class Result<T = any> {
   /** @internal */ _items: Result.Item[];
@@ -9,13 +9,17 @@ export class Result<T = any> {
   static fromDiagnostics<T = any>(diagnostics: Diagnostic[]) : Result<T> {
     return new Result([...diagnostics]);
   }
-
+  static fromReporter<T = any>(reporter: Reporter) : Result<T> {
+    return this.fromDiagnostics(reporter.diagnostics);
+  }
+  static fromValue<T>(value: T) : Result<T> {
+    return new Result([{ is: "value", value: value }]);
+  }
   static fromDiagnosticsAndValue<T>(diagnostics: Diagnostic[], value: T) : Result<T> {
     return new Result([...diagnostics, { is: "value", value: value }]);
   }
-
-  static fromValue<T>(value: T) : Result<T> {
-    return new Result([{ is: "value", value: value }]);
+  static fromReporterAndValue<T>(reporter: Reporter, value: T) : Result<T> {
+    return this.fromDiagnosticsAndValue(reporter.diagnostics, value);
   }
 
   static fromItemsWithoutValue(items: ImmutableList<Result.Item>) : Result<any> {
@@ -24,9 +28,18 @@ export class Result<T = any> {
   static fromItemsWithNewValue<T>(items: ImmutableList<Result.Item>, value: T) : Result<T> {
     return new Result([...items.filter(i => i.is !== "value"), { is: "value", value: value }]);
   }
+  static fromItemsWithMappedValue<IN_T, OUT_T>(items: ImmutableList<Result.Item>, map: (i: IN_T) => OUT_T) : Result<OUT_T> {
+    return new Result([...items.map(i => i.is === "value" ? { is: "value", value: map(i.value) } as Result.ItemValue<OUT_T> : i)]);
+  }
 
+  static fromResultWithoutValue(result: Result) : Result<any> {
+    return this.fromItemsWithoutValue(result.items());
+  }
   static fromResultWithNewValue<T>(result: Result, value: T) : Result<T> {
     return this.fromItemsWithNewValue(result.items(), value);
+  }
+  static fromResultWithMappedValue<IN_T, OUT_T>(result: Result<IN_T>, map: (i: IN_T) => OUT_T) : Result<OUT_T> {
+    return this.fromItemsWithMappedValue(result.items(), map);
   }
 
   constructor(items: Result.Item[]) {
