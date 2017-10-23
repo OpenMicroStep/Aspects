@@ -58,9 +58,11 @@ function serialize(s, map = new Map()) {
   return r;
 }
 
-function parseRequest(req) {
+function parseRequest(req, attributesAndCompatibleAspects?) {
   let sets = DataSourceInternal.parseRequest(req, cc);
   assert.deepEqual(sets.diagnostics(), []);
+  if (attributesAndCompatibleAspects)
+    assert.deepEqual<any>(serialize(sets.value()[0].attributesAndCompatibleAspects(cc)), attributesAndCompatibleAspects);
   return sets.value().map(s => serialize(s));
 }
 
@@ -431,6 +433,169 @@ function persons_with_cars() {
   let p = set_persons1_p();
   assert.deepEqual<any>(sets, [p]);
 }
+function persons_with_cars2() {
+  let sets = parseRequest({
+    "P=": { $instanceOf: People },
+    name: "persons_with_cars",
+    where: "=P:_cars:_owner",
+    scope: ['_firstname', '_lastname'],
+  });
+  let P_cars_owner: any = Object.assign(new ObjectSet("P._cars._owner"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "P", leftAttribute: "_cars", rightVariable: "P._cars", rightAttribute: "_id" },
+      { type: ConstraintType.Equal, leftVariable: "P._cars", leftAttribute: "_owner", rightVariable: "P._cars._owner", rightAttribute: "_id" },
+    ],
+    variables: [],
+    name: "persons_with_cars",
+    sort: [],
+    scope: {
+      People: {
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname")],
+      }
+    },
+  });
+  let P_cars: any = Object.assign(new ObjectSet("P._cars"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
+  let P: any = Object.assign(new ObjectSet("P"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+  });
+  P_cars_owner.variables.push(["P", P]);
+  P_cars_owner.variables.push(["P._cars", P_cars]);
+  assert.deepEqual<any>(sets, [P_cars_owner]);
+}
+function car_owners() {
+  let sets = parseRequest({
+    "C=": { $instanceOf: Car },
+    name: "car_owners",
+    where: "=C:_owner",
+    scope: ['_firstname', '_lastname'],
+  });
+  let C_owner: any = Object.assign(new ObjectSet("C._owner"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "C", leftAttribute: "_owner", rightVariable: "C._owner", rightAttribute: "_id" },
+    ],
+    variables: [],
+    name: "car_owners",
+    sort: [],
+    scope: {
+      People: {
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname")],
+      }
+    },
+  });
+  let C: any = Object.assign(new ObjectSet("C"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
+  C_owner.variables.push(["C", C]);
+  assert.deepEqual<any>(sets, [C_owner]);
+}
+function car_owners_fathers() {
+  let sets = parseRequest({
+    "C=": { $instanceOf: Car },
+    name: "car_owners_fathers",
+    where: "=C:_owner:_father",
+    scope: ['_firstname', '_lastname'],
+  }, {
+    attributes: [
+      ["_id", aspect_attr("People", "_id")],
+    ],
+    compatibleAspects: [
+      { name: "People", aspect: "test1" },
+    ]
+  });
+  let C_owner_father: any = Object.assign(new ObjectSet("C._owner._father"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "C", leftAttribute: "_owner", rightVariable: "C._owner", rightAttribute: "_id" },
+      { type: ConstraintType.Equal, leftVariable: "C._owner", leftAttribute: "_father", rightVariable: "C._owner._father", rightAttribute: "_id" },
+    ],
+    variables: [],
+    name: "car_owners_fathers",
+    sort: [],
+    scope: {
+      People: {
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname")],
+      }
+    },
+  });
+  let C_owner: any = Object.assign(new ObjectSet("C._owner"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+  });
+  let C: any = Object.assign(new ObjectSet("C"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
+  C_owner_father.variables.push(["C", C]);
+  C_owner_father.variables.push(["C._owner", C_owner]);
+  assert.deepEqual<any>(sets, [C_owner_father]);
+}
+function car_owners_fathers2() {
+  let sets = parseRequest({
+    "C=": { $instanceOf: Car },
+    "P=": { $instanceOf: People },
+    "car_owners=": {
+      $out: "=p",
+      "p=": { $elementOf: "=P" },
+      "c=": { $elementOf: "=C" },
+      "=c._owner": { $eq: "=p" },
+    },
+    name: "car_owners_fathers",
+    where: "=car_owners:_father",
+    scope: ['_firstname', '_lastname'],
+  });
+
+  let car_owners_father: any = Object.assign(new ObjectSet("p._father"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "p", leftAttribute: "_father", rightVariable: "p._father", rightAttribute: "_id" },
+    ],
+    variables: [],
+    name: "car_owners_fathers",
+    sort: [],
+    scope: {
+      People: {
+        ".": [aspect_attr("People", "_firstname"), aspect_attr("People", "_lastname")],
+      }
+    },
+  });
+  let p: any = Object.assign(new ObjectSet("p"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } },
+    ],
+    constraints: [
+      { type: ConstraintType.Equal, leftVariable: "c", leftAttribute: "_owner", rightVariable: "p", rightAttribute: "_id" },
+    ],
+    variables: [],
+  });
+  let c: any = Object.assign(new ObjectSet("c"), {
+    typeConstraints: [
+      { type: ConstraintType.InstanceOf, value: { name: "Car", aspect: "test1" } },
+    ],
+  });
+  p.variables.push(["c", c]);
+  car_owners_father.variables.push(["p", p]);
+  assert.deepEqual<any>(sets, [car_owners_father]);
+}
 
 function persons_and_their_cars() {
   let sets = parseRequest({
@@ -453,6 +618,12 @@ function persons_and_their_cars() {
         '_cars.': ['_owner'],
       },
     },
+  }, {
+    attributes: [],
+    compatibleAspects: [
+      { name: "Car", aspect: "test1" },
+      { name: "People", aspect: "test1" },
+    ]
   });
   let persons: any = Object.assign(new ObjectSet("persons"), {
     typeConstraints: [
@@ -805,6 +976,10 @@ export const tests = { name: 'DataSource.request', tests: [
     no_instanceof_scope_model,
     recursion,
     persons_with_cars,
+    persons_with_cars2,
+    car_owners,
+    car_owners_fathers,
+    car_owners_fathers2,
     persons_with_cars_intersection,
     persons_and_their_cars,
     persons_with_cars_and_their_cars,
