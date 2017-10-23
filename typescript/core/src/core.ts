@@ -12,6 +12,7 @@ export * from './datasource.internal';
 export * from './datasource.memory';
 export * from './transport';
 export * from './pool';
+export {Diagnostic, Reporter} from '@openmicrostep/msbuildsystem.shared';
 
 export interface ImmutableList<T> extends ReadonlyArray<T> {
 
