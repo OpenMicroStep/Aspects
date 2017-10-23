@@ -110,7 +110,7 @@ function query_eq_peugeots(f: Flux<Context>) {
 }
 function query_ne_peugeots(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, _name: { $ne: "Peugeot" } } }).then((envelop) => {
+  ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, _name: { $neq: "Peugeot" } } }).then((envelop) => {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c0, c1]);
     let lc2 = res['cars'][0];
@@ -391,7 +391,7 @@ function query_elementof_c1c2(f: Flux<Context>) {
       "c1=": { $elementOf: "=C" },
       "c2=": { $elementOf: "=C" },
       "=c1._owner": { $eq: "=c2._owner" },
-      "=c1": { $ne: "=c2" },
+      "=c1": { $neq: "=c2" },
     },
     results: [
       { name: "cars", where: "=cars", scope: [] },

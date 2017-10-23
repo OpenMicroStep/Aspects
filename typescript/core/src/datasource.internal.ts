@@ -660,7 +660,7 @@ export namespace DataSourceInternal {
   export type Instance<R> = string | R;
   export interface ConstraintDefinition {
     $eq?: Value;
-    $ne?: Value;
+    $neq?: Value;
     $gt?: string | Date | number;
     $gte?: string | Date | number;
     $lt?: string | Date | number;
@@ -668,7 +668,8 @@ export namespace DataSourceInternal {
     $exists?: boolean;
     $in?: Instance<ObjectSetDefinition> | (Value[]);
     $nin?: Instance<ObjectSetDefinition> | (Value[]);
-    $has?: Instance<ObjectSetDefinition> | Value;
+    $contains?: Instance<ObjectSetDefinition> | Value;
+    $ncontains?: Instance<ObjectSetDefinition> | Value;
     [s: string]: AnyValue | ConstraintDefinition | Function | undefined;
   }
   export interface ObjectSetDefinitionR {
@@ -851,53 +852,69 @@ export namespace DataSourceInternal {
       && right_var
       ? validate_var_is_value(reporter, p, right_var, 'right')
       : validate_fixed_is_value(reporter, p, right_fixed);
-    if (right_var && left_var.attribute.type_sign !== right_var.attribute.type_sign)
-      p.diagnostic(reporter, { is: "error", msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign}` });
+    if (ret && right_var && left_var.attribute.type_sign !== right_var.attribute.type_sign) {
+      ret = false;
+      p.diagnostic(reporter, { is: "error",
+        msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign}`
+      });
+    }
     return ret;
-  }
+  };
   const A_op_b: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
     let ret = validate_var_is_set(reporter, p, left_var, 'left')
       && right_var
       ? validate_var_is_value(reporter, p, right_var, 'right')
       : validate_fixed_is_value(reporter, p, right_fixed);
-    if (right_var && left_var.attribute.type_sign.indexOf(right_var.attribute.type_sign) === 1)
-      p.diagnostic(reporter, { is: "error", msg: `operands are incompatible, ${left_var.attribute.type_sign.substring(1, left_var.attribute.type_sign.length -1)} !== ${right_var.attribute.type_sign}` });
+    if (ret && right_var && left_var.attribute.type_sign.indexOf(right_var.attribute.type_sign) === 1) {
+      ret = false;
+      p.diagnostic(reporter, { is: "error",
+        msg: `operands are incompatible, ${left_var.attribute.type_sign.substring(1, left_var.attribute.type_sign.length - 1)} !== ${right_var.attribute.type_sign}`
+      });
+    }
     return ret;
-  }
+  };
   const a_op_B: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
     let ret = validate_var_is_value(reporter, p, left_var, 'left')
       && right_var
       ? validate_var_is_set(reporter, p, right_var, 'right')
       : validate_fixed_is_set(reporter, p, right_fixed);
-    if (right_var && right_var.attribute.type_sign.indexOf(left_var.attribute.type_sign) === 1)
-      p.diagnostic(reporter, { is: "error", msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign.substring(1, right_var.attribute.type_sign.length -1)}` });
+    if (ret && right_var && right_var.attribute.type_sign.indexOf(left_var.attribute.type_sign) === 1) {
+      ret = false;
+      p.diagnostic(reporter, { is: "error",
+        msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign.substring(1, right_var.attribute.type_sign.length - 1)}`
+      });
+    }
     return ret;
-  }
+  };
   const A_op_B: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
     let ret = validate_var_is_set(reporter, p, left_var, 'left')
       && right_var
       ? validate_var_is_set(reporter, p, right_var, 'right')
       : validate_fixed_is_set(reporter, p, right_fixed);
-      if (right_var && left_var.attribute.type_sign !== right_var.attribute.type_sign)
-        p.diagnostic(reporter, { is: "error", msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign}` });
+    if (ret && right_var && left_var.attribute.type_sign !== right_var.attribute.type_sign) {
+      ret = false;
+      p.diagnostic(reporter, { is: "error",
+        msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign}`
+      });
+    }
     return ret;
-  }
+  };
   const a_op_v: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
     let ret = validate_var_is_value(reporter, p, left_var, 'left')
       && right_var
       ? validate_var_is_undefined(reporter, p, right_var, 'right')
       : validate_fixed_is_value(reporter, p, right_fixed);
     return ret;
-  }
+  };
   const set_op: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
     p.diagnostic(reporter, { is: "error", msg: `only operators on attributes are allowed here` });
     return false;
-  }
+  };
   type OperatorDesc = { is: OperatorValidation, type: ConstraintType };
   const operators: { [op: string]: OperatorDesc } = {
     // a operator b
     $eq:  { is: a_op_b, type: ConstraintType.Equal              },
-    $ne:  { is: a_op_b, type: ConstraintType.NotEqual           },
+    $neq: { is: a_op_b, type: ConstraintType.NotEqual           },
     $gt:  { is: a_op_b, type: ConstraintType.GreaterThan        },
     $gte: { is: a_op_b, type: ConstraintType.GreaterThanOrEqual },
     $lt:  { is: a_op_b, type: ConstraintType.LessThan           },

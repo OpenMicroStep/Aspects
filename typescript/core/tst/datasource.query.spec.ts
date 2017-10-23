@@ -1,4 +1,4 @@
-import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration, AspectSelection, Result} from '@openmicrostep/aspects';
+import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration, AspectSelection, Result, Diagnostic} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -892,6 +892,67 @@ function persons_mixed() {
   assert.deepEqual<any>(sets, [persons1_p, persons2_C_owner, cars1_c, cars2_c]);
 }
 
+function test_a_op_b(where, constraints, diagnostics: Diagnostic[] = []) {
+  let req = {
+    "A=": { $instanceOf: People },
+    name: "a", where: {
+      $out: "=a",
+      "a=": { $elementOf: "=A" },
+      ...where,
+    }
+  };
+  let sets = DataSourceInternal.parseRequest(req, cc);
+  let s = sets.value().map(s => serialize(s));
+  assert.deepEqual(sets.diagnostics(), diagnostics);
+  assert.deepEqual<any>(s, [
+    Object.assign(new ObjectSet("a"), { name: "a",
+      typeConstraints: [{ type: ConstraintType.InstanceOf, value: { name: "People", aspect: "test1" } }],
+      constraints: constraints,
+    })
+  ]);
+}
+
+function a_op_b(op, ct) {
+  test_a_op_b({ "=a._name": { [op]: "Test2" } }, [
+    { type: ct, leftVariable: "a", leftAttribute: "_name", value: "Test2" }
+  ]);
+  test_a_op_b({ "=a._firstname": { [op]: "Test2" }, "=a._lastname": { [op]:  "test3" } }, [
+    { type: ct, leftVariable: "a", leftAttribute: "_firstname", value: "Test2" },
+    { type: ct, leftVariable: "a", leftAttribute: "_lastname", value: "test3" },
+  ]);
+  test_a_op_b({ "=a._name": { [op]: "=a._birthDate" } }, [], [
+    { is: "error", path: `.where.=a._name.${op}`,
+      msg: "operands are incompatible, primitive:string !== primitive:date" },
+  ]);
+}
+
+function a_eq_b() {
+  test_a_op_b({ "=a._name": "Test" }, [
+    { type: ConstraintType.Equal, leftVariable: "a", leftAttribute: "_name", value: "Test" }
+  ]);
+  a_op_b("$eq", ConstraintType.Equal);
+}
+
+function a_neq_b() {
+  a_op_b("$neq", ConstraintType.NotEqual);
+}
+
+function a_gt_b() {
+  a_op_b("$gt", ConstraintType.GreaterThan);
+}
+
+function a_lt_b() {
+  a_op_b("$lt", ConstraintType.LessThan);
+}
+
+function a_gte_b() {
+  a_op_b("$gte", ConstraintType.GreaterThanOrEqual);
+}
+
+function a_lte_b() {
+  a_op_b("$lte", ConstraintType.LessThanOrEqual);
+}
+
 function persons_with_cars_and_their_cars_1k() { // about 170ms
   let i = 1e4;
   while (i-- > 0) {
@@ -985,6 +1046,14 @@ export const tests = { name: 'DataSource.request', tests: [
     persons_with_cars_and_their_cars,
     persons_cars_sub,
     persons_mixed,
+    { name: "operators", tests: [
+      { name: "a $eq b", test: a_eq_b },
+      { name: "a $neq b", test: a_neq_b },
+      { name: "a $gt b", test: a_gt_b },
+      { name: "a $lt b", test: a_lt_b },
+      { name: "a $gte b", test: a_gte_b },
+      { name: "a $lte b", test: a_lte_b },
+    ]},
     { name: "perfs", tests: [
       persons_with_cars_and_their_cars_1k,
     ]},
