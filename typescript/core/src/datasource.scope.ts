@@ -43,7 +43,7 @@ type ParseScopeContext = {
 
 
 export function attribute_name_type_are_equals(ai: Aspect.InstalledAttribute, bi: Aspect.InstalledAttribute) : boolean {
-  return ai === bi || (ai.name === bi.name && ai.type_sign === bi.type_sign);
+  return ai === bi || (ai.name === bi.name && Aspect.typesAreComparable(ai.type, bi.type));
 }
 
 export function attributes_name_type_are_equals(a: Aspect.InstalledAttribute[], b: Aspect.InstalledAttribute[]) {

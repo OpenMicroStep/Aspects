@@ -296,7 +296,7 @@ export namespace DataSourceInternal {
     CustomStart = 100 // The first 100 ([0-99]) are reserved
   }
 
-  export type Value = string | number | boolean | Date;
+  export type Value = string | number | boolean | Date | undefined;
   export type ValueSet = Value[] | Set<Value>;
   export type AnyValue = Value | ValueSet;
   export type ConstraintBetweenValueAndValue =
@@ -419,10 +419,10 @@ export namespace DataSourceInternal {
     for (let [name, attr] of attributes) {
       let f_attr = aspect.attributes.get(name);
       if (
-        (!f_attr || f_attr.type_sign !== attr.type_sign) &&
-        (name !== "_id" || aspect.attribute_ref.type_sign !== attr.type_sign)
+        (!f_attr || !Aspect.typesAreComparable(f_attr.type, attr.type)) &&
+        (name !== "_id" || !Aspect.typesAreComparable(aspect.attribute_ref.type, attr.type))
       )
-        return false;
+       return false;
     }
     return true;
   }
@@ -627,10 +627,10 @@ export namespace DataSourceInternal {
       // a operator b
       case ConstraintType.Equal: return left === right;
       case ConstraintType.NotEqual: return left !== right;
-      case ConstraintType.GreaterThan: return left > right;
-      case ConstraintType.GreaterThanOrEqual: return left >= right;
-      case ConstraintType.LessThan: return left < right;
-      case ConstraintType.LessThanOrEqual: return left <= right;
+      case ConstraintType.GreaterThan: return left! > right!;
+      case ConstraintType.GreaterThanOrEqual: return left! >= right!;
+      case ConstraintType.LessThan: return left! < right!;
+      case ConstraintType.LessThanOrEqual: return left! <= right!;
 
       // A operator b
       case ConstraintType.Contains: return find(left as ValueSet, right as Value);
@@ -847,57 +847,40 @@ export namespace DataSourceInternal {
       p.diagnostic(reporter, { is: "error", msg: `right operand must be a set of values, ${Object.prototype.toString.call(fixed)} was found` });
     return ret;
   }
-  const a_op_b: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    let ret = validate_var_is_value(reporter, p, left_var, 'left')
-      && right_var
-      ? validate_var_is_value(reporter, p, right_var, 'right')
-      : validate_fixed_is_value(reporter, p, right_fixed);
-    if (ret && right_var && left_var.attribute.type_sign !== right_var.attribute.type_sign) {
-      ret = false;
+  function validate_are_comparable(reporter: Reporter, p: AttributePath, a: Aspect.Type, b: Aspect.Type) {
+    let ret = Aspect.typesAreComparable(a, b);
+    if (!ret)
       p.diagnostic(reporter, { is: "error",
-        msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign}`
+        msg: `operands are incompatible, ${Aspect.typeToString(a)} !== ${Aspect.typeToString(b)}`
       });
-    }
     return ret;
+  }
+  function subtype(a: Aspect.Type) : Aspect.Type {
+    return (a as Aspect.TypeArray | Aspect.TypeSet).itemType;
+  }
+  const a_op_b: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
+    return validate_var_is_value(reporter, p, left_var, 'left')
+      && right_var
+      ? validate_var_is_value(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, left_var.attribute.type, right_var.attribute.type)
+      : validate_fixed_is_value(reporter, p, right_fixed);
   };
   const A_op_b: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    let ret = validate_var_is_set(reporter, p, left_var, 'left')
+    return validate_var_is_set(reporter, p, left_var, 'left')
       && right_var
-      ? validate_var_is_value(reporter, p, right_var, 'right')
+      ? validate_var_is_value(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, subtype(left_var.attribute.type), right_var.attribute.type)
       : validate_fixed_is_value(reporter, p, right_fixed);
-    if (ret && right_var && left_var.attribute.type_sign.indexOf(right_var.attribute.type_sign) === 1) {
-      ret = false;
-      p.diagnostic(reporter, { is: "error",
-        msg: `operands are incompatible, ${left_var.attribute.type_sign.substring(1, left_var.attribute.type_sign.length - 1)} !== ${right_var.attribute.type_sign}`
-      });
-    }
-    return ret;
   };
   const a_op_B: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    let ret = validate_var_is_value(reporter, p, left_var, 'left')
+    return validate_var_is_value(reporter, p, left_var, 'left')
       && right_var
-      ? validate_var_is_set(reporter, p, right_var, 'right')
+      ? validate_var_is_set(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, left_var.attribute.type, subtype(right_var.attribute.type))
       : validate_fixed_is_set(reporter, p, right_fixed);
-    if (ret && right_var && right_var.attribute.type_sign.indexOf(left_var.attribute.type_sign) === 1) {
-      ret = false;
-      p.diagnostic(reporter, { is: "error",
-        msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign.substring(1, right_var.attribute.type_sign.length - 1)}`
-      });
-    }
-    return ret;
   };
   const A_op_B: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    let ret = validate_var_is_set(reporter, p, left_var, 'left')
+    return validate_var_is_set(reporter, p, left_var, 'left')
       && right_var
-      ? validate_var_is_set(reporter, p, right_var, 'right')
+      ? validate_var_is_set(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, left_var.attribute.type, right_var.attribute.type)
       : validate_fixed_is_set(reporter, p, right_fixed);
-    if (ret && right_var && left_var.attribute.type_sign !== right_var.attribute.type_sign) {
-      ret = false;
-      p.diagnostic(reporter, { is: "error",
-        msg: `operands are incompatible, ${left_var.attribute.type_sign} !== ${right_var.attribute.type_sign}`
-      });
-    }
-    return ret;
   };
   const a_op_v: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
     let ret = validate_var_is_value(reporter, p, left_var, 'left')

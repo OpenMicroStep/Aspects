@@ -75,6 +75,92 @@ export namespace Aspect {
     return [];
   }
 
+  export function typeToString(a: Aspect.Type) {
+    switch (a.type) {
+      case 'class':
+      case 'primitive':
+        return `${a.type}:${a.name}`;
+      case 'set':
+        return `<${typeToString(a.itemType)}>`;
+      case 'array':
+        return `[${typeToString(a.itemType)}]`;
+      case 'or':
+        return `(${a.types.map(t => typeToString(t)).join(',')})`;
+      case 'dictionary':
+        return `{${Object.keys(a.properties).map(k => `${k}=${typeToString(a.properties[k])}`).join(',')})`;
+    }
+    return 'void';
+  }
+
+  export function typesAreComparable(a: Type, b: Type) : boolean {
+    if (a === b)
+      return true;
+    if (b.type === 'or') {
+      for (let bi of b.types)
+        if (typesAreComparable(a, bi))
+          return true;
+      return false;
+    }
+    switch (a.type) {
+      case 'array':
+        return b.type === 'array' && typesAreComparable(a.itemType, b.itemType);
+      case 'set':
+        return b.type === 'set' && typesAreComparable(a.itemType, b.itemType);
+      case 'class':
+        return b.type === 'class' && a.name === b.name;
+      case 'primitive':
+        return b.type === 'primitive' && a.name === b.name;
+      case 'dictionary':
+        return typesAreEquals(a, b);
+      case 'or':
+        for (let ai of a.types)
+          if (typesAreComparable(ai, b))
+            return true;
+        return false;
+    }
+    return false;
+  }
+
+  function typesCompare(a: Type, b: Type): number {
+    if (a.type < b.type)
+      return -1;
+    if (a.type < b.type)
+      return +1;
+    switch (a.type) {
+      case 'set':
+      case 'array':
+        return typesCompare(a.itemType, (b as TypeArray | TypeSet).itemType);
+      case 'class':
+      case 'primitive':
+        if (a.name < (b as TypeClass | TypePrimitive).name)
+          return -1;
+        if (a.name > (b as TypeClass | TypePrimitive).name)
+          return +1;
+        return 0;
+      case 'dictionary':
+        throw new Error('typesCompare is not implemented for dictionary');
+      case 'or': {
+        var i = 0;
+        while (i < a.types.length && i < (b as TypeOr).types.length) {
+          let ret = typesCompare(a.types[i], (b as TypeOr).types[i]);
+          if (ret !== 0)
+            return ret;
+          i++;
+        }
+        if (i < a.types.length)
+          return -1;
+        if (i < (b as TypeOr).types.length)
+          return +1;
+        return 0;
+      }
+    }
+    return 0;
+  }
+
+  export function typesAreEquals(a: Type, b: Type) : boolean {
+    return typesCompare(a, b) === 0;
+  }
+
   export function disabled_aspect<T extends VersionedObject>(name: string, aspect: string, impl: string) : Aspect.FastConfiguration<T> {
     function throw_disabled(): any {
       throw new Error(`aspect ${aspect} is disabled for ${name} with ${impl} implementation`);
@@ -143,7 +229,6 @@ export namespace Aspect {
   export interface InstalledAttribute {
     name: string;
     type: Type;
-    type_sign: string;
     validator: AttributeTypeValidator;
     relation: Reference | undefined;
     contains_vo: boolean;
@@ -182,7 +267,6 @@ export namespace Aspect {
   export const attribute_id: Aspect.InstalledAttribute = {
     name: "_id",
     type: { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
-    type_sign: "primitive:identifier",
     validator: Validation.validateId,
     relation: undefined,
     contains_vo: false,
@@ -190,7 +274,6 @@ export namespace Aspect {
   export const attribute_version: Aspect.InstalledAttribute = {
     name: "_version",
     type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
-    type_sign: "primitive:number",
     validator: Validation.validateVersion,
     relation: undefined,
     contains_vo: false,
@@ -213,23 +296,6 @@ function nameClass<T extends { new(...args): any }>(name: string, parent: string
 const voAttributes = new Map<string, Aspect.InstalledAttribute>();
 voAttributes.set("_id", Aspect.attribute_id);
 voAttributes.set("_version", Aspect.attribute_version);
-
-function build_type_sign(a: Aspect.Type) {
-  switch (a.type) {
-    case 'class':
-    case 'primitive':
-      return `${a.type}:${a.name}`;
-    case 'set':
-      return `<${build_type_sign(a.itemType)}>`;
-    case 'array':
-      return `[${build_type_sign(a.itemType)}]`;
-    case 'or':
-      return `(${a.types.map(t => build_type_sign(t)).join(',')})`;
-    case 'dictionary':
-      return `{${Object.keys(a.properties).map(k => `${k}=${build_type_sign(a.properties[k])}`).join(',')})`;
-  }
-  return 'void';
-}
 
 export class AspectSelection {
   /** @internal */ _classes: { name: string, aspect: string, cstor: VersionedObjectConstructor }[];
@@ -281,7 +347,6 @@ export class AspectConfiguration {
           attribute_ref: {
             name: "_id",
             type: { is: "type", type: "class", name: name },
-            type_sign: `class:${name}`,
             validator: Validation.validateId,
             relation: undefined,
             contains_vo: false,
@@ -479,7 +544,6 @@ export class AspectConfiguration {
       name: attribute.name as keyof VersionedObject,
       validator: attribute.validator || this.createValidator(true, attribute.type),
       type: attribute.type,
-      type_sign: build_type_sign(attribute.type),
       relation: undefined,
       contains_vo: contains_types.length > 0,
     };
