@@ -157,6 +157,7 @@ export class ObiDataSource extends DataSource {
 
         switch (a.type.type) {
           case "primitive":
+          case "or":
           case "class": {
             if (nv !== undefined)
               await insert(tr, table, oid as number, car._id!, a, ci, nv);
