@@ -138,9 +138,10 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[] = [
   } as ObjectFlatCoding<any[], any[]>,
 ];
 
-type EncodedBinary = { __is__: "Binary", data:  any[] };
+type EncodedBinary = { __is__: "Binary", data: number[] };
 
 declare class Buffer {
+  static from(data: number[]): Buffer;
   [s: number]: number;
   length: number;
 }
@@ -149,36 +150,22 @@ if (typeof Buffer !== "undefined") { // nodejs
     canEncode(e, s) { return s instanceof Buffer; },
     canDecode(d, s) { return s && s.__is__ === "Binary"; },
     encode(e, s) {
-      let r: any[] = [];
-      for (var i = 0; i < s.length; i++) {
-        r.push(e.encode(s[i]));
-      }
-      return { __is__: "Binary", data: r};
+      return { __is__: "Binary", data: Array.from(s) };
     },
     decode(d, s) {
-      let r: any = [] ;
-       for (let v of s.data)
-        r.push(d.decode(v));
-      return r;
+      return Buffer.from(s.data);
     },
   } as ObjectFlatCoding<Buffer,  EncodedBinary>);
 }
-
-if (typeof Uint8Array !== "undefined") { // JS
+else if (typeof Uint8Array !== "undefined") { // JS
     jsonEncoders.push({ is: "Binary",
     canEncode(e, s) { return s instanceof Uint8Array; },
     canDecode(d, s) { return s && s.__is__ === "Binary"; },
     encode(e, s) {
-      let r: any[] = [] ;
-      for (let v of s)
-        r.push(e.encode(v));
-      return { __is__: "Binary", data: r  };
+      return { __is__: "Binary", data: Array.from(s) };
     },
     decode(d, s) {
-      let r: any = [] ;
-       for (let v of s.data)
-        r.push(d.decode(v));
-      return r;
+      return new Uint8Array(s.data);
     },
   } as ObjectFlatCoding<Uint8Array,  EncodedBinary>);
 }
