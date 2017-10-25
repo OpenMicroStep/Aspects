@@ -107,6 +107,9 @@ module.exports =  {
       { is: 'group', name: 'transport.express', path: 'typescript/transport.express/src', elements: [
         { is: 'file', name: 'transport.express.ts', tags: ['tsc'] }
       ]},
+      { is: 'group', name: 'transport.node', path: 'typescript/transport.node/src', elements: [
+        { is: 'file', name: 'transport.node.ts', tags: ['tsc'] }
+      ]},
       { is: 'group', name: 'transport.xhr', path: 'typescript/transport.xhr/src', elements: [
         { is: 'file', name: 'transport.xhr.ts', tags: ['tsc'] }
       ]},
@@ -173,6 +176,21 @@ module.exports =  {
           "@types/body-parser": "^0.0.33",
           "body-parser": "^1.15.2",
           "@openmicrostep/mstools": "^1.0.2"
+        },
+      },
+    },
+    "aspects transport node=": {
+      is: 'target',
+      outputName: "@openmicrostep/aspects.transport.node",
+      targets: ["aspects core"],
+      components: ["=::aspects core::", "=node"],
+      environments: ["=envs:js"],
+      files: ["=Files:transport.node ? tsc"],
+      npmPackage: { is: "component",
+        "main": "transport.node.js",
+        "typings": "transport.node.d.ts",
+        "dependencies": { is: "component",
+          "@openmicrostep/msbuildsystem.shared": "^0.5.6",
         },
       },
     },
