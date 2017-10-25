@@ -34,6 +34,10 @@ export class ControlCenterContext {
     this._cc._components.delete(this._component);
   }
 
+  controlCenter(): ControlCenter {
+    return this._cc;
+  }
+
   create<T extends VersionedObject>(classname: string, categories: string[] = [], ...args) : T {
     return this.registerObject(this._cc.configuration().create(this._cc, classname, categories, ...args));
   }
@@ -134,10 +138,24 @@ export class ControlCenter {
   /** @internal */ readonly _objects = new Map<Identifier, VersionedObject>();
   /** @internal */ readonly _components = new Map<AComponent, ControlCenterContext>();
   /** @internal */ readonly _configuration: AspectConfiguration;
+  /** @internal */ readonly _defaultContext: { [name: string]: VersionedObject };
 
   constructor(configuration: AspectConfiguration) {
     this._configuration = configuration;
+
+    if ( this._configuration._initDefaultContext) {
+      let ccc = new ControlCenterContext(this, this);
+      this._defaultContext = this._configuration._initDefaultContext(ccc);
+    } else {
+      this._defaultContext = {};
+    }
+
   }
+
+  defaultContext() {
+    return  this._defaultContext;
+  }
+
 
   /// events
   notificationCenter() { return this._notificationCenter; }

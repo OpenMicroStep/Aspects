@@ -5,7 +5,7 @@ import {
 import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
 
 export interface FarTransport {
-  remoteCall(ccc: ControlCenterContext, to: VersionedObject, method: string, args: any[]): Promise<any>;
+  remoteCall(ctx: Aspect.FarContext, to: VersionedObject, method: string, args: any[]): Promise<any>;
 }
 
 export interface PublicTransport {
@@ -19,8 +19,9 @@ export interface Aspect {
   farCategories: string[];
 };
 export namespace Aspect {
+  export type FarContext = { context: { ccc: ControlCenterContext, [s: string]: VersionedObject | ControlCenterContext} };
   export const farTransportStub: FarTransport = {
-    remoteCall(ccc, to: VersionedObject, method: string, args: any[]): Promise<any> {
+    remoteCall(ctx: FarContext, to: VersionedObject, method: string, args: any[]): Promise<any> {
       return Promise.reject(new Error(`transport not installed`));
     }
   };
@@ -264,7 +265,7 @@ export namespace Aspect {
     create(ccc: ControlCenterContext, ...args) : T,
   }
   export type Invokable<A0, R> = { to: VersionedObject, method: string, _check?: { _a0: A0, _r: R } };
-  export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, ctx: { context: { ccc: ControlCenterContext } }, arg: A) => R | Result<R> | Promise<R | Result<R>>);
+  export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, ctx: FarContext, arg: A) => R | Result<R> | Promise<R | Result<R>>);
 
   export const attribute_id: Aspect.InstalledAttribute = {
     name: "_id",
@@ -320,21 +321,26 @@ export class AspectSelection {
 export class AspectConfiguration {
   private readonly _aspects = new Map<string, VersionedObjectConstructorCache>();
   private readonly _cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
-
+  /** @internal */ readonly _initDefaultContext: ((ccc: ControlCenterContext) => { [name: string]: VersionedObject }) | undefined;
   constructor(options: {
     selection: AspectSelection,
     farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
-    defaultFarTransport?: FarTransport
+    defaultFarTransport?: FarTransport,
+    initDefaultContext?: (ccc: ControlCenterContext) => { [name: string]: VersionedObject },
   })
   constructor(selection: AspectSelection)
   constructor(options: AspectSelection | {
     selection: AspectSelection,
     farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
-    defaultFarTransport?: FarTransport
+    defaultFarTransport?: FarTransport,
+    initDefaultContext?: (ccc: ControlCenterContext) => { [name: string]: VersionedObject },
   }) {
     if (options instanceof AspectSelection)
       options = { selection: options };
-    let { selection, farTransports, defaultFarTransport } = options;
+    let { selection, farTransports, defaultFarTransport,initDefaultContext } = options;
+
+    this._initDefaultContext = initDefaultContext;
+
     for (let { name, aspect, cstor } of selection.classes()) {
       let aspect_cstor = this._aspects.get(name);
       if (aspect_cstor)
@@ -485,8 +491,8 @@ export class AspectConfiguration {
       if (local_method.transport) {
         aspect_cstor.aspect.farMethods.set(category_name, Object.assign({}, local_method, {
           transport: {
-            remoteCall(ccc, to: VersionedObject, method: string, args: any[]): Promise<any> {
-              return fastSafeCall(ccc, localImpl, to, args[0]);
+            remoteCall(ctx, to: VersionedObject, method: string, args: any[]): Promise<any> {
+              return fastSafeCall(ctx, localImpl, to, args[0]);
             }
           } as FarTransport
         }));
@@ -686,9 +692,9 @@ function validateValue(value, path: AttributePath, validator: Aspect.AttributeTy
   return value;
 }
 
-function fastSafeCall(ccc: ControlCenterContext, farImpl: Aspect.FarImplementation<VersionedObject, any, any>, self, arg0): Promise<any> {
+function fastSafeCall(ctx: Aspect.FarContext, farImpl: Aspect.FarImplementation<VersionedObject, any, any>, self, arg0): Promise<any> {
   try {
-    return Promise.resolve(farImpl.call(self, { context: { ccc: ccc } }, arg0));
+    return Promise.resolve(farImpl.call(self, ctx, arg0));
   } catch (e) {
     return Promise.reject(e);
   }

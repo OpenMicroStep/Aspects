@@ -1,18 +1,18 @@
-import {ControlCenterContext, ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
+import {ControlCenterContext, ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration, AspectSelection,Aspect} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 
-function add_common_objects<T extends { ccc: ControlCenterContext }>(ctx: T) {
-  let ret = Object.assign(ctx, {
-    c0: Object.assign(Car.create(ctx.ccc), { _name: "Renault", _model: "Clio 3" }),
-    c1: Object.assign(Car.create(ctx.ccc), { _name: "Renault", _model: "Clio 2" }),
-    c2: Object.assign(Car.create(ctx.ccc), { _name: "Peugeot", _model: "3008 DKR" }),
-    c3: Object.assign(Car.create(ctx.ccc), { _name: "Peugeot", _model: "4008 DKR" }),
-    p0: Object.assign(People.create(ctx.ccc), { _name: "Lisa Simpsons" , _firstname: "Lisa" , _lastname: "Simpsons", _birthDate: new Date()  }),
-    p1: Object.assign(People.create(ctx.ccc), { _name: "Bart Simpsons" , _firstname: "Bart" , _lastname: "Simpsons", _birthDate: new Date(0) }),
-    p2: Object.assign(People.create(ctx.ccc), { _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: new Date()  }),
-  });
+function add_common_objects<T>(ccc: ControlCenterContext) {
+  let ret = {
+    c0: Object.assign(Car.create(ccc), { _name: "Renault", _model: "Clio 3" }),
+    c1: Object.assign(Car.create(ccc), { _name: "Renault", _model: "Clio 2" }),
+    c2: Object.assign(Car.create(ccc), { _name: "Peugeot", _model: "3008 DKR" }),
+    c3: Object.assign(Car.create(ccc), { _name: "Peugeot", _model: "4008 DKR" }),
+    p0: Object.assign(People.create(ccc), { _name: "Lisa Simpsons" , _firstname: "Lisa" , _lastname: "Simpsons", _birthDate: new Date()  }),
+    p1: Object.assign(People.create(ccc), { _name: "Bart Simpsons" , _firstname: "Bart" , _lastname: "Simpsons", _birthDate: new Date(0) }),
+    p2: Object.assign(People.create(ccc), { _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: new Date()  }),
+  };
   ret.p0._father = ret.p2;
   ret.p1._father = ret.p2;
   return ret;
@@ -21,59 +21,42 @@ function add_common_objects<T extends { ccc: ControlCenterContext }>(ctx: T) {
 function createContext_C1(publicTransport: (json: string) => Promise<string>) {
   let coder = new Transport.JSONCoder();
   let default_transport = {
-    async remoteCall(ccc: ControlCenterContext, to: VersionedObject, method: string, args: any[]): Promise<any> {
+    async remoteCall({ context: { ccc } }: Aspect.FarContext, to: VersionedObject, method: string, args: any[]): Promise<any> {
       let req = { to: to.id(), method: method, args: args };
       let res = await coder.encode_transport_decode(ccc, req, publicTransport);
       let inv = new Result(res);
       return inv;
     }
   };
-  let cc = new ControlCenter(new AspectConfiguration({
-    selection: new AspectSelection([
-      Resource.Aspects.c1,
-      Car.Aspects.c1,
-      People.Aspects.c1,
-      DataSource.Aspects.client,
-    ]),
-    defaultFarTransport: default_transport
-  }));
-  let ccc = cc.registerComponent({});
-  let ret = {
-    cc: cc,
-    ccc: ccc,
-    db: DataSource.Aspects.client.create(ccc),
+
+  function initDefaultContext_C1(ccc:ControlCenterContext) {
+    let db = DataSource.Aspects.client.create(ccc);
+    db.manager().setId('datasource');
+    let common_objects =  add_common_objects(ccc);
+    return {db, ...common_objects }
   };
-  ret.db.manager().setId('datasource');
-  return add_common_objects(ret);
+
+  let cc = new ControlCenter(
+    new AspectConfiguration(
+    {
+      selection: new AspectSelection([
+        Resource.Aspects.c1,
+        Car.Aspects.c1,
+        People.Aspects.c1,
+        DataSource.Aspects.client,
+      ]),
+      defaultFarTransport: default_transport,
+      initDefaultContext:initDefaultContext_C1,
+    })
+  );
+  return { cc };
+
 }
 
-type ContextS1 = {
-  db: DataSource.Aspects.server,
-  cc: ControlCenter,
-  ccc: ControlCenterContext,
-  publicTransport: (json: string) => Promise<string>
-};
-
 function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string, DataSourceQuery>) {
-  let ctx: any = {};
-  let cc = ctx.cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
-    Resource.Aspects.s1,
-    Car.Aspects.s1,
-    People.Aspects.s1,
-    InMemoryDataSource.Aspects.server,
-  ])));
-  let ccc = ctx.ccc = cc.registerComponent({});
-
-  ctx.db = InMemoryDataSource.Aspects.server.create(ccc, ds);
-  ctx.db.setQueries(queries);
-  cc.registerComponent(ctx.component);
-  ctx.db.manager().setId('datasource');
-
   let coder = new Transport.JSONCoder();
-  ctx.publicTransport = async (json: string) => {
+  let publicTransport = async (json: string) => {
     let p1 = createContext_S1(ds, queries);
-    p1.ccc.registerObjects([p1.db]);
-
     let res = cc.safe(ccc => coder.decode_handle_encode(ccc, json, (request) => p1.cc.safe(async ccc_p1 => {
       let to = ccc_p1.findChecked(request.to);
       let inv = await Invocation.farPromise(ccc_p1, { to: to, method: request.method }, request.args[0]);
@@ -81,7 +64,29 @@ function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string,
     })));
     return res;
   };
-  return add_common_objects(ctx as ContextS1);
+
+  function initDefaultContext_S1(ccc:ControlCenterContext) {
+    let db = InMemoryDataSource.Aspects.server.create(ccc, ds);
+    db.setQueries(queries);
+    db.manager().setId('datasource');
+    let common_objects =  add_common_objects(ccc);
+    return {db, ...common_objects }
+  };
+
+  let cc = new ControlCenter(
+    new AspectConfiguration(
+    {
+      selection: new AspectSelection([
+        Resource.Aspects.s1,
+        Car.Aspects.s1,
+        People.Aspects.s1,
+        InMemoryDataSource.Aspects.server,
+      ]),
+      initDefaultContext:initDefaultContext_S1,
+    })
+  );
+
+  return { cc: cc, publicTransport: publicTransport };
 }
 
 async function client_to_server_save(flux) {
@@ -90,10 +95,12 @@ async function client_to_server_save(flux) {
   let c1 = createContext_C1(s1.publicTransport);
 
   await c1.cc.safe(async ccc => {
+    let defCtx = c1.cc.defaultContext();
+    let db = defCtx.db as  DataSource.Aspects.client;
     let c1_c4 = Object.assign(Car.Aspects.c1.create(ccc), { _name: "Renault", _model: "Clio 4" });
-    let inv = await ccc.farPromise(c1.db.save, [c1_c4, c1.c0, c1.c1, c1.c2, c1.c3, c1.p0, c1.p1, c1.p2]);
+    let inv = await ccc.farPromise(db.save, [c1_c4, defCtx.c0, defCtx.c1, defCtx.c2, defCtx.c3, defCtx.p0, defCtx.p1, defCtx.p2]);
     assert.deepEqual(inv.diagnostics(), []);
-    assert.deepEqual(inv.value(), [c1_c4, c1.c0, c1.c1, c1.c2, c1.c3, c1.p0, c1.p1, c1.p2]);
+    assert.deepEqual(inv.value(), [c1_c4, defCtx.c0, defCtx.c1, defCtx.c2, defCtx.c3, defCtx.p0, defCtx.p1, defCtx.p2]);
   });
   flux.continue();
 }
@@ -110,14 +117,22 @@ async function client_to_server_query(flux) {
   let ds = new InMemoryDataSource.DataStore();
   let s1 = createContext_S1(ds, queries);
   let c1 = createContext_C1(s1.publicTransport);
-  await s1.cc.safe(ccc => ccc.farPromise(s1.db.rawSave, [s1.c0, s1.c1, s1.c2, s1.c3, s1.p0, s1.p1, s1.p2]));
+
+  await s1.cc.safe(ccc => {
+    let defCtx = ccc.controlCenter().defaultContext();
+    let db = defCtx.db as  DataSource.Aspects.server;
+    return ccc.farPromise(db.rawSave, [defCtx.c0, defCtx.c1, defCtx.c2, defCtx.c3, defCtx.p0, defCtx.p1, defCtx.p2]);
+  });
 
   await c1.cc.safe(async ccc => {
-    let inv = await ccc.farPromise(c1.db.query, { id: "s1cars" });
+    let defCtx = ccc.controlCenter().defaultContext();
+    let db = defCtx.db as  DataSource.Aspects.client;
+    let inv = await ccc.farPromise(db.query, { id: "s1cars" });
     let res = inv.value();
+    let s1Ctx = s1.cc.defaultContext();
     assert.sameMembers(
       res["cars"].map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`),
-      ([s1.c0, s1.c1, s1.c2, s1.c3] as any[]).map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`));
+      ([s1Ctx.c0, s1Ctx.c1, s1Ctx.c2, s1Ctx.c3] as any[]).map((vo: Car.Aspects.c1) => `${vo.id()}:${vo.brand()}:${vo.owner()}`));
   });
   flux.continue();
 }
@@ -196,7 +211,9 @@ async function manual_server_save(flux) {
   let c1 = createContext_C1(s1.publicTransport);
 
   await c1.cc.safe(async ccc => {
-    let res = await ccc.farPromise(c1.db.distantSave, data_out as any);
+    let defCtx = ccc.controlCenter().defaultContext()
+    let db = defCtx.db as  DataSource.Aspects.client;
+    let res = await ccc.farPromise(db.distantSave, data_out as any);
     assert.deepEqual(res.diagnostics(), []);
     assert.deepEqual(res.value(), data_res as any);
   });

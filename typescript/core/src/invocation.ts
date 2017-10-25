@@ -55,7 +55,8 @@ export namespace Invocation {
         let argValidator = farMethod.argumentValidators[0];
         let arg = argValidator ? argValidator.validate(reporter, new AttributePath(farMethod.name, ":", 0), a0) : undefined;
         if (!reporter.failed) {
-          farMethod.transport.remoteCall(ccc, receiver, method, argValidator ? [arg] : [])
+
+          farMethod.transport.remoteCall({ context:{ ccc,...ccc.controlCenter().defaultContext() } }, receiver, method, argValidator ? [arg] : [])
             .then(
               (result) => { hasResult = true; ret = result; exit(); },
                 (err) => {
