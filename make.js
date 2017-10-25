@@ -170,7 +170,6 @@ module.exports =  {
         "devDependencies": { is: "component",
           "express": "^4.14.0",
           "@types/express": "^4.0.34",
-          "express-serve-static-core": "^0.1.1",
           "@types/body-parser": "^0.0.33",
           "body-parser": "^1.15.2",
           "@openmicrostep/mstools": "^1.0.2"

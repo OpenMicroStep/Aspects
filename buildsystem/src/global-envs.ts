@@ -84,7 +84,6 @@ Element.load(reporter, {
           "@openmicrostep/async": "^0.1.0",
           "express": "^4.14.0",
           "body-parser": "^1.15.2",
-          "express-serve-static-core": "^0.1.1",
           "source-map-support": "^0.4.11",
         },
         devDependencies: { is: "component",
