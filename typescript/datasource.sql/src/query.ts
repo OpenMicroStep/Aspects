@@ -653,6 +653,19 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let maker = this.ctx.maker;
     let remotes = new Map<VersionedObject, Map<string, any>>();
     let ret: VersionedObject[] = [];
+
+    const loadMultValue = (rtype: string, rdb_id: any, rname: string, value: any) => {
+      let rmapper = this.ctx.mappers[rtype]!;
+      let rid = rmapper.fromDbKey(rmapper.attribute_id().fromDbKey(rdb_id));
+      let rvo = ccc.findChecked(rid);
+      let rremoteAttributes = remotes.get(rvo)!;
+      let rset = rremoteAttributes.get(rname);
+      if (rset instanceof Set)
+        rset.add(value);
+      else
+        rset.push(value);
+    };
+
     const loadMonoRow = (row: any, prefix: string, path: string, mult_items: Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>) => {
       let type = row[prefix + "__is"];
       let db_id = row[prefix + "_id"];
@@ -671,15 +684,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       if (rtype) {
         let rname = rtype && row[prefix + "__rname"];
         let rdb_id = rtype && row[prefix + "__rid"];
-        let rmapper = this.ctx.mappers[rtype]!;
-        let rid = rmapper.fromDbKey(rmapper.attribute_id().fromDbKey(rdb_id));
-        let rvo = ccc.find(rid)!;
-        let rremoteAttributes = remotes.get(rvo)!;
-        let rset = rremoteAttributes.get(rname);
-        if (rset instanceof Set)
-          rset.add(vo);
-        else
-          rset.push(vo);
+        loadMultValue(rtype, rdb_id, rname, vo);
       }
 
       if (path === '.')
@@ -712,31 +717,49 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         for (let [attribute, ids] of m_attrs) {
           let types = Aspect.typeToAspectNames(attribute.type);
           let attribute_path = `${path}${attribute.name}.`;
-          for (let type_r of types) {
-            let scope_path = scope_at_type_path(this.set.scope, type_r, attribute_path);
+          if (types.length > 0) {
+            for (let type_r of types) {
+              let scope_path = scope_at_type_path(this.set.scope, type_r, attribute_path);
+              let s_m = new ObjectSet(aspect.classname);
+              let q_m = new SqlMappedQuery(this.ctx, s_m);
+              let s_r = new ObjectSet(type_r);
+              let q_r = new SqlMappedQuery(this.ctx, s_r);
+              this.ctx.queries.set(s_r, q_r);
+              q_r.setInitialType(type_r, false);
+              q_r.addAttribute("_id");
+              q_r.addAttribute("_version");
+              for (let a of scope_path)
+                q_r.addAttribute(a.name);
+
+              this.ctx.queries.set(s_m, q_m);
+              q_m.setInitialType(aspect.classname, false);
+              q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, [...ids]));
+
+              q_r.variables.add(q_m);
+              q_r.addConstraint(this.ctx.maker.compare(q_r.sql_column("_id"), ConstraintType.Equal, q_m.sql_column(attribute.name)));
+              let sql_columns = q_r.sql_columns();
+              sql_columns.push(maker.column_alias_bind(maker.value(aspect.classname), `__ris`));
+              sql_columns.push(maker.column_alias_bind(maker.value(attribute.name), `__rname`));
+              sql_columns.push(maker.column_alias(q_m.sql_column("_id"), `__rid`));
+
+              await doQuery(q_r, sql_columns, [type_r], attribute_path, attribute_path);
+            }
+          }
+          else { // array/set of primitive values
             let s_m = new ObjectSet(aspect.classname);
             let q_m = new SqlMappedQuery(this.ctx, s_m);
-            let s_r = new ObjectSet(type_r);
-            let q_r = new SqlMappedQuery(this.ctx, s_r);
-            this.ctx.queries.set(s_r, q_r);
-            q_r.setInitialType(type_r, false);
-            q_r.addAttribute("_id");
-            q_r.addAttribute("_version");
-            for (let a of scope_path)
-              q_r.addAttribute(a.name);
-
             this.ctx.queries.set(s_m, q_m);
             q_m.setInitialType(aspect.classname, false);
+            q_m.addAttribute("_id");
+            q_m.addAttribute(attribute.name);
             q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, [...ids]));
-
-            q_r.variables.add(q_m);
-            q_r.addConstraint(this.ctx.maker.compare(q_r.sql_column("_id"), ConstraintType.Equal, q_m.sql_column(attribute.name)));
-            let sql_columns = q_r.sql_columns();
-            sql_columns.push(maker.column_alias_bind(maker.value(aspect.classname), `__ris`));
-            sql_columns.push(maker.column_alias_bind(maker.value(attribute.name), `__rname`));
-            sql_columns.push(maker.column_alias(q_m.sql_column("_id"), `__rid`));
-
-            await doQuery(q_r, sql_columns, [type_r], attribute_path, attribute_path);
+            let sql_select = q_m.sql_select();
+            let rows = await this.ctx.db.select(sql_select);
+            for (let row of rows) {
+              let _id = row["_id"];
+              let value = row[attribute.name];
+              loadMultValue(aspect.classname, _id, attribute.name, value);
+            }
           }
         }
       }

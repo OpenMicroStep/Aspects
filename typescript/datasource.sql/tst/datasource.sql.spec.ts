@@ -45,6 +45,7 @@ function createSqlControlCenter(flux) {
       is: "sql-mapped-object",
       fromDbKey: (id) => `${id}:Car`,
       toDbKey: toDBKey,
+      "T=": { is: "sql-insert"       , table: "Tags"    , values: [{ is: "sql-value", name: "car"      , type: "ref", insert: "=C", value: "id" }] },
       inserts: [
         { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
                                                                     { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
@@ -59,6 +60,7 @@ function createSqlControlCenter(flux) {
           { is: "sql-mapped-attribute", name: "_model"     , insert: "=C", path: [{ is: "sql-path", table: "Car"     , key: "id"    , value: "model"     }] },
           { is: "sql-mapped-attribute", name: "_owner"     , insert: "=C", path: [{ is: "sql-path", table: "Car"     , key: "id"    , value: "owner"     }] },
           { is: "sql-mapped-attribute", name: "_drivers"                 , path: [{ is: "sql-path", table: "Drivers" , key: "car"   , value: "people"    }] },
+          { is: "sql-mapped-attribute", name: "_tags"      , insert: "=T", path: [{ is: "sql-path", table: "Tags"    , key: "car"   , value: "tag"       }] },
       ]
     }
   });
@@ -96,10 +98,12 @@ const sqlite = { name: "sqlite (npm sqlite3)", tests: createTests(async function
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `People` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` DATETIME, `father` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `mother` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Car` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `model` VARCHAR(255), `owner` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Tags` (`car` INTEGER REFERENCES `Car` (`id`), `tag` VARCHAR(255))', bind: [] });
     await connector.unsafeRun({ sql: 'DELETE FROM `Version`', bind: [] });
     await connector.unsafeRun({ sql: 'DELETE FROM `Resource`', bind: [] });
     await connector.unsafeRun({ sql: 'DELETE FROM `People`', bind: [] });
     await connector.unsafeRun({ sql: 'DELETE FROM `Car`', bind: [] });
+    await connector.unsafeRun({ sql: 'DELETE FROM `Tags`', bind: [] });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
@@ -122,6 +126,7 @@ const mysql = { name: "mysql (npm mysql2)", tests: createTests(async function my
     await connector.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTO_INCREMENT, `idVersion` INTEGER, `name` VARCHAR(255), FOREIGN KEY (idVersion) REFERENCES Version(id))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY, `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` BIGINT, `father` INTEGER, `mother` INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (father) REFERENCES People(id), FOREIGN KEY (mother) REFERENCES People(id))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE `Car` (`id` INTEGER PRIMARY KEY, `model` VARCHAR(255), `owner` INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (owner) REFERENCES People(id))', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE `Tags` (`car` INTEGER , `tag` VARCHAR(255))', bind: [] });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
@@ -144,6 +149,7 @@ const postgres = { name: "postgres (npm pg)", tests: createTests(async function 
     await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" SERIAL PRIMARY KEY, "idVersion" INTEGER REFERENCES "Version" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "name" VARCHAR(255))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" BIGINT, "father" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "mother" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "model" VARCHAR(255), "owner" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Tags" ("car" INTEGER REFERENCES "Car" ("id"), "tag" VARCHAR(255))', bind: [] });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
@@ -168,6 +174,7 @@ const mssql = { name: "mssql (npm tedious)", tests: createTests(async function m
     await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" INTEGER IDENTITY PRIMARY KEY, "idVersion" INTEGER, "name" VARCHAR(255), FOREIGN KEY (idVersion) REFERENCES Version(id))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY, "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" BIGINT, "father" INTEGER, "mother" INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (father) REFERENCES People(id), FOREIGN KEY (mother) REFERENCES People(id))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY, "model" VARCHAR(255), "owner" INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (owner) REFERENCES People(id))', bind: [] });
+    await connector.unsafeRun({ sql: 'CREATE TABLE "Tags" ("car" INTEGER, "tag" VARCHAR(255))', bind: [] });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();

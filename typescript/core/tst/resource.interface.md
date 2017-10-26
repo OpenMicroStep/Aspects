@@ -17,6 +17,7 @@
 _relation_: `_cars`
 #### _drivers: [0, *, People]
 _relation_: `_drivenCars`
+#### _tags: <0, *, string>
 ### category local
 #### brand(): string
 #### model(): string

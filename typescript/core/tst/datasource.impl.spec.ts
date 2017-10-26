@@ -27,9 +27,9 @@ function init(flux: Flux<Context>) {
   let {db, cc} = ctx;
   let ccc = ctx.ccc = cc.registerComponent({});
   ctx.c0 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 3" });
-  ctx.c1 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 2" });
-  ctx.c2 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "3008 DKR" });
-  ctx.c3 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "4008 DKR" });
+  ctx.c1 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 2"  , _tags: new Set(['Trop', 'Vieux']) });
+  ctx.c2 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "3008 DKR", _tags: new Set(['Dakkar']) });
+  ctx.c3 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "4008 DKR", _tags: new Set(['Dakkar', 'Top1', 'Top2']) });
   ctx.p4 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Abraham Simpson", _firstname: "Abraham", _lastname: "Simpson", _birthDate: new Date()  });
   ctx.p2 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Homer Simpson"  , _firstname: "Homer"  , _lastname: "Simpson", _birthDate: new Date(), _father: ctx.p4 });
   ctx.p3 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Marge Simpson"  , _firstname: "Marge"  , _lastname: "Simpson", _birthDate: new Date()  });
@@ -71,6 +71,26 @@ function save_c0_new_name(f: Flux<Context>) {
     f.continue();
   });
 }
+
+function save_c0_c1_c2_modify_tags(f: Flux<Context>) {
+  let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  assert.equal(c0.manager().isModified(), false);
+  c0._tags = new Set(['new']);
+  c1._tags = new Set([]);
+  c2._tags = new Set(['Paris', 'Dakkar']);
+  assert.equal(c0.manager().isModified(), true);
+  assert.equal(c1.manager().isModified(), true);
+  assert.equal(c2.manager().isModified(), true);
+  ccc.farPromise(db.rawSave, [c0,c1,c2]).then((envelop) => {
+    assert.sameMembers(envelop.value(), [c0,c1,c2]);
+    assert.equal(c0.version(), 2);
+    assert.equal(c0.manager().isModified(), false);
+    assert.equal(c1.manager().isModified(), false);
+    assert.equal(c2.manager().isModified(), false);
+    f.continue();
+  });
+}
+
 function save_c0_c1_c2(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawSave, [c0, c1, c2]).then((envelop) => {
@@ -707,6 +727,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       save_c0,
       save_c0_new_name,
       save_c0_c1_c2,
+      save_c0_c1_c2_modify_tags,
       query_cars,
       query_peugeots,
       query_eq_peugeots,

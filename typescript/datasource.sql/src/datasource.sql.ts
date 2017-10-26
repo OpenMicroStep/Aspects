@@ -2,7 +2,7 @@ import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier,
 import {Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {SqlMappedObject} from './mapper';
+import {SqlMappedObject, SqlMappedAttribute} from './mapper';
 export * from './mapper';
 import {SqlQuery, SqlMappedQuery, SqlMappedSharedContext, mapValue} from './query';
 import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, DBConnectorCRUD} from './index';
@@ -27,6 +27,7 @@ export class SqlDataSource extends DataSource {
   };
 
   async save(tr: SqlDataSourceTransaction, reporter: Reporter, objects: Set<VersionedObject>, object: VersionedObject) : Promise<void> {
+    let maker = this.maker;
     let manager = object.manager();
     let aspect = manager.aspect();
     let id = manager.id();
@@ -35,55 +36,96 @@ export class SqlDataSource extends DataSource {
     if (!mapper)
       return Promise.reject(`mapper not found for: ${aspect.classname}`);
     let idAttr = mapper.get("_id")!;
+    let id_path_last = idAttr.last();
     let isNew = manager.isNew();
-    let valuesByTable = new Map<SqlInsert, Map<string, any>>();
-    let valuesByPath = new Map<string, { table: string, sets: SqlBinding[], checks: SqlBinding[], where: SqlBinding }>(); // [table, key]value*[table, key]
-    if (isNew) {
-      for (let c of mapper.inserts)
-        valuesByTable.set(c, new Map<string, { nv: any, ov: any }>());
-    }
-    let map = (k: Aspect.InstalledAttribute, modified: any, saved: any | undefined) => {
-      let mapped_attribute = mapper.get(k.name)!;
+    let inserts = new Map<SqlInsert, Map<string, any>[]>();;
+    let requestsByPath = new Map<string, {
+      table: string,
+      delete: SqlBinding[],
+      update_sets: SqlBinding[], update_checks: SqlBinding[],
+      where: SqlBinding
+    }>(); // [table, key]value*[table, key]
+    let requestsForAttribute = (attribute: SqlMappedAttribute) => {
+      let iddb = attribute.toDbKey(mapper.toDbKey(id));
+      let key = attribute.pathref_uniqid();
+      let ret = requestsByPath.get(key);
+      let last = attribute.last();
+      if (!ret) {
+        requestsByPath.set(key, ret = { table: last.table, delete: [], update_sets: [], update_checks: [], where: { sql: "", bind: [] } });
+        if (attribute.path.length > 1) {
+          let p: SqlPath;
+          let l: SqlPath = attribute.path[0];
+          let i = 1, len = attribute.path.length - 1;
+          let from = this.maker.from(l.table, `U0`);
+          let joins: SqlBinding[] = [];
+          let where = this.maker.op(this.maker.column(`U0`, l.key), ConstraintType.Equal, iddb);
+          for (; i < len; i++) {
+            p = attribute.path[i];
+            joins.push(this.maker.join('inner',
+              p.table, `U${i}`,
+              this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key))
+            ));
+            l = p;
+          }
+          let select = this.maker.sub(this.maker.select([this.maker.column(`U0`, l.value)], from, joins, where));
+          ret.where = this.maker.compare_bind({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
+        }
+        else {
+          ret.where = this.maker.op(this.maker.quote(last.key), ConstraintType.Equal, iddb);
+        }
+      }
+      return ret;
+    };
+
+    let map = (attribute: Aspect.InstalledAttribute, modified: any, saved: any | undefined) => {
+      let mapped_attribute = mapper.get(attribute.name);
+      if (!mapped_attribute)
+        throw new Error(`attribute ${attribute.name} is missing in mapper ${mapper.name}`);
       if (!mapped_attribute.insert) // virtual attribute
         return;
       let last = mapped_attribute.last();
+      let is_single_value = Aspect.typeIsSingleValue(attribute.type);
       let db_modified = mapValue(this, mapper, mapped_attribute, modified);
+      let db_saved = saved !== undefined ? mapValue(this, mapper, mapped_attribute, saved) : undefined;
       if (isNew && mapped_attribute.insert) { // insert syntax
-        let values = valuesByTable.get(mapped_attribute.insert)!;
-        values.set(last.value, db_modified);
-      }
-      else { // update syntax
-        let iddb = mapped_attribute.toDbKey(mapper.toDbKey(id));
-        let key = mapped_attribute.pathref_uniqid();
-        let values = valuesByPath.get(key);
-        if (!values) {
-          valuesByPath.set(key, values = { table: last.table, sets: [], checks: [], where: { sql: "", bind: [] } });
-          if (mapped_attribute.path.length > 1) {
-            let p: SqlPath;
-            let l: SqlPath = mapped_attribute.path[0];
-            let i = 1, len = mapped_attribute.path.length - 1;
-            let from = this.maker.from(l.table, `U0`);
-            let joins: SqlBinding[] = [];
-            let where = this.maker.op(this.maker.column(`U0`, l.key), ConstraintType.Equal, iddb);
-            for (; i < len; i++) {
-              p = mapped_attribute.path[i];
-              joins.push(this.maker.join('inner',
-                p.table, `U${i}`,
-                this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key))
-              ));
-              l = p;
-            }
-            let select = this.maker.sub(this.maker.select([this.maker.column(`U0`, l.value)], from, joins, where));
-            values.where = this.maker.compare_bind({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
-          }
-          else {
-            values.where = this.maker.op(this.maker.quote(last.key), ConstraintType.Equal, iddb);
+        let insert = inserts.get(mapped_attribute.insert);
+        if (!insert)
+          inserts.set(mapped_attribute.insert, insert = []);
+        if (is_single_value) {
+          if (insert.length === 0)
+            insert.push(new Map());
+          if (insert.length === 1)
+            insert[0].set(last.value, db_modified);
+          else
+            throw new Error(`insert ${mapped_attribute.insert.name} is used by both multi and single values`);
+        } else {
+          for (let new_value_db_i of db_modified) {
+            let m = new Map<string, any>();
+            m.set(last.value, new_value_db_i);
+            insert.push(m);
           }
         }
-        values.sets.push(this.maker.set(last.value, db_modified));
-        if (!isNew) {
-          let db_saved = mapValue(this, mapper, mapped_attribute, saved);
-          values.checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, db_saved));
+      }
+      else { // update syntax
+        let requests = requestsForAttribute(mapped_attribute);
+        if (is_single_value) {
+          requests.update_sets.push(this.maker.set(last.value, db_modified));
+          if (!isNew) // TODO: check this if
+            requests.update_checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, db_saved));
+        }
+        else {
+          let {add, del} = Aspect.diff(attribute.type, db_modified, db_saved);
+          for (let new_value_db_i of add) {
+            let insert = inserts.get(mapped_attribute.insert);
+            if (!insert)
+              inserts.set(mapped_attribute.insert, insert = []);
+            let m = new Map<string, any>();
+            m.set(last.value, new_value_db_i);
+            insert.push(m);
+          }
+          for (let old_value_db_i of del) {
+            requests.delete.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, old_value_db_i));
+          }
         }
       }
     };
@@ -107,52 +149,89 @@ export class SqlDataSource extends DataSource {
     }
     map(Aspect.attribute_version, version + 1, version);
     version++;
-    if (isNew) {
-      for (let c of mapper.inserts) {
-        let values = valuesByTable.get(c)!;
+    let inserted = new Set<SqlInsert>();
+
+    let insert_attributes = async (c: SqlInsert, insert_values: Map<string, any>[], is_new: boolean) => {
+      for (let insert_value of insert_values) {
         let output_columns: string[] = [];
         let columns: string[] = [];
         let sql_values: SqlBinding[] = [];
-        for (let value of c.values) {
-          switch (value.type) {
+        for (let sql_insert_value of c.values) {
+          switch (sql_insert_value.type) {
             case 'autoincrement':
-              output_columns.push(value.name);
+              if (is_new)
+                output_columns.push(sql_insert_value.name);
               break;
             case 'sql':
-              columns.push(value.name);
-              sql_values.push({ sql: value.value!, bind: [] });
-              output_columns.push(value.name);
+              columns.push(sql_insert_value.name);
+              sql_values.push({ sql: sql_insert_value.value!, bind: [] });
+              output_columns.push(sql_insert_value.name);
               break;
             case 'ref': {
-              let tvalues = valuesByTable.get(value.insert!);
-              if (!tvalues || !tvalues.has(value.value!))
-                throw new Error(`referencing a previously created value that doesn't exists: ${value.insert}.${value.value}`);
-              values.set(value.name, tvalues.get(value.value!));
+              let ref_ins = sql_insert_value.insert!;
+              let ref_col = sql_insert_value.value!;
+              let deps_inserted = inserted.has(ref_ins);
+              if (!deps_inserted && is_new)
+                throw new Error(`referencing a previously created value that doesn't exists: ${ref_ins.name}.${ref_col}`);
+              if (deps_inserted) {
+                let tvalues = inserts.get(ref_ins);
+                if (!tvalues || tvalues.length !== 1 || !tvalues[0].has(ref_col))
+                  throw new Error(`referencing a previously created value that doesn't exists: ${ref_ins.name}.${ref_col}`);
+                insert_value.set(sql_insert_value.name, tvalues[0].get(ref_col));
+              }
+              else {
+                if (id_path_last.table !== ref_ins.table || id_path_last.value !== ref_col)
+                  throw new Error(`support of complex ref in update is not yet supported, you must reference _id last path table & value`);
+                insert_value.set(sql_insert_value.name, mapper.toDbKey(idAttr.toDbKey(id)));
+              }
             } break;
-            case 'value': values.set(value.name, value.value); break;
+            case 'value': insert_value.set(sql_insert_value.name, sql_insert_value.value); break;
             default:
-              throw new Error(`unsupported sql-value type: ${value.type}`);
+              throw new Error(`unsupported sql-value type: ${sql_insert_value.type}`);
           }
         }
-        columns.push(...values.keys());
-        sql_values.push(...this.maker.values([...values.values()]));
+        columns.push(...insert_value.keys());
+        sql_values.push(...this.maker.values([...insert_value.values()]));
         let sql_insert = this.maker.insert(c.table, columns, sql_values, output_columns);
         let result = await tr.tr.insert(sql_insert, output_columns); // sequential insertion
-        output_columns.forEach((c, i) => values.set(c, result[i]));
+        output_columns.forEach((c, i) => insert_value.set(c, result[i]));
         if (c === idAttr.insert) {
-          id = mapper.fromDbKey(idAttr.fromDbKey(values.get(idAttr.last().value)));
+          id = mapper.fromDbKey(idAttr.fromDbKey(insert_value.get(id_path_last.value)));
           tr.versions.set(object, { _id: id, _version: version });
         }
+      }
+      inserted.add(c);
+    }
+    if (isNew) {
+      for (let c of mapper.inserts) {
+        let values = inserts.get(c);
+        if (!values)
+          inserts.set(c, values = [new Map()]);
+        if (values.length > 1)
+          throw new Error(`insert ${c.name} can't be used for multi value`);
+        await insert_attributes(c, values, true);
       }
     }
     else {
       tr.versions.set(object, { _id: id, _version: version });
     }
-    for (let entry of valuesByPath.values()) {
-      let sql_update = this.maker.update(entry.table, entry.sets, this.maker.and([entry.where, ...entry.checks]));
-      let changes = await tr.tr.update(sql_update); // TODO: test for any advantage to parallelize this ?
-      if (changes !== 1)
-        throw new Error(`cannot update`);
+    for (let entry of requestsByPath.values()) {
+      if (entry.update_sets.length > 0) {
+        let sql_update = this.maker.update(entry.table, entry.update_sets, this.maker.and([entry.where, ...entry.update_checks]));
+        let changes = await tr.tr.update(sql_update); // TODO: test for any advantage to parallelize this ?
+        if (changes !== 1)
+          throw new Error(`cannot update`);
+      }
+      for (let del of entry.delete) {
+        let sql_delete = this.maker.delete(entry.table, this.maker.and([entry.where, del]));
+        let changes = await tr.tr.delete(sql_delete); // TODO: where can probably be merged
+        if (changes !== 1)
+          throw new Error(`cannot update`);
+      }
+    }
+    for (let[c, values] of inserts) {
+      if (!inserted.has(c))
+        await insert_attributes(c, values, false);
     }
   }
 

@@ -548,6 +548,11 @@ pattern:
   characteristic: t_drivers
   cardinality: multi
   _end:
+pattern:
+  Gab
+  characteristic: t_tags
+  cardinality: multi
+  _end:
 _end:
 
 ENT
@@ -634,6 +639,11 @@ Car
 system name: t_drivers
 type: ID
 domain entity: T_People
+_end:
+
+Car
+system name: t_tags
+type: STR
 _end:
 
 Car
