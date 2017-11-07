@@ -307,9 +307,10 @@ module.exports =  {
     "deploy-aspects="              : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects"]) },
     "deploy-aspects.express="      : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects.express"]) },
     "deploy-aspects.sql="          : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects.sql"]) },
+    "deploy-aspects.obi="          : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects.obi"]) },
     "deploy-aspects.xhr="          : { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/aspects/js/node_modules/@openmicrostep/aspects.xhr"]) },
     "deploy=": { is: "target", components: ["=shell"], targets: ["build"],
-      preTasks: Value(["=deploy-msbuildsystem.aspects", "=deploy-aspects", "=deploy-aspects.express", "=deploy-aspects.sql", "=deploy-aspects.xhr"]) },
+      preTasks: Value(["=deploy-msbuildsystem.aspects", "=deploy-aspects", "=deploy-aspects.express", "=deploy-aspects.sql", "=deploy-aspects.obi", "=deploy-aspects.xhr"]) },
 
     "build=":     { is: "target", components: ["=shell"], preTasksByEnvironment: {
       "=envs ? ci + !coveralls": Value(["=install-deps", "=build-bs", "=tests-bs", "=build-aspects", "=tests-aspects"                   ]),
