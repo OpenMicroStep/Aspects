@@ -10,8 +10,8 @@ export namespace ObiDataSource {
     aspectClassname_to_ObiEntity: (classname: string) => string;
     obiEntity_to_aspectClassname: (is: string) => string;
     aspectAttribute_to_ObiCar: (attribute: string) => string;
-    aspectValue_to_obiValue: (value: any, attribute: string) => any;
-    obiValue_to_aspectValue: (value: any, attribute: string) => any;
+    aspectValue_to_obiValue: (value: any, attribute: Aspect.InstalledAttribute) => any;
+    obiValue_to_aspectValue: (value: any, attribute: Aspect.InstalledAttribute) => any;
   }
 }
 
@@ -95,7 +95,7 @@ export class ObiDataSource extends DataSource {
           value = value.id();
         }
       }
-      value = this.config.aspectValue_to_obiValue(value, attribute.name);
+      value = this.config.aspectValue_to_obiValue(value, attribute);
       await this.db.raw_insert(tr, table, oid, cid, value);
     };
     const remove = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
@@ -109,7 +109,7 @@ export class ObiDataSource extends DataSource {
           value = value.id();
         }
       }
-      value = this.config.aspectValue_to_obiValue(value, attribute.name);
+      value = this.config.aspectValue_to_obiValue(value, attribute);
       await this.db.raw_delete(tr, table, oid, cid, value);
     };
 

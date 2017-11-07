@@ -1,4 +1,4 @@
-import {ControlCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
+import {ControlCenter, AspectConfiguration, AspectSelection, Aspect} from '@openmicrostep/aspects';
 import {Reporter, Parser} from '@openmicrostep/msbuildsystem.shared';
 import {SqliteDBConnectorFactory} from '@openmicrostep/aspects.sql';
 import {parseObis, ObiDefinition, OuiDB, ObiDataSource, StdDefinition} from '@openmicrostep/aspects.obi';
@@ -683,13 +683,13 @@ async function createObiControlCenter(flux) {
     aspectClassname_to_ObiEntity: (classname: string) => `T_${classname}`,
     obiEntity_to_aspectClassname: (classname: string) => classname.substring(2),
     aspectAttribute_to_ObiCar: (attribute: string) => `t${attribute}`,
-    aspectValue_to_obiValue: (value, attribute: string) => {
-      if (attribute === "_birthDate")
+    aspectValue_to_obiValue: (value, attribute: Aspect.InstalledAttribute) => {
+      if (attribute.name === "_birthDate")
         return value.getTime();
       return value;
     },
-    obiValue_to_aspectValue: (value, attribute: string) => {
-      if (attribute === "_birthDate")
+    obiValue_to_aspectValue: (value, attribute: Aspect.InstalledAttribute) => {
+      if (attribute.name === "_birthDate")
         return new Date(value);
       return value;
     },

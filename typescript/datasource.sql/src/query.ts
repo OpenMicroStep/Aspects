@@ -96,7 +96,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   abstract sql_column(attribute: string, required: boolean): string | undefined;
   abstract execute(): Promise<VersionedObject[]>;
   abstract execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>>;
-  abstract mapValue(attribute: string, value): any;
+  abstract mapValue(attribute: Aspect.InstalledAttribute, value): any;
   abstract setInitialUnionOfAlln(q_0: SqlQuery<SharedContext>, q_n: SqlQuery<SharedContext>, q_np1: SqlQuery<SharedContext>): Promise<void>;
 
   setInitialUnion(queries: SqlQuery<SharedContext>[]) {
@@ -218,14 +218,14 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     this.columns_ordered.push(name);
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
+  buildConstraintValue(var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
     value = Array.isArray(value) ? value.map(v => this.mapValue(var_attribute, v)) : this.mapValue(var_attribute, value);
     return this.ctx.maker.op(this.buildVariable(var_set, var_attribute), operator, value);
   }
 
-  buildVariable(var_set: ObjectSet, var_attribute: string): string {
+  buildVariable(var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute): string {
     let q = this.ctx.queries.get(var_set)!;
-    return q.sql_column(var_attribute);
+    return q.sql_column(var_attribute.name);
   }
 
   mapContraintType(type: ConstraintType) : any {
@@ -247,13 +247,13 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     else if (constraint instanceof DataSourceInternal.ConstraintValue) {
       let lset = this.set.variable(prefix + constraint.leftVariable)!;
       let type = this.mapContraintType(constraint.type);
-      return this.buildConstraintValue(lset, constraint.leftAttribute.name, type, constraint.value);
+      return this.buildConstraintValue(lset, constraint.leftAttribute, type, constraint.value);
     }
     else if (constraint instanceof DataSourceInternal.ConstraintVariable) {
       let lset = this.set.variable(prefix + constraint.leftVariable)!;
       let rset = this.set.variable(prefix + constraint.rightVariable)!;
-      let lc = this.buildVariable(lset, constraint.leftAttribute.name);
-      let rc = this.buildVariable(rset, constraint.rightAttribute.name);
+      let lc = this.buildVariable(lset, constraint.leftAttribute);
+      let rc = this.buildVariable(rset, constraint.rightAttribute);
       let type = this.mapContraintType(constraint.type);
       return this.ctx.maker.compare(lc, type, rc);
     }
@@ -583,8 +583,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return monoAttributes.values();
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
-    if (operator === ConstraintType.Text && var_attribute === "_id") {
+  buildConstraintValue(var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
+    if (operator === ConstraintType.Text && var_attribute.name === "_id") {
       // TODO: add support for external full text search ?
       let constraints: SqlBinding[] = [];
       let attr = new Set<string>();
@@ -593,7 +593,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         for (let a of aspect.attributes.values()) {
           if (a.type.type === "primitive" && !attr.has(a.name)) {
             attr.add(a.name);
-            constraints.push(super.buildConstraintValue(var_set, a.name, operator, value));
+            constraints.push(super.buildConstraintValue(var_set, a, operator, value));
           }
         }
       }
@@ -604,11 +604,11 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     }
   }
 
-  mapValue(attribute: string, value) {
+  mapValue(attribute: Aspect.InstalledAttribute, value) {
     let finalValue;
     let hasFinalValue = false;
     for (let mapper of this.mappers) {
-      let a = mapper.get(attribute);
+      let a = mapper.get(attribute.name);
       if (a) {
         let v = mapValue(this.ctx, mapper, a, value);
         if (hasFinalValue && finalValue !== v)
@@ -727,7 +727,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
 
             this.ctx.queries.set(s_m, q_m);
             q_m.setInitialType(aspect.name, false);
-            q_m.addConstraint(q_m.buildConstraintValue(q_m.set, "_id", ConstraintType.In, [...ids]));
+            q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, [...ids]));
 
             q_r.variables.add(q_m);
             q_r.addConstraint(this.ctx.maker.compare(q_r.sql_column("_id"), ConstraintType.Equal, q_m.sql_column(attribute.name)));

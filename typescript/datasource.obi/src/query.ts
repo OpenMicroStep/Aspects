@@ -222,8 +222,8 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     }
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
-    if (operator === ConstraintType.Text && var_attribute === "_id") {
+  buildConstraintValue(var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
+    if (operator === ConstraintType.Text && var_attribute.name === "_id") {
       // obi make full text search on the whole object attributes easy and fast
       let alias = this.nextAlias();
       let maker = this.ctx.maker;
@@ -235,11 +235,11 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     }
   }
 
-  mapValue(attribute: string, value) {
+  mapValue(attribute: Aspect.InstalledAttribute, value) {
     if (value instanceof VersionedObject) {
       value = value.id();
     }
-    if (attribute === "_id")
+    if (attribute.name === "_id")
       return value;
     return this.ctx.config.aspectValue_to_obiValue(value, attribute);
   }
@@ -344,7 +344,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let vo = ccc.find(_id)!;
         let remoteAttributes = remotes.get(vo)!;
         let a = (direct ? car2attr_d : car2attr_r).get(car)!;
-        val = this.ctx.config.obiValue_to_aspectValue(val, a.name);
+        val = this.ctx.config.obiValue_to_aspectValue(val, a);
         val = this.loadValue(ccc, val, __is);
         if (a.type.type === "set" || a.type.type === "array") {
           let c = remoteAttributes.get(a.name);
