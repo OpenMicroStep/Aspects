@@ -120,10 +120,10 @@ Element.load(reporter, {
       "js=": { is: "environment" },
       environments: ["=js"],
       targetsByEnvironment: {
-        "=js": ["aspects core", "aspects express", "aspects sql"]
+        "=js": ["aspects core", "aspects express", "aspects sql", "aspects obi"]
       },
       componentsByEnvironment: {
-        "=js": ["=openms.aspects.node:target", "=openms.aspects.node:express", "=::aspects core::", "=::aspects express::", "=::aspects sql::"],
+        "=js": ["=openms.aspects.node:target", "=openms.aspects.node:express", "=::aspects core::", "=::aspects express::", "=::aspects sql::", "=::aspects obi::"],
       }
   },
 }, Workspace.globalRoot, Project.elementFactories);
