@@ -290,7 +290,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       while ((is_add = ai < add.length) || di < del.length) {
         let sub_object = is_add ? add[ai++] : del[di++];
         let sub_object_manager = sub_object.manager();
-        this._check_sub_object(sub_object_manager, is_add);
+        this._check_sub_object(sub_object_manager, is_add, data);
         if (data.relation) {
           let relation_name = data.relation.attribute.name;
           let relation_type = data.relation.attribute.type;
@@ -315,14 +315,16 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
   }
 
-  private _check_sub_object(sub_object_manager: VersionedObjectManager, is_add: boolean) {
+  private _check_sub_object(sub_object_manager: VersionedObjectManager, is_add: boolean, attribute: Aspect.InstalledAttribute) {
     if (sub_object_manager.controlCenter() !== this.controlCenter())
       throw new Error(`you can't mix objects of different control centers`);
-    if (is_add && sub_object_manager.isSubObject()) {
-      if (!sub_object_manager._parent_manager)
-        sub_object_manager._parent_manager = this;
-      else if (sub_object_manager._parent_manager !== this)
-        throw new Error(`you can't move sub objects to another parent`);
+    if (attribute.is_sub_object) {
+      if (is_add && sub_object_manager.isSubObject()) {
+        if (!sub_object_manager._parent_manager)
+          sub_object_manager._parent_manager = this;
+        else if (sub_object_manager._parent_manager !== this)
+          throw new Error(`you can't move sub objects to another parent`);
+      }
     }
   }
 
@@ -348,11 +350,11 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
               case 'set':
               case 'array':
                 for (let vi of v as VersionedObject[])
-                  this._check_sub_object(vi.manager(), true);
+                  this._check_sub_object(vi.manager(), true, a);
                 break;
               case 'class':
                 if (v)
-                  this._check_sub_object(v.manager(), true);
+                  this._check_sub_object(v.manager(), true, a);
                 break;
             }
             // TODO: check relations ? (do the other side of the relation is uptodate ?)

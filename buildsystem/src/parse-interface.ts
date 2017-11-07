@@ -185,6 +185,7 @@ namespace Element {
     name: string,
     type: Type,
     relation?: string
+    is_sub_object?: boolean,
   }
   export type Query = {
     is: 'query',
@@ -237,6 +238,8 @@ function parseAttribute(parser: Parser) : Element.Attribute {
     let relation = parseStringOption(parser, "relation");
     if (relation)
       attr.relation = relation;
+    if (parseBooleanOption(parser, "sub object") === true)
+      attr.is_sub_object = true;
   });
   return attr;
 }

@@ -13,7 +13,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
   }
 
   uniqueKey() {
-    return { ...super.uniqueKey(), customHeader: this.src.customHeader, header: this.src.header, v: 103 };
+    return { ...super.uniqueKey(), customHeader: this.src.customHeader, header: this.src.header, v: 104 };
   }
 
   do_build(step: Step<{}>) {

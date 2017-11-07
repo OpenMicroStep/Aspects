@@ -173,7 +173,7 @@ export namespace ${this.name} {
       is: this.is,
       name: this.name,
       version: 0,
-      is_sub_object: this.is_sub_object,
+      is_sub_object: this.is_sub_object || undefined,
       attributes: this.attributes.map(a => a.toJSON()),
       queries: this.queries.map(a => a.toJSON()),
       categories: this.categories.map(c => c.toJSON()),
@@ -189,6 +189,7 @@ elementFactories.registerSimple('attribute', (reporter, name, definition, attrPa
 export class AttributeElement extends Element {
   type: TypeElement;
   relation?: string;
+  is_sub_object: boolean = false;
 
   __resolveWithPath(reporter: Reporter, attrPath: AttributePath) {
     super.__resolveWithPath(reporter, attrPath);
@@ -201,7 +202,8 @@ export class AttributeElement extends Element {
       is: this.is,
       name: this.name,
       type: this.type,
-      relation: this.relation
+      relation: this.relation,
+      is_sub_object: this.is_sub_object || undefined,
     };
   }
 }

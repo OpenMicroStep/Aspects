@@ -189,7 +189,7 @@ export namespace Aspect {
     is: string;
     name: string;
     version: number;
-    is_sub_object: boolean;
+    is_sub_object?: boolean;
     queries?: never[];
     attributes?: Attribute[];
     categories?: Category[];
@@ -202,6 +202,7 @@ export namespace Aspect {
     type: Type;
     validator?: AttributeTypeValidator;
     relation?: string;
+    is_sub_object?: boolean;
   };
   export interface Category {
     is: string;
@@ -232,6 +233,7 @@ export namespace Aspect {
     validator: AttributeTypeValidator;
     relation: Reference | undefined;
     contains_vo: boolean;
+    is_sub_object: boolean;
   };
   export interface Installed {
     name: string;
@@ -270,6 +272,7 @@ export namespace Aspect {
     validator: Validation.validateId,
     relation: undefined,
     contains_vo: false,
+    is_sub_object: false,
   };
   export const attribute_version: Aspect.InstalledAttribute = {
     name: "_version",
@@ -277,6 +280,7 @@ export namespace Aspect {
     validator: Validation.validateVersion,
     relation: undefined,
     contains_vo: false,
+    is_sub_object: false,
   };
 }
 
@@ -341,7 +345,7 @@ export class AspectConfiguration {
           name: name,
           version: cstor.definition.version,
           aspect: aspect,
-          is_sub_object: cstor.definition.is_sub_object,
+          is_sub_object: cstor.definition.is_sub_object === true,
           references: [],
           categories: new Set(),
           attribute_ref: {
@@ -350,6 +354,7 @@ export class AspectConfiguration {
             validator: Validation.validateId,
             relation: undefined,
             contains_vo: false,
+            is_sub_object: false,
           },
           attributes: new Map(voAttributes),
           farMethods: new Map(),
@@ -538,7 +543,6 @@ export class AspectConfiguration {
     attribute: Aspect.Attribute,
     pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
   ) {
-    let contains_sub_object: boolean | undefined = undefined;
     let contains_types = Aspect.typeToAspectNames(attribute.type);
     const data: Aspect.InstalledAttribute = {
       name: attribute.name as keyof VersionedObject,
@@ -546,16 +550,15 @@ export class AspectConfiguration {
       type: attribute.type,
       relation: undefined,
       contains_vo: contains_types.length > 0,
+      is_sub_object: attribute.is_sub_object === true,
     };
     for (let name of contains_types) {
       let sub_aspect_cstor = this._aspects.get(name);
       if (!sub_aspect_cstor)
-        throw new Error(`attribute ${aspect_cstor.aspect.name}.${attribute.name} requires class ${name} to work`);
+        throw new Error(`attribute ${aspect_cstor.aspect.name}.${data.name} requires class ${name} to work`);
       let sub_aspect = sub_aspect_cstor.aspect;
-      if (contains_sub_object === undefined)
-        contains_sub_object = sub_aspect.is_sub_object;
-      else if (contains_sub_object !== sub_aspect.is_sub_object)
-        throw new Error(`attribute ${aspect_cstor.aspect.name}.${attribute.name} contains a mix of sub and non sub objects: ${contains_types.join(', ')}`);
+      if (data.is_sub_object && !sub_aspect.is_sub_object)
+        throw new Error(`attribute ${aspect_cstor.aspect.name}.${data.name} is marked as sub object while ${name} is not`);
       sub_aspect.references.push({ class: aspect_cstor.aspect, attribute: data });
     }
 

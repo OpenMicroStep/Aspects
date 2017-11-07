@@ -5,7 +5,6 @@ export class DataSource extends VersionedObject {
     "is": "class",
     "name": "DataSource",
     "version": 0,
-    "is_sub_object": false,
     "attributes": [],
     "queries": [],
     "categories": [

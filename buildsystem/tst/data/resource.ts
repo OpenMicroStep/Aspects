@@ -7,7 +7,6 @@ export class Resource extends VersionedObject {
     "is": "class",
     "name": "Resource",
     "version": 0,
-    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
@@ -92,7 +91,6 @@ export class Car extends Resource {
     "is": "class",
     "name": "Car",
     "version": 0,
-    "is_sub_object": false,
     "attributes": [
       {
         "is": "attribute",
