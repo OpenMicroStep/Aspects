@@ -235,13 +235,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
             }
             sub_object[relation_name] = v;
           }
-          else if (is_add && sub_object_manager.state() === VersionedObjectManager.State.NEW) {
-            switch (relation_type.type) {
-              case 'set':   sub_object[relation_name] = (new Set<VersionedObject>()).add(this._object); break;
-              case 'class': sub_object[relation_name] = this._object; break;
-              default: throw new Error(`unsupported relation destination type ${relation_type.type}`);
-            }
-          }
         }
       }
     }
