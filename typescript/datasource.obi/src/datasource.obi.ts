@@ -116,7 +116,7 @@ export class ObiDataSource extends DataSource {
     let manager = object.manager();
     let aspect = manager.aspect();
     let oid = manager.id();
-    let version = manager.versionVersion();
+    let version = manager.savedVersion();
     let state = manager.state();
 
     if (state === VersionedObjectManager.State.DELETED) {
@@ -128,7 +128,7 @@ export class ObiDataSource extends DataSource {
       if (isNew)
         oid = await this.db.nextObiId(tr);
 
-      let obi_ENT = this.config.aspectClassname_to_ObiEntity(aspect.name);
+      let obi_ENT = this.config.aspectClassname_to_ObiEntity(aspect.classname);
       let obi = this.db.systemObiByName.get(obi_ENT);
       if (!obi) {
         reporter.diagnostic({ is: "error", msg: `cannot found ${obi_ENT} obi definition` });
@@ -187,8 +187,8 @@ export class ObiDataSource extends DataSource {
         await this.db.raw_insert(tr, "ID", oid as number, this.db.config.CarEntityId, obi._id);
       await map("_version", version + 1, isNew ? undefined : version);
       versions.set(object, { _id: oid, _version: version + 1 });
-      for (let [k, nv] of manager.localAttributes().entries())
-        await map(k, nv, isNew ? undefined : manager.versionAttributes().get(k));
+      for (let [k, nv] of manager.modifiedAttributes().entries())
+        await map(k, nv, isNew ? undefined : manager.savedAttributes().get(k));
     }
   }
 

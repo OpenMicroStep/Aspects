@@ -166,7 +166,7 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
     let manager = o.manager();
     let state = manager.state();
     if (state === VersionedObjectManager.State.NEW)
-      manager.setNewObjectMissingValues();
+      manager.fillNewObjectMissingValues();
     if (state !== VersionedObjectManager.State.UNCHANGED)
       changed.add(o);
   }
@@ -189,7 +189,7 @@ async function safeScope(
       ccc.registerObject(vo);
       if (all)
         all.add(vo);
-      let safe_validator = db._safeValidators && db._safeValidators.get(manager.name());
+      let safe_validator = db._safeValidators && db._safeValidators.get(manager.classname());
       if (safe_validator) for (let safe_post_load of safe_validator.safe_post_load) {
         let f = filters.get(safe_post_load);
         if (!f)
@@ -200,10 +200,10 @@ async function safeScope(
         let extra = extras.get(vo);
         if (!extra) {
           extra = new Set();
-          for (let a of manager.localAttributes().keys())
+          for (let a of manager.modifiedAttributes().keys())
             if (a !== "_id" && a !== "_version")
               extra.add(a);
-          for (let a of manager.versionAttributes().keys())
+          for (let a of manager.savedAttributes().keys())
             if (a !== "_id" && a !== "_version")
               extra.add(a);
           extras.set(vo, extra);
@@ -298,7 +298,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
         let safe_pre_saves = new Map<SafePreSave, SafePreSaveContext>();
         for (let o of changed) {
           o.validate(reporter);
-          let validator = this._safeValidators && this._safeValidators.get(o.manager().name());
+          let validator = this._safeValidators && this._safeValidators.get(o.manager().classname());
           if (validator) for (let safe_pre_save of validator.safe_pre_save) {
             let f = safe_pre_saves.get(safe_pre_save);
             if (!f)
@@ -317,7 +317,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
         let safe_post_saves = new Map<SafePostSave, SafePostSaveContext>();
         for (let o of changed) {
           o.validate(reporter);
-          let validator = this._safeValidators && this._safeValidators.get(o.manager().name());
+          let validator = this._safeValidators && this._safeValidators.get(o.manager().classname());
           if (validator) for (let safe_post_save of validator.safe_post_save) {
             let f = safe_post_saves.get(safe_post_save);
             if (!f)

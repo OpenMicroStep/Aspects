@@ -50,7 +50,7 @@ export namespace Invocation {
       };
 
       if (!farMethod)
-        reporter.diagnostic({ is: "error", msg: `method ${method} doesn't exists on ${manager.name()}` });
+        reporter.diagnostic({ is: "error", msg: `method ${method} doesn't exists on ${manager.classname()}` });
       else {
         let argValidator = farMethod.argumentValidators[0];
         let arg = argValidator ? argValidator.validate(reporter, new AttributePath(farMethod.name, ":", 0), a0) : undefined;

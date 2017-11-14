@@ -24,7 +24,7 @@ function serialize(s, map = new Map()) {
     r = map.get(s);
     if (!r) {
       if (s instanceof VersionedObject)
-        s = `VersionedObject{${s.manager().aspect().name}/${s.id()}}`;
+        s = `VersionedObject{${s.manager().classname()}/${s.id()}}`;
       if (s instanceof Map)
         s = [...s.entries()];
       if (s instanceof Set)
@@ -35,8 +35,8 @@ function serialize(s, map = new Map()) {
       }
       else if ("contains_vo" in s)
         map.set(s, r = s);
-      else if (s.aspect && s.name && s.attributes)
-        map.set(s, r = { aspect: s.aspect, name: s.name });
+      else if (s.aspect && s.classname && s.attributes)
+        map.set(s, r = { aspect: s.aspect, name: s.classname });
       else {
         let k, v;
         map.set(s, r = {});

@@ -71,7 +71,7 @@ function basics() {
   v1.manager().setId(2);
   assert.equal(v1.id(), 2);
   assert.throw(() => { v1.manager().setId(3); }, `id can't be modified once assigned (not local)`);
-  assert.throw(() => { v1.name(); }, `attribute '_name' is unaccessible and never was`);
+  assert.throw(() => { v1.name(); }, `attribute 'Resource._name' is unaccessible and never was`);
   v1.manager().setVersion(2);
 }
 

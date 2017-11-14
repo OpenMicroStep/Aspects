@@ -31,10 +31,10 @@ export class SqlDataSource extends DataSource {
     let state = manager.state();
     let aspect = manager.aspect();
     let id = manager.id();
-    let version = manager.versionVersion();
-    let mapper = this.mappers[aspect.name];
+    let version = manager.savedVersion();
+    let mapper = this.mappers[aspect.classname];
     if (!mapper)
-      return Promise.reject(`mapper not found for: ${aspect.name}`);
+      return Promise.reject(`mapper not found for: ${aspect.classname}`);
     let idAttr = mapper.get("_id")!;
     let isNew = state === VersionedObjectManager.State.NEW;
     let valuesByTable = new Map<SqlInsert, Map<string, any>>();
@@ -88,7 +88,7 @@ export class SqlDataSource extends DataSource {
         }
       }
     };
-    for (let [k, nv] of manager.localAttributes()) {
+    for (let [k, nv] of manager.modifiedAttributes()) {
       if (nv instanceof VersionedObject && nv.manager().state() === VersionedObjectManager.State.NEW) {
         if (!objects.has(nv)) {
           reporter.diagnostic({ is: "error", msg: `cannot save ${k}: referenced object is not saved and won't be` });
@@ -97,14 +97,14 @@ export class SqlDataSource extends DataSource {
         if (!tr.versions.has(nv))
           await this.save(tr, reporter, objects, nv);
         let v = tr.versions.get(nv)!;
-        let name = nv.manager().aspect().name;
+        let name = nv.manager().classname();
         let mapper = this.mappers[name];
         if (!mapper)
           throw new Error(`cannot find mapper for ${name}`);
         let idattr = mapper.attribute_id();
         nv = idattr.toDbKey(mapper.toDbKey(v._id));
       }
-      map(k, nv, isNew ? undefined : manager.versionAttributes().get(k));
+      map(k, nv, isNew ? undefined : manager.savedAttributes().get(k));
     }
     map("_version", version + 1, version);
     version++;
@@ -208,7 +208,7 @@ export class SqlDataSource extends DataSource {
     }
     let sets = new Set<ObjectSet>();
     for (let [aspect, list] of types) {
-      let set = new ObjectSet(aspect.name);
+      let set = new ObjectSet(aspect.classname);
       set.addType({ type: ConstraintType.MemberOf, value: aspect });
       set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, Aspect.attribute_id, list));
       sets.add(set);

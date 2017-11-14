@@ -48,33 +48,30 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   /** @internal */ _parent_manager: VersionedObjectManager | undefined;
   /** @internal */ _components: Set<object>;
 
-  /** @internal */ _localAttributes: VersionedObjectManager.Attributes<T>;
-  /** @internal */ _version: number;
-  /** @internal */ _versionAttributes: VersionedObjectManager.Attributes<T>;
-  /** @internal */ _oldVersion: number;
-  /** @internal */ _oldVersionAttributes: VersionedObjectManager.Attributes<T>;
+  /** @internal */ _modified_attributes: VersionedObjectManager.Attributes<T>;
+  /** @internal */ _saved_version: number;
+  /** @internal */ _saved_attributes: VersionedObjectManager.Attributes<T>;
+  /** @internal */ _outdated_version: number;
+  /** @internal */ _outdated_attributes: VersionedObjectManager.Attributes<T>;
 
   constructor(controlCenter: ControlCenter, object: T) {
     this._controlCenter = controlCenter;
     this._components = new Set();
     this._id = `_localid:${++VersionedObjectManager.LocalIdCounter}`;
-    this._localAttributes = new Map();
-    this._version = VersionedObjectManager.NoVersion;
-    this._versionAttributes = new Map();
-    this._oldVersion = VersionedObjectManager.NoVersion;
-    this._oldVersionAttributes = new Map();
+    this._modified_attributes = new Map();
+    this._saved_version = VersionedObjectManager.NoVersion;
+    this._saved_attributes = new Map();
+    this._outdated_version = VersionedObjectManager.NoVersion;
+    this._outdated_attributes = new Map();
     this._aspect = (object.constructor as any).aspect;
     this._object = object;
     this._parent_manager = undefined;
   }
 
+  // Environment
   id()     : Identifier { return this._id; }
-  controlCenter() { return this._controlCenter; }
-  name() { return this._aspect.name; }
-  aspect() { return this._aspect; }
+  version(): number { return this._modified_attributes.size > 0 ? VersionedObjectManager.NextVersion : this._saved_version; }
   object() { return this._object; }
-
-  isSubObject() { return this._aspect.is_sub_object; }
   rootObject() {
     if (!this.isSubObject())
       return this._object;
@@ -82,79 +79,72 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return this._parent_manager.rootObject();
     throw new Error(`cannot find root object of sub object, the sub object is not linked to any parent object`);
   }
-
+  controlCenter() { return this._controlCenter; }
   isRegistered() { return this._components.size > 0; }
 
-  hasChanges(scope?: string[]) : boolean;
-  hasChanges(scope?: (keyof T)[]) : boolean;
-  hasChanges(scope?: (keyof T)[]) {
-    if (this._localAttributes.size === 0)
+  // Definition
+  classname() { return this._aspect.classname; }
+  aspect() { return this._aspect; }
+  isSubObject() { return this._aspect.is_sub_object; }
+
+  // Modified attributes
+  isModified(scope?: string[]) : boolean;
+  isModified(scope?: (keyof T)[]) : boolean;
+  isModified(scope?: (keyof T)[]) {
+    if (this._modified_attributes.size === 0)
       return false;
-    return scope ? scope.some(attribute => this._localAttributes.has(attribute)) : true;
+    return scope ? scope.some(attribute => this._modified_attributes.has(attribute)) : true;
   }
-  localVersion(): number { return this._localAttributes.size > 0 ? VersionedObjectManager.NextVersion : this._version; }
-  localAttributes(): VersionedObjectManager.ROAttributes<T> { return this._localAttributes; }
+  modifiedAttributes(): VersionedObjectManager.ROAttributes<T> { return this._modified_attributes; }
 
   clear(scope?: string[]) : void;
   clear(scope?: (keyof T)[]) : void;
   clear(scope?: (keyof T)[]) {
     if (!scope)
-      this._localAttributes.clear();
+      this._modified_attributes.clear();
     else
-      scope.forEach(attribute => this._localAttributes.delete(attribute));
+      scope.forEach(attribute => this._modified_attributes.delete(attribute));
   }
 
-  unload(scope?: string[]) : void;
-  unload(scope?: (keyof T)[]) : void;
-  unload(scope?: (keyof T)[]) {
-    if (!scope) {
-      this._localAttributes.clear();
-      this._versionAttributes.clear();
-    }
-    else {
-      scope.forEach(attribute => {
-        this._localAttributes.delete(attribute);
-        this._versionAttributes.delete(attribute);
-      });
-    }
+  // Saved attributes
+  savedVersion(): number { return this._saved_version; }
+  savedAttributes(): VersionedObjectManager.ROAttributes<T> { return this._saved_attributes; }
+
+  savedAttributeValue(attribute: string) : any;
+  savedAttributeValue<K extends keyof T>(attribute: K) : T[K];
+  savedAttributeValue<K extends keyof T>(attribute: K) : T[K] {
+    if (this._saved_attributes.has(attribute))
+      return this._saved_attributes.get(attribute);
+    return this._couldBeMissingValue(attribute);
   }
 
-  filter_anonymize(key: string, value: any)  : void;
-  filter_anonymize<K extends keyof T>(key: K, value: T[K]) : void;
-  filter_anonymize<K extends keyof T>(key: K, value: T[K]) {
-    if (this._localAttributes.has(key))
-      this._localAttributes.set(key, value);
-    if (this._versionAttributes.has(key))
-      this._versionAttributes.set(key, value);
-  }
-
-  versionVersion(): number { return this._version; }
-  versionAttributes(): VersionedObjectManager.ROAttributes<T> { return this._versionAttributes; }
-
+  // Live attributes
   state(): VersionedObjectManager.State {
-    if (this._version === VersionedObjectManager.NoVersion)
+    if (this._saved_version === VersionedObjectManager.NoVersion)
       return VersionedObjectManager.State.NEW;
-    if (this._version === VersionedObjectManager.DeletedVersion)
+    if (this._saved_version === VersionedObjectManager.DeletedVersion)
       return VersionedObjectManager.State.DELETED;
-    if (this._localAttributes.size > 0)
+    if (this._outdated_attributes.size > 0)
+      return VersionedObjectManager.State.INCONFLICT;
+    if (this._modified_attributes.size > 0)
       return VersionedObjectManager.State.MODIFIED;
     return VersionedObjectManager.State.UNCHANGED;
-    // TODO INCONFLICT
   }
 
   attributeState(attribute: string) : VersionedObjectManager.AttributeState;
   attributeState(attribute: keyof T) : VersionedObjectManager.AttributeState;
   attributeState(attribute: keyof T) : VersionedObjectManager.AttributeState {
-    if (this._localAttributes.has(attribute))
+    if (this._modified_attributes.has(attribute))
       return VersionedObjectManager.AttributeState.MODIFIED;
-    if (this._versionAttributes.has(attribute))
-      return VersionedObjectManager.AttributeState.UNCHANGED;
-    if (this._version === VersionedObjectManager.NoVersion)
+    if (this._saved_version === VersionedObjectManager.NoVersion)
       return VersionedObjectManager.AttributeState.NEW;
+    if (this._saved_attributes.has(attribute))
+      return VersionedObjectManager.AttributeState.UNCHANGED;
     if (attribute === '_id' || attribute === '_version')
       return VersionedObjectManager.AttributeState.UNCHANGED;
+    if (this._outdated_attributes.has(attribute))
+      return VersionedObjectManager.AttributeState.INCONFLICT;
     return VersionedObjectManager.AttributeState.NOTLOADED;
-    // TODO INCONFLICT
   }
 
   hasAttributeValue(attributes: string) : boolean;
@@ -162,95 +152,37 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   hasAttributeValue(attribute: keyof T) : boolean {
     return attribute === '_id'
         || attribute === '_version'
-        || this._localAttributes.has(attribute)
-        || this._versionAttributes.has(attribute)
-        || (this._version === VersionedObjectManager.NoVersion && this._aspect.attributes.has(attribute));
+        || this._modified_attributes.has(attribute)
+        || this._saved_attributes.has(attribute)
+        || (this._saved_version === VersionedObjectManager.NoVersion && this._aspect.attributes.has(attribute));
   }
 
-  hasAttributeValues(attributes: string[]) : boolean;
-  hasAttributeValues(attributes: (keyof T)[]) : boolean;
-  hasAttributeValues(attributes: (keyof T)[]) : boolean {
+  hasEveryAttributesValue(attributes: string[]) : boolean;
+  hasEveryAttributesValue(attributes: (keyof T)[]) : boolean;
+  hasEveryAttributesValue(attributes: (keyof T)[]) : boolean {
     return attributes.every(attribute => this.hasAttributeValue(attribute));
   }
 
   attributeValue(attribute: string) : any;
   attributeValue<K extends keyof T>(attribute: K) : T[K];
   attributeValue<K extends keyof T>(attribute: K) : T[K] {
-    if (this._localAttributes.has(attribute))
-      return this._localAttributes.get(attribute);
-    if (this._versionAttributes.has(attribute))
-      return this._versionAttributes.get(attribute);
+    if (this._modified_attributes.has(attribute))
+      return this._modified_attributes.get(attribute);
+    if (this._saved_attributes.has(attribute))
+      return this._saved_attributes.get(attribute);
     if (attribute === "_id")
       return this.id();
     if (attribute === "_version")
-      return this.localVersion();
-    if (this._oldVersionAttributes.has(attribute))
-      throw new Error(`attribute '${attribute}' is unaccessible due to version change`);
-    return this.couldBeMissingValue(attribute);
-  }
-
-  versionAttributeValue(attribute: string) : any;
-  versionAttributeValue<K extends keyof T>(attribute: K) : T[K];
-  versionAttributeValue<K extends keyof T>(attribute: K) : T[K] {
-    if (this._versionAttributes.has(attribute))
-      return this._versionAttributes.get(attribute);
-    return this.couldBeMissingValue(attribute);
-  }
-
-  private couldBeMissingValue(attribute: string) {
-    let a = this._aspect.attributes.get(attribute);
-    if (!a)
-      throw new Error(`attribute '${attribute}' doesn't exists on ${this.name()}`);
-    if (this.state() === VersionedObjectManager.State.NEW)
-      return this.missingValue(a);
-    throw new Error(`attribute '${attribute}' is unaccessible and never was`);
-  }
-
-  delete() {
-    this._localAttributes.clear();
-    this._version = VersionedObjectManager.DeletedVersion;
-  }
-
-  setId(id: Identifier) {
-    if (this._id === id)
-      return;
-    if (VersionedObjectManager.isLocalId(id))
-      throw new Error(`cannot change identifier to a local identifier`);
-    if (!VersionedObjectManager.isLocalId(this._id))
-      throw new Error(`id can't be modified once assigned (not local)`);
-    this._controlCenter._changeObjectId(this._object, this._id, id);
-    this._id = id; // local -> real id (ie. object _id attribute got loaded)
-    if (this._version === VersionedObjectManager.NoVersion)
-      this._version = VersionedObjectManager.UndefinedVersion;
-  }
-
-  setVersion(version: number) {
-    if (VersionedObjectManager.isLocalId(this._id))
-      throw new Error(`version can't be set on a locally identifier object`);
-    this._localAttributes.forEach((v, k) => this._versionAttributes.set(k, v));
-    this._localAttributes.clear();
-    this._version = version;
-  }
-
-  setNewObjectMissingValues() {
-    for (let attribute of this._aspect.attributes.values()) {
-      if (attribute.name !== '_id' && attribute.name !== '_version' && !this._localAttributes.has(attribute.name as keyof T))
-        this._localAttributes.set(attribute.name as keyof T, this.missingValue(attribute));
-    }
-  }
-
-  private missingValue(attribute: Aspect.InstalledAttribute) {
-    if (attribute.type.type === "array")
-      return [];
-    if (attribute.type.type === "set")
-      return new Set();
-    return undefined;
+      return this.version();
+    if (this._outdated_attributes.has(attribute))
+      throw new Error(`attribute '${this.classname()}.${attribute}' is unaccessible due to version change`);
+    return this._couldBeMissingValue(attribute);
   }
 
   validateAttributeValue(attribute: string, value: any): Diagnostic[] {
     let reporter = new Reporter();
     let a = this._aspect.attributes.get(attribute);
-    let path = new AttributePath(this.name(), this.id(), '.', attribute);
+    let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', attribute);
     if (!a)
       path.diagnostic(reporter, { is: "error", msg: `attribute doesn't exists` });
     else
@@ -259,28 +191,28 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   }
 
   setAttributeValue<K extends keyof T>(attribute: K, value: T[K]) {
-    this.setAttributeValueFast(attribute, value, this._aspect.attributes.get(attribute)!);
+    this.setAttributeValueFast(attribute, value, this._attribute_data(attribute));
   }
 
   setAttributeValueFast<K extends keyof T>(attribute: K, value: T[K], data: Aspect.InstalledAttribute) {
     let hasChanged = false;
     let isNew = this.state() === VersionedObjectManager.State.NEW;
     let oldValue;
-    let hasVersionAttribute = this._versionAttributes.has(attribute);
-    let hasLocalAttribute = this._localAttributes.has(attribute);
+    let hasVersionAttribute = this._saved_attributes.has(attribute);
+    let hasLocalAttribute = this._modified_attributes.has(attribute);
     if (!hasVersionAttribute && !isNew)
-      throw new Error(`attribute '${attribute}' is unaccessible and never was`);
-    if (hasVersionAttribute && areEquals(this._versionAttributes.get(attribute), value)) {
+      throw new Error(`attribute '${this.classname()}.${attribute}' is unaccessible and never was`);
+    if (hasVersionAttribute && areEquals(this._saved_attributes.get(attribute), value)) {
       if (data.relation || data.contains_vo)
-        oldValue = this._localAttributes.get(attribute);
-      hasChanged = this._localAttributes.delete(attribute);
+        oldValue = this._modified_attributes.get(attribute);
+      hasChanged = this._modified_attributes.delete(attribute);
     }
-    else if (!hasLocalAttribute || !areEquals(this._localAttributes.get(attribute), value)) {
+    else if (!hasLocalAttribute || !areEquals(this._modified_attributes.get(attribute), value)) {
       if (hasLocalAttribute)
-        oldValue = this._localAttributes.get(attribute);
+        oldValue = this._modified_attributes.get(attribute);
       else if (hasVersionAttribute)
-        oldValue = this._versionAttributes.get(attribute);
-      this._localAttributes.set(attribute, value);
+        oldValue = this._saved_attributes.get(attribute);
+      this._modified_attributes.set(attribute, value);
       hasChanged = true;
     }
     if (hasChanged && data.contains_vo) {
@@ -315,35 +247,65 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
   }
 
-  private _check_sub_object(sub_object_manager: VersionedObjectManager, is_add: boolean, attribute: Aspect.InstalledAttribute) {
-    if (sub_object_manager.controlCenter() !== this.controlCenter())
-      throw new Error(`you can't mix objects of different control centers`);
-    if (attribute.is_sub_object) {
-      if (is_add && sub_object_manager.isSubObject()) {
-        if (!sub_object_manager._parent_manager)
-          sub_object_manager._parent_manager = this;
-        else if (sub_object_manager._parent_manager !== this)
-          throw new Error(`you can't move sub objects to another parent`);
-      }
+  // Management
+  unload(scope?: string[]) : void;
+  unload(scope?: (keyof T)[]) : void;
+  unload(scope?: (keyof T)[]) {
+    if (!scope) {
+      this._modified_attributes.clear();
+      this._saved_attributes.clear();
+      this._outdated_attributes.clear();
+    }
+    else {
+      scope.forEach(attribute => {
+        this._modified_attributes.delete(attribute);
+        this._saved_attributes.delete(attribute);
+        this._outdated_attributes.delete(attribute);
+      });
     }
   }
 
-  mergeWithRemote(manager: VersionedObjectManager<T>) {
-    this.mergeWithRemoteAttributes(manager._versionAttributes, manager._version);
+  delete() {
+    // TODO: add a shitload of checks
+    this._modified_attributes.clear();
+    this._saved_version = VersionedObjectManager.DeletedVersion;
   }
+
+  setId(id: Identifier) {
+    if (this._id === id)
+      return;
+    if (VersionedObjectManager.isLocalId(id))
+      throw new Error(`cannot change identifier to a local identifier`);
+    if (!VersionedObjectManager.isLocalId(this._id))
+      throw new Error(`id can't be modified once assigned (not local)`);
+    this._controlCenter._changeObjectId(this._object, this._id, id);
+    this._id = id; // local -> real id (ie. object _id attribute got loaded)
+    if (this._saved_version === VersionedObjectManager.NoVersion)
+      this._saved_version = VersionedObjectManager.UndefinedVersion;
+  }
+
+  setVersion(version: number) {
+    if (VersionedObjectManager.isLocalId(this._id))
+      throw new Error(`version can't be set on a locally identifier object`);
+    this._modified_attributes.forEach((v, k) => this._saved_attributes.set(k, v));
+    this._modified_attributes.clear();
+    this._saved_version = version;
+  }
+
   computeMissingAttributes(attributes: Map<keyof T, any>) {
     let missings: string[] = [];
-    for (let k of this._versionAttributes.keys()) {
+    for (let k of this._saved_attributes.keys()) {
       if (!attributes.has(k))
         missings.push(k);
     }
     return missings;
   }
-  mergeWithRemoteAttributes(attributes: Map<keyof T, any>, version: number) {
+
+  mergeSavedAttributes(attributes: Map<keyof T, any>, version: number) {
     // _attributes_ can't be trusted, so we need to validate _attributes_ keys and types
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     let reporter = new Reporter();
-    let path = new AttributePath(this.name(), this.id(), '.', '');
+    let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', '');
     for (let [k, v] of attributes) {
       let a = this._aspect.attributes.get(k);
       path.set(k);
@@ -367,18 +329,18 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
             }
             // TODO: check relations ? (do the other side of the relation is uptodate ?)
           }
-          if (version === this._version) {
-            if (this._versionAttributes.has(k) && !areEquals(this._versionAttributes.get(k), v))
+          if (version === this._saved_version) {
+            if (this._saved_attributes.has(k) && !areEquals(this._saved_attributes.get(k), v))
               ret.conflicts.push(k);
-            this._versionAttributes.set(k, v);
+            this._saved_attributes.set(k, v);
           }
-          else if (version > this._version) {
-            if (!this._versionAttributes.has(k) || !areEquals(this._versionAttributes.get(k), v))
+          else if (version > this._saved_version) {
+            if (!this._saved_attributes.has(k) || !areEquals(this._saved_attributes.get(k), v))
               ret.changes.push(k);
-            if (this._localAttributes.has(k)) {
-              if (areEquals(this._localAttributes.get(k), v))
-                this._localAttributes.delete(k);
-              else if (!areEquals(this._versionAttributes.get(k), v))
+            if (this._modified_attributes.has(k)) {
+              if (areEquals(this._modified_attributes.get(k), v))
+                this._modified_attributes.delete(k);
+              else if (!areEquals(this._saved_attributes.get(k), v))
                 ret.conflicts.push(k);
             }
           }
@@ -387,17 +349,69 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
     if (reporter.failed)
       throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
-    if (version > this._version) {
-      this._version = version;
-      this._versionAttributes = attributes;
-      this._oldVersion = this._version;
-      this._oldVersionAttributes = this._versionAttributes;
-      for (let k of this._oldVersionAttributes.keys()) {
-        if (!this._versionAttributes.has(k))
+    if (version > this._saved_version) {
+      this._saved_version = version;
+      this._saved_attributes = attributes;
+      this._outdated_version = this._saved_version;
+      this._outdated_attributes = this._saved_attributes;
+      for (let k of this._outdated_attributes.keys()) {
+        if (!this._saved_attributes.has(k))
           ret.missings.push(k);
       }
     }
     return ret;
+  }
+
+  fillNewObjectMissingValues() {
+    for (let attribute of this._aspect.attributes.values()) {
+      if (attribute.name !== '_id' && attribute.name !== '_version' && !this._modified_attributes.has(attribute.name as keyof T))
+        this._modified_attributes.set(attribute.name as keyof T, this._missingValue(attribute));
+    }
+  }
+
+  // Others
+  filter_anonymize(key: string, value: any)  : void;
+  filter_anonymize<K extends keyof T>(key: K, value: T[K]) : void;
+  filter_anonymize<K extends keyof T>(key: K, value: T[K]) {
+    if (this._modified_attributes.has(key))
+      this._modified_attributes.set(key, value);
+    if (this._saved_attributes.has(key))
+      this._saved_attributes.set(key, value);
+  }
+
+  private _attribute_data(attribute: string) {
+    let a = this._aspect.attributes.get(attribute);
+    if (!a)
+      throw new Error(`attribute '${this.classname()}.${attribute}' doesn't exists on ${this.classname()}`);
+    return a;
+  }
+
+  private _couldBeMissingValue(attribute: string) {
+    let a = this._attribute_data(attribute);
+    if (this.state() === VersionedObjectManager.State.NEW)
+      return this._missingValue(a);
+    throw new Error(`attribute '${this.classname()}.${attribute}' is unaccessible and never was`);
+  }
+
+  private _missingValue(attribute: Aspect.InstalledAttribute) {
+    if (attribute.type.type === "array")
+      return [];
+    if (attribute.type.type === "set")
+      return new Set();
+    return undefined;
+  }
+
+  private _check_sub_object(sub_object_manager: VersionedObjectManager, is_add: boolean, attribute: Aspect.InstalledAttribute) {
+    if (sub_object_manager.controlCenter() !== this.controlCenter())
+      throw new Error(`you can't mix objects of different control centers`);
+    if (attribute.is_sub_object) {
+      if (is_add && sub_object_manager.isSubObject()) {
+        if (!sub_object_manager._parent_manager)
+          sub_object_manager._parent_manager = this;
+        else if (sub_object_manager._parent_manager !== this)
+          throw new Error(`you can't move sub objects to another parent`);
+      }
+    }
   }
 }
 export namespace VersionedObjectManager {
@@ -433,7 +447,7 @@ export namespace VersionedObjectManager {
       s.add(o);
       for (let attribute of scope) {
         push(s, m.attributeValue(attribute));
-        push(s, m.versionAttributeValue(attribute));
+        push(s, m.savedAttributeValue(attribute));
       }
     }
     return [...s];
@@ -496,7 +510,7 @@ export class VersionedObject {
   }
 
   id()     : Identifier { return this.__manager.id(); }
-  version(): number { return this.__manager.localVersion(); }
+  version(): number { return this.__manager.version(); }
   manager(): VersionedObjectManager<this> { return this.__manager; }
   controlCenter(): ControlCenter { return this.__manager.controlCenter(); }
 
@@ -520,7 +534,7 @@ Object.defineProperty(VersionedObject.prototype, '_id', {
 });
 Object.defineProperty(VersionedObject.prototype, '_version', {
   enumerable: true,
-  get(this: VersionedObject) { return this.__manager.localVersion(); },
+  get(this: VersionedObject) { return this.__manager.version(); },
 });
 
 function isEqualVersionedObject(this: VersionedObject, other, level?: number) {

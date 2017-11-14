@@ -30,15 +30,15 @@ export class VersionedObjectCoder {
       this.encodedWithLocalId.set(id, vo);
       let m = vo.manager();
       let r: EncodedVersionedObject = {
-        is: m.name(),
+        is: m.classname(),
         real_id: id,
         local_id: this.decodedWithLocalId.get(vo) || id,
-        version: m.versionVersion(),
+        version: m.savedVersion(),
         local_attributes: {},
         version_attributes: {},
       };
-      m.versionAttributes().forEach((v, k) => r.version_attributes[k] = this._encodeValue(v));
-      m.localAttributes().forEach((v, k) => r.local_attributes[k] = this._encodeValue(v));
+      m.savedAttributes().forEach((v, k) => r.version_attributes[k] = this._encodeValue(v));
+      m.modifiedAttributes().forEach((v, k) => r.local_attributes[k] = this._encodeValue(v));
       if (this._encodedVersionedObjects)
         this._encodedVersionedObjects.push(r);
       else
@@ -51,7 +51,7 @@ export class VersionedObjectCoder {
       return null;
     if (value instanceof VersionedObject) {
       let m = value.manager();
-      return { is: "vo", v: [m.name(), m.id()] };
+      return { is: "vo", v: [m.classname(), m.id()] };
     }
     else if (value instanceof Set) {
       let r: any[] = [];
@@ -148,7 +148,7 @@ export class VersionedObjectCoder {
       let saved_attributes = new Map<keyof VersionedObject, any>();
       for (let k of Object.keys(s.version_attributes))
         saved_attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
-      m.mergeWithRemoteAttributes(saved_attributes, s.version);
+      m.mergeSavedAttributes(saved_attributes, s.version);
       for (let k of Object.keys(s.local_attributes))
         m.setAttributeValue(k as keyof VersionedObject, this._decodeValue(ccc, s.local_attributes[k]));
       ret.push(vo);
@@ -173,16 +173,16 @@ export class VersionedObjectCoder {
         attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
       let missings = m.computeMissingAttributes(attributes);
       if (missings.length) {
-        let k = m.name() + ':' + missings.sort().join(',');
+        let k = m.classname() + ':' + missings.sort().join(',');
         let g = missings_grouped.get(k);
         let mergeable = { vo, version: s.version, attributes };
         if (!g)
-          missings_grouped.set(k, g = { aspect: m.name(), objects: [], attributes: missings });
+          missings_grouped.set(k, g = { aspect: m.classname(), objects: [], attributes: missings });
         g.objects.push(vo);
         missings_by_vo.set(vo, mergeable);
       }
       else {
-        m.mergeWithRemoteAttributes(attributes, s.version);
+        m.mergeSavedAttributes(attributes, s.version);
       }
       ret.push(vo);
     }
@@ -203,7 +203,7 @@ export class VersionedObjectCoder {
         }
       })));
       for (let [vo, mergeable] of missings_by_vo) {
-        vo.manager().mergeWithRemoteAttributes(mergeable.attributes, mergeable.version);
+        vo.manager().mergeSavedAttributes(mergeable.attributes, mergeable.version);
       }
     }
     return ret;

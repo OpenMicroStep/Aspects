@@ -48,7 +48,7 @@ export function classValidator(classname: string, allowUndefined: boolean) : Asp
       else if (value instanceof aspect.implementation)
         return value;
       else
-        path.diagnostic(reporter, { is: "warning", msg: `attribute must be a ${classname}, got ${value.manager().name()}`});
+        path.diagnostic(reporter, { is: "warning", msg: `attribute must be a ${classname}, got ${value.manager().classname()}`});
     }
     else if (typeof value === "object")
       path.diagnostic(reporter, { is: "warning", msg: `attribute must be a ${classname}, got ${value.constructor ? value.constructor.name : value}`});

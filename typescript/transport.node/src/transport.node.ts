@@ -69,6 +69,6 @@ export class NodeReqTransport implements FarTransport {
 
   httpUrl(to: VersionedObject, method: string) {
     let def = to.manager().aspect();
-    return `${this.url}/${def.version}/${def.name}/${to.id()}/${method}`;
+    return `${this.url}/${def.version}/${def.classname}/${to.id()}/${method}`;
   }
 }

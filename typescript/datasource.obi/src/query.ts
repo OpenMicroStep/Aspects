@@ -187,7 +187,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     else {
       let a = this.aspectAttribute(attribute);
       if (a.relation) {
-        let other_is_name = this.ctx.config.aspectClassname_to_ObiEntity(a.relation.class.name);
+        let other_is_name = this.ctx.config.aspectClassname_to_ObiEntity(a.relation.class.classname);
         let other_is = this.ctx.systemObiByName.get(other_is_name);
         if (!other_is)
           throw new Error(`obi ${other_is_name} not found`);
@@ -302,7 +302,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let remoteAttributes = remotes.get(vo);
         if (!remoteAttributes) {
           remotes.set(vo, remoteAttributes = new Map<string, any>());
-          for (let a of scope_at_type_path(this.set.scope, manager.name(), _path)) {
+          for (let a of scope_at_type_path(this.set.scope, manager.classname(), _path)) {
             let d: undefined | Set<any> | any[] = undefined;
             if (a.type.type === "set")
               d = new Set();
@@ -362,7 +362,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       let tables = new Map<string, { dor: SqlBinding[], ror: SqlBinding[] }>();
       for (let [type, ids] of idsByType) {
         let cars_by_tables = new Map<string, { dcar_ids: number[], rcar_ids: number[]}>();
-        let attributes = scope_at_type_path(this.set.scope, type.name, path);
+        let attributes = scope_at_type_path(this.set.scope, type.classname, path);
         for (let a of attributes) {
           let car_info = this.car_info(a.name);
           let cars = cars_by_tables.get(car_info.table);

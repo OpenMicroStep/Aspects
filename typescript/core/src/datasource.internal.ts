@@ -115,10 +115,10 @@ export namespace DataSourceInternal {
         for (let c of set.typeConstraints) {
           switch (c.type) {
             case ConstraintType.InstanceOf:
-              ok = this.mapper.aspect(object).name === c.value.name; // TODO: real instanceof
+              ok = this.mapper.aspect(object).classname === c.value.classname; // TODO: real instanceof
               break;
             case ConstraintType.MemberOf:
-              ok = this.mapper.aspect(object).name === c.value.name;
+              ok = this.mapper.aspect(object).classname === c.value.classname;
               break;
             case ConstraintType.Union:
               ok = [...c.value].some(s => this.solveFull(s).has(object));

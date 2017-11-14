@@ -32,7 +32,7 @@ export class InMemoryDataSource extends DataSource {
     let aspect = lManager.aspect();
     let remoteAttributes = new Map<keyof VersionedObject, any>();
     function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
-      let cls_scope = scope[aspect.name];
+      let cls_scope = scope[aspect.classname];
       if (!cls_scope)
         return;
       let attributes = cls_scope[path] || cls_scope['_'];
@@ -60,7 +60,7 @@ export class InMemoryDataSource extends DataSource {
       }
       remoteAttributes.set(a.name as keyof VersionedObject, ds.fromDSValue(ccc, v));
     }
-    lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
+    lManager.mergeSavedAttributes(remoteAttributes, dObject.version);
   }
 
   implQuery({ context: { ccc } }, { tr, sets }: { tr?: InMemoryDataSource.DataStoreTransaction, sets: ObjectSet[] }): { [k: string]: VersionedObject[] } {
@@ -133,7 +133,7 @@ export class InMemoryDataSource extends DataSource {
         return tr.get(dbId);
       }
 
-      let lVersion = lObject.manager().versionVersion();
+      let lVersion = lObject.manager().savedVersion();
       if (lVersion === VersionedObjectManager.DeletedVersion) {
         let dbId = this.ds.toDSId(lObject.id());
         if (!tr.delete(dbId))
@@ -151,9 +151,9 @@ export class InMemoryDataSource extends DataSource {
           tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.id), _version: dObject.version });
           let lManager = lObject.manager();
           let n = diags.length;
-          for (let [k, lv] of lManager._localAttributes) {
+          for (let [k, lv] of lManager.modifiedAttributes()) {
             let dbv = dObject.attributes.get(k);
-            let exv = lManager._versionAttributes.get(k);
+            let exv = lManager.savedAttributes().get(k);
             if (!areEquals(exv, dbv))
               diags.push({ is: "error", msg: `cannot update ${lObject.id()}: attribute ${k} mismatch` });
             else
@@ -161,19 +161,19 @@ export class InMemoryDataSource extends DataSource {
           }
           if (diags.length > n) {
             let remoteAttributes = new Map<keyof VersionedObject, any>();
-            for (let k of lManager._localAttributes.keys())
+            for (let k of lManager.modifiedAttributes().keys())
               remoteAttributes.set(k, tr.fromDSValue(ccc, dObject.attributes.get(k)));
-            lManager.mergeWithRemoteAttributes(remoteAttributes, dObject.version);
+            lManager.mergeSavedAttributes(remoteAttributes, dObject.version);
           }
         }
         return dObject;
       }
       else { // new
         let lManager = lObject.manager();
-        let dObject = new InMemoryDataSource.DataStoreObject(lManager.aspect().name, this.ds.nextId(), 0);
+        let dObject = new InMemoryDataSource.DataStoreObject(lManager.classname(), this.ds.nextId(), 0);
         tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.id), _version: dObject.version });
         tr.add(dObject);
-        for (let [k, lv] of lManager._localAttributes)
+        for (let [k, lv] of lManager.modifiedAttributes())
           dObject.attributes.set(k, tr.toDSValue(lv, create));
         return dObject;
       }
@@ -263,7 +263,7 @@ export namespace InMemoryDataSource {
   function toDSValue(ds: DataStore, tr: DataStoreCRUD, value, create?: (value: VersionedObject) => DataStoreObject | undefined): any {
     const fix = (value: VersionedObject) => {
       let dsId = ds.toDSId(value.id());
-      return tr.get(dsId) || (create && create(value)) || new DataStoreObject(value.manager().name(), ds.toDSId(value.id()), -1);
+      return tr.get(dsId) || (create && create(value)) || new DataStoreObject(value.manager().classname(), ds.toDSId(value.id()), -1);
     };
     return fixVOValue(value, fix);
   }

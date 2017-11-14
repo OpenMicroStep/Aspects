@@ -11,7 +11,7 @@ import scope_at_type_path = DataSourceInternal.ResolvedScope.scope_at_type_path;
 
 export function mapValue(ctx: { mappers: { [s: string]: SqlMappedObject }  }, mapper: SqlMappedObject, attribute: SqlMappedAttribute, value) {
   if (value instanceof VersionedObject) {
-    let name = value.manager().aspect().name;
+    let name = value.manager().classname();
     let mapper = ctx.mappers[name];
     if (!mapper)
       throw new Error(`cannot find mapper for ${name}`);
@@ -163,7 +163,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     let ret =  this.set.attributesAndCompatibleAspects(this.ctx.controlCenter);
     if (this.set.scope) {
       for (let aspect of ret.compatibleAspects) {
-        let scope_type = this.set.scope[aspect.name];
+        let scope_type = this.set.scope[aspect.classname];
         let scope_path = scope_type ? scope_type['.'] : [];
         for (let a of scope_path)
           ret.attributes.set(a.name, a);
@@ -308,10 +308,10 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     for (let c of this.set.typeConstraints) {
       switch (c.type) {
         case ConstraintType.MemberOf:
-          this.setInitialType(c.value.name, false);
+          this.setInitialType(c.value.classname, false);
           break;
         case ConstraintType.InstanceOf:
-          this.setInitialType(c.value.name, true);
+          this.setInitialType(c.value.classname, true);
           break;
         case ConstraintType.Union:
           let queries: SqlQuery<SharedContext>[] = [];
@@ -403,7 +403,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       let version = remoteAttributes.get('_version');
       let manager = vo.manager();
       remoteAttributes.delete('_version');
-      manager.mergeWithRemoteAttributes(remoteAttributes as Map<keyof VersionedObject, any>, version);
+      manager.mergeSavedAttributes(remoteAttributes as Map<keyof VersionedObject, any>, version);
     }
   }
 }
@@ -573,7 +573,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let monoAttributes = new Set<string>();
     if (this.set.scope) {
       for (let aspect of aspects) {
-        let scope_type = this.set.scope[aspect.name];
+        let scope_type = this.set.scope[aspect.classname];
         let scope_path = scope_type ? scope_type['.'] : [];
         for (let a of scope_path)
           if (isMonoAttribute(a))
@@ -714,7 +714,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           let attribute_path = `${path}${attribute.name}.`;
           for (let type_r of types) {
             let scope_path = scope_at_type_path(this.set.scope, type_r, attribute_path);
-            let s_m = new ObjectSet(aspect.name);
+            let s_m = new ObjectSet(aspect.classname);
             let q_m = new SqlMappedQuery(this.ctx, s_m);
             let s_r = new ObjectSet(type_r);
             let q_r = new SqlMappedQuery(this.ctx, s_r);
@@ -726,13 +726,13 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
               q_r.addAttribute(a.name);
 
             this.ctx.queries.set(s_m, q_m);
-            q_m.setInitialType(aspect.name, false);
+            q_m.setInitialType(aspect.classname, false);
             q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, [...ids]));
 
             q_r.variables.add(q_m);
             q_r.addConstraint(this.ctx.maker.compare(q_r.sql_column("_id"), ConstraintType.Equal, q_m.sql_column(attribute.name)));
             let sql_columns = q_r.sql_columns();
-            sql_columns.push(maker.column_alias_bind(maker.value(aspect.name), `__ris`));
+            sql_columns.push(maker.column_alias_bind(maker.value(aspect.classname), `__ris`));
             sql_columns.push(maker.column_alias_bind(maker.value(attribute.name), `__rname`));
             sql_columns.push(maker.column_alias(q_m.sql_column("_id"), `__rid`));
 

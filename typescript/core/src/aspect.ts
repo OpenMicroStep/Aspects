@@ -237,7 +237,7 @@ export namespace Aspect {
     is_sub_object: boolean;
   };
   export interface Installed {
-    name: string;
+    classname: string;
     aspect: string;
     version: number;
     is_sub_object: boolean;
@@ -348,7 +348,7 @@ export class AspectConfiguration {
 
       aspect_cstor = nameClass(`${name}:${aspect}`, `${name}`, class CachedAspect extends cstor {
         static aspect: Aspect.Installed = {
-          name: name,
+          classname: name,
           version: cstor.definition.version,
           aspect: aspect,
           is_sub_object: cstor.definition.is_sub_object === true,
@@ -561,10 +561,10 @@ export class AspectConfiguration {
     for (let name of contains_types) {
       let sub_aspect_cstor = this._aspects.get(name);
       if (!sub_aspect_cstor)
-        throw new Error(`attribute ${aspect_cstor.aspect.name}.${data.name} requires class ${name} to work`);
+        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${data.name} requires class ${name} to work`);
       let sub_aspect = sub_aspect_cstor.aspect;
       if (data.is_sub_object && !sub_aspect.is_sub_object)
-        throw new Error(`attribute ${aspect_cstor.aspect.name}.${data.name} is marked as sub object while ${name} is not`);
+        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${data.name} is marked as sub object while ${name} is not`);
       sub_aspect.references.push({ class: aspect_cstor.aspect, attribute: data });
     }
 
@@ -573,7 +573,7 @@ export class AspectConfiguration {
       get(this: VersionedObject) { return this.__manager.attributeValue(data.name as keyof VersionedObject); },
       set(this: VersionedObject, value) {
         let manager = this.__manager;
-        value = validateValue(value, new AttributePath(manager._aspect.name, manager.id(), '.', data.name), data.validator, manager);
+        value = validateValue(value, new AttributePath(manager._aspect.classname, manager.id(), '.', data.name), data.validator, manager);
         manager.setAttributeValueFast(data.name as keyof VersionedObject, value, data);
       }
     });
@@ -587,22 +587,22 @@ export class AspectConfiguration {
     for (let [aspect, attribute, relation] of pending_relations) {
       let contains_types = Aspect.typeToAspectNames(attribute.type);
       if (contains_types.length !== 1)
-        throw new Error(`attribute ${aspect.name}.${attribute.name} type of a relation must be a class, an array of classes or a set of classes`);
+        throw new Error(`attribute ${aspect.classname}.${attribute.name} type of a relation must be a class, an array of classes or a set of classes`);
       let relation_aspect = this._aspects.get(contains_types[0])!.aspect;
       let relation_attribute = relation_aspect.attributes.get(relation);
       if (!relation_attribute)
-        throw new Error(`attribute ${aspect.name}.${attribute.name} contains a relation to an unknown attribute ${relation_aspect.name}.${relation}`);
+        throw new Error(`attribute ${aspect.classname}.${attribute.name} contains a relation to an unknown attribute ${relation_aspect.classname}.${relation}`);
       attribute.relation = { class: relation_aspect, attribute: relation_attribute };
     }
     for (let [aspect, attribute] of pending_relations) {
       let relation_aspect = attribute.relation!.class;
       let relation_attribute = attribute.relation!.attribute;
       if (!relation_attribute.relation)
-        throw new Error(`relation ${aspect.name}.${attribute.name} - ${relation_aspect.name}.${relation_attribute.name} is not bidirectional`);
+        throw new Error(`relation ${aspect.classname}.${attribute.name} - ${relation_aspect.classname}.${relation_attribute.name} is not bidirectional`);
       if (relation_attribute.relation.class !== aspect)
-        throw new Error(`relation ${aspect.name}.${attribute.name} - ${relation_aspect.name}.${relation_attribute.name} is type incoherent`);
+        throw new Error(`relation ${aspect.classname}.${attribute.name} - ${relation_aspect.classname}.${relation_attribute.name} is type incoherent`);
       if (relation_attribute.relation.attribute !== attribute)
-        throw new Error(`relation ${aspect.name}.${attribute.name} - ${relation_aspect.name}.${relation_attribute.name} is attribute incoherent`);
+        throw new Error(`relation ${aspect.classname}.${attribute.name} - ${relation_aspect.classname}.${relation_attribute.name} is attribute incoherent`);
     }
   }
 

@@ -78,7 +78,7 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[] = [
       let id = m.id();
       if (VersionedObjectManager.isLocalId(id))
         throw new Error(`reference to locally defined object ${id}`);
-      r = { __is__: "VersionedObject", is: m.name(), id: m.id() };
+      r = { __is__: "VersionedObject", is: m.classname(), id: m.id() };
       return r;
     },
     canDecode(d, s) { return s && s.__is__ === this.is; },

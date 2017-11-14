@@ -72,7 +72,7 @@ function parseScopeAttr(ctx: ParseScopeContext,
 
   let safe_attribute = aspect.attributes.get(unsafe_attribute);
   if (!safe_attribute)
-    throw new Error(`'${unsafe_attribute}' requested but not found for '${aspect.name}'`);
+    throw new Error(`'${unsafe_attribute}' requested but not found for '${aspect.classname}'`);
 
   if (!sort_match || sort_match[2] !== "#")
     safe_attributes.add(safe_attribute);
@@ -128,9 +128,9 @@ function parseScopeAttr(ctx: ParseScopeContext,
 }
 
 function get_safe_attributes(ctx: ParseScopeContext, aspect: Aspect.Installed, safe_path: string) {
-  let safe_scope_type = ctx.scope[aspect.name];
+  let safe_scope_type = ctx.scope[aspect.classname];
   if (!safe_scope_type)
-    ctx.scope[aspect.name] = safe_scope_type = {};
+    ctx.scope[aspect.classname] = safe_scope_type = {};
   let safe_attributes = safe_scope_type[safe_path];
   if (!safe_attributes) {
     ctx.safe_path_count++;
@@ -223,24 +223,24 @@ function _traverseScope(
   for_each: (manager: VersionedObjectManager, path: string, attributes: ImmutableSet<Aspect.InstalledAttribute>) => void
 ) {
   let manager = object.manager();
-  let attributes = ResolvedScope.scope_at_type_path(scope, manager.name(), path);
+  let attributes = ResolvedScope.scope_at_type_path(scope, manager.classname(), path);
   for_each(manager, path, attributes);
   for (let attribute of attributes) {
     if (Aspect.typeIsClass(attribute.type)) {
       let s_path = `${n_path}${attribute.name}.`;
       if (Aspect.typeIsMultValue(attribute.type)) {
-        let l_values: any = manager.localAttributes().get(attribute.name as keyof VersionedObject);
+        let l_values: any = manager.modifiedAttributes().get(attribute.name as keyof VersionedObject);
         if (l_values) for (let v of l_values)
           _traverseScope(scope, v, s_path, s_path, for_each);
-        let v_values: any = manager.versionAttributes().get(attribute.name as keyof VersionedObject);
+        let v_values: any = manager.savedAttributes().get(attribute.name as keyof VersionedObject);
         if (v_values) for (let v of v_values)
           _traverseScope(scope, v, s_path, s_path, for_each);
       }
       else {
-        let l_value: any = manager.localAttributes().get(attribute.name as keyof VersionedObject);
+        let l_value: any = manager.modifiedAttributes().get(attribute.name as keyof VersionedObject);
         if (l_value)
           _traverseScope(scope, l_value, s_path, s_path, for_each);
-        let v_value: any = manager.versionAttributes().get(attribute.name as keyof VersionedObject);
+        let v_value: any = manager.savedAttributes().get(attribute.name as keyof VersionedObject);
         if (v_value)
           _traverseScope(scope, v_value, s_path, s_path, for_each);
       }

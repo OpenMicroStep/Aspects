@@ -49,24 +49,24 @@ function clean(f: Flux<Context>) {
 function save_c0(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   assert.equal(c0.version(), VersionedObjectManager.NextVersion);
-  assert.equal(c0.manager().hasChanges(), true);
+  assert.equal(c0.manager().isModified(), true);
   ccc.farPromise(db.rawSave, [c0]).then((envelop) => {
     assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0]);
     assert.equal(c0.version(), 0);
-    assert.equal(c0.manager().hasChanges(), false);
+    assert.equal(c0.manager().isModified(), false);
     f.continue();
   });
 }
 function save_c0_new_name(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  assert.equal(c0.manager().hasChanges(), false);
+  assert.equal(c0.manager().isModified(), false);
   c0._name = "ReNault";
-  assert.equal(c0.manager().hasChanges(), true);
+  assert.equal(c0.manager().isModified(), true);
   ccc.farPromise(db.rawSave, [c0]).then((envelop) => {
     assert.sameMembers(envelop.value(), [c0]);
     assert.equal(c0.version(), 1);
-    assert.equal(c0.manager().hasChanges(), false);
+    assert.equal(c0.manager().isModified(), false);
     f.continue();
   });
 }
@@ -94,7 +94,7 @@ function query_peugeots(f: Flux<Context>) {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c2]);
     let lc2 = res['cars'][0];
-    assert.isNotTrue(lc2.manager().hasChanges());
+    assert.isNotTrue(lc2.manager().isModified());
     f.continue();
   });
 }
@@ -104,7 +104,7 @@ function query_eq_peugeots(f: Flux<Context>) {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c2]);
     let lc2 = res['cars'][0];
-    assert.isNotTrue(lc2.manager().hasChanges());
+    assert.isNotTrue(lc2.manager().isModified());
     f.continue();
   });
 }
@@ -114,7 +114,7 @@ function query_ne_peugeots(f: Flux<Context>) {
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c0, c1]);
     let lc2 = res['cars'][0];
-    assert.isNotTrue(lc2.manager().hasChanges());
+    assert.isNotTrue(lc2.manager().isModified());
     f.continue();
   });
 }
@@ -177,26 +177,27 @@ function save_c0_c1_c2_c3_p0_p1_p2_p3_p4(f: Flux<Context>) {
 }
 function save_relation_c0p0_c1p0_c2p1(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  assert.equal(c0.manager().hasChanges(), false);
+  assert.equal(c0.manager().isModified(), false);
   assert.sameMembers([...p0._cars], []);
   c0._owner = p0;
   assert.sameMembers([...p0._cars], [c0]);
-  assert.equal(c0.manager().hasChanges(), true);
-  assert.equal(c1.manager().hasChanges(), false);
+  assert.equal(c0.manager().isModified(), true);
+  assert.equal(c1.manager().isModified(), false);
   c1._owner = p0;
   assert.sameMembers([...p0._cars], [c0, c1]);
-  assert.equal(c1.manager().hasChanges(), true);
+  assert.equal(c1.manager().isModified(), true);
   c2._owner = p1;
   assert.sameMembers([...p1._cars], [c2]);
 
   ccc.farPromise(db.rawSave, [c0, c1, c2, p0, p1]).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0, c1, c2, p0, p1]);
     assert.equal(c0.version(), 1);
-    assert.equal(c0.manager().hasChanges(), false);
+    assert.equal(c0.manager().isModified(), false);
     assert.equal(c0._owner, p0);
 
     assert.equal(c1.version(), 1);
-    assert.equal(c1.manager().hasChanges(), false);
+    assert.equal(c1.manager().isModified(), false);
     assert.equal(c1._owner, p0);
     f.continue();
   });
