@@ -1,5 +1,5 @@
 services:
-  - "microsoft/mssql-server-linux"
+  - "microsoft/mssql-server-linux:2017-GA"
   - "mysql"
   - "postgres:alpine"
 
