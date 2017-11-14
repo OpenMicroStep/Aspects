@@ -331,6 +331,14 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   mergeWithRemote(manager: VersionedObjectManager<T>) {
     this.mergeWithRemoteAttributes(manager._versionAttributes, manager._version);
   }
+  computeMissingAttributes(attributes: Map<keyof T, any>) {
+    let missings: string[] = [];
+    for (let k of this._versionAttributes.keys()) {
+      if (!attributes.has(k))
+        missings.push(k);
+    }
+    return missings;
+  }
   mergeWithRemoteAttributes(attributes: Map<keyof T, any>, version: number) {
     // _attributes_ can't be trusted, so we need to validate _attributes_ keys and types
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };

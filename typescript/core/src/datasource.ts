@@ -41,7 +41,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
       return res as Result;
 
     let v = res.value();
-    coder.decodeEncodedVersionedObjects(ccc, v.e, false);
+    await coder.decodeEncodedVersionedObjectsClient(ccc, v.e, this);
     let r = {};
     for (let k of Object.keys(v.results))
       r[k] = v.results[k].map(id => ccc.findChecked(id));
@@ -57,7 +57,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
       let res = await ccc.farPromise(this.distantLoad, { objects: saved, scope: w.scope });
       if (res.hasOneValue()) {
         let coder = new VersionedObjectCoder();
-        coder.decodeEncodedVersionedObjects(ccc, res.value(), false);
+        await coder.decodeEncodedVersionedObjectsClient(ccc, res.value(), this);
       }
       return Result.fromResultWithNewValue(res, w.objects);
     }
@@ -80,7 +80,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     if (changed.length > 0) {
       let res = await ccc.farPromise(this.distantSave, changed);
       if (res.hasOneValue())
-        coder.decodeEncodedVersionedObjects(ccc, res.value(), false);
+        await coder.decodeEncodedVersionedObjectsClient(ccc, res.value(), this);
       return Result.fromResultWithNewValue(res, objects);
     }
     return Result.fromValue(objects);
@@ -125,7 +125,7 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
   async distantSave({ context: { ccc } }, data: EncodedVersionedObjects) : Promise<Result<EncodedVersionedObjects>> {
     let coder = new VersionedObjectCoder();
     this.controlCenter().registerComponent(coder);
-    let objects = coder.decodeEncodedVersionedObjects(ccc, data, true);
+    let objects = coder.decodeEncodedVersionedObjectsWithModifiedValues(ccc, data);
     let res = await ccc.farPromise(this.safeSave, objects);
     if (!res.hasOneValue())
       return res as Result;

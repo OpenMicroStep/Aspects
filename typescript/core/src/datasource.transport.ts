@@ -1,6 +1,7 @@
 import {
-  ControlCenter, ControlCenterContext,
-  Identifier, VersionedObject, VersionedObjectManager
+  ControlCenterContext,
+  Identifier, VersionedObject, VersionedObjectManager,
+  DataSource, Result
 } from './core';
 
 export type EncodedVersionedObjects = EncodedVersionedObject[];
@@ -135,8 +136,80 @@ export class VersionedObjectCoder {
     return value;
   }
 
-  decodeEncodedVersionedObjects(ccc: ControlCenterContext, data: EncodedVersionedObjects, allow_unknown_local_id: boolean): VersionedObject[] {
+  decodeEncodedVersionedObjectsWithModifiedValues(
+    ccc: ControlCenterContext,
+    data: EncodedVersionedObjects,
+  ): VersionedObject[] {
     let ret: VersionedObject[] = [];
+    this._decodePhase1(ccc, data, true);
+    for (let s of data) {
+      let vo = ccc.findChecked(s.real_id);
+      let m = vo.manager();
+      let saved_attributes = new Map<keyof VersionedObject, any>();
+      for (let k of Object.keys(s.version_attributes))
+        saved_attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
+      m.mergeWithRemoteAttributes(saved_attributes, s.version);
+      for (let k of Object.keys(s.local_attributes))
+        m.setAttributeValue(k as keyof VersionedObject, this._decodeValue(ccc, s.local_attributes[k]));
+      ret.push(vo);
+    }
+    return ret;
+  }
+
+  async decodeEncodedVersionedObjectsClient(
+    ccc: ControlCenterContext,
+    data: EncodedVersionedObjects,
+    dataSource: DataSource.Categories.server
+  ): Promise<VersionedObject[]> {
+    let ret: VersionedObject[] = [];
+    this._decodePhase1(ccc, data, false);
+    let missings_grouped = new Map<string, { aspect: string, objects: VersionedObject[], attributes: string[] }>();
+    let missings_by_vo = new Map<VersionedObject, Mergeable>();
+    for (let s of data) {
+      let vo = ccc.findChecked(s.real_id);
+      let m = vo.manager();
+      let attributes = new Map<keyof VersionedObject, any>();
+      for (let k of Object.keys(s.version_attributes))
+        attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
+      let missings = m.computeMissingAttributes(attributes);
+      if (missings.length) {
+        let k = m.name() + ':' + missings.sort().join(',');
+        let g = missings_grouped.get(k);
+        let mergeable = { vo, version: s.version, attributes };
+        if (!g)
+          missings_grouped.set(k, g = { aspect: m.name(), objects: [], attributes: missings });
+        g.objects.push(vo);
+        missings_by_vo.set(vo, mergeable);
+      }
+      else {
+        m.mergeWithRemoteAttributes(attributes, s.version);
+      }
+      ret.push(vo);
+    }
+    if (missings_grouped.size) {
+      await dataSource.controlCenter().safe(async ccc => Promise.all([...missings_grouped.values()].map(async g => {
+        let res = await ccc.farPromise(dataSource.distantLoad, { objects: g.objects, scope: g.attributes });
+        let missing_data = res.value();
+        this._decodePhase1(ccc, missing_data, false);
+        for (let s of missing_data) {
+          let vo = ccc.findChecked(s.real_id);
+          let mergeable = missings_by_vo.get(vo) || {
+            vo: vo,
+            version: s.version,
+            attributes:  new Map<keyof VersionedObject, any>()
+          };
+          for (let k of Object.keys(s.version_attributes))
+            mergeable.attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
+        }
+      })));
+      for (let [vo, mergeable] of missings_by_vo) {
+        vo.manager().mergeWithRemoteAttributes(mergeable.attributes, mergeable.version);
+      }
+    }
+    return ret;
+  }
+
+  private _decodePhase1(ccc: ControlCenterContext, data: EncodedVersionedObjects, allow_unknown_local_id: boolean) {
     for (let s of data) {
       let is_local = VersionedObjectManager.isLocalId(s.real_id);
       let l = this.encodedWithLocalId.get(s.local_id);
@@ -161,17 +234,7 @@ export class VersionedObjectCoder {
         s.real_id = l.id();
       }
     }
-    for (let s of data) {
-      let r = ccc.findChecked(s.real_id);
-      let m = r.manager();
-      let ra = new Map<keyof VersionedObject, any>();
-      for (let k of Object.keys(s.version_attributes))
-        ra.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
-      m.mergeWithRemoteAttributes(ra, s.version);
-      for (let k of Object.keys(s.local_attributes))
-        m.setAttributeValue(k as keyof VersionedObject, this._decodeValue(ccc, s.local_attributes[k]));
-      ret.push(r);
-    }
-    return ret;
   }
 }
+export type Mergeable = { vo: VersionedObject, version: number, attributes: Map<keyof VersionedObject, any> };
+
