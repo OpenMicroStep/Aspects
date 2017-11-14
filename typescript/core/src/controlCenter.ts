@@ -143,19 +143,17 @@ export class ControlCenter {
   constructor(configuration: AspectConfiguration) {
     this._configuration = configuration;
 
-    if ( this._configuration._initDefaultContext) {
+    if (this._configuration._initDefaultContext) {
       let ccc = new ControlCenterContext(this, this);
       this._defaultContext = this._configuration._initDefaultContext(ccc);
     } else {
       this._defaultContext = {};
     }
-
   }
 
   defaultContext() {
-    return  this._defaultContext;
+    return this._defaultContext;
   }
-
 
   /// events
   notificationCenter() { return this._notificationCenter; }
