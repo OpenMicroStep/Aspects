@@ -446,7 +446,7 @@ export namespace VersionedObjectManager {
     throw new Error(`this object (${this._id}) was totally unregistered and thus is considered DEAD !`);
   }
   for (let k of Object.getOwnPropertyNames(VersionedObjectManager.prototype)) {
-    let prop = { ...Object.getOwnPropertyDescriptor(VersionedObjectManager.prototype, k) };
+    let prop = { ...Object.getOwnPropertyDescriptor(VersionedObjectManager.prototype, k)! };
     prop.value = throw_is_dead_error;
     Object.defineProperty(UnregisteredVersionedObjectManager.prototype, k, prop);
   }

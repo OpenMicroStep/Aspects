@@ -127,6 +127,7 @@ export class OuiDB {
     ]));
     if (await tr.delete(sql_delete) !== 1)
       return Promise.reject('unable to delete previous value');
+    return Promise.resolve();
   }
 
   async raw_delete_obi(tr: DBConnectorTransaction, reporter: Reporter, oid: number)  {

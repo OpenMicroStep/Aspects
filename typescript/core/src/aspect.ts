@@ -641,7 +641,7 @@ export class AspectConfiguration {
       else
         extensions[k] = this.createValidator(forAttribute, properties[k], lvl + 1);
     }
-    return AttributeTypes.objectValidator(extensions, objectForKeyValidator);
+    return AttributeTypes.objectValidator(extensions, objectForKeyValidator) as Aspect.TypeValidator;
   }
   private createValidator(forAttribute: boolean, type: Aspect.Type, lvl = 0) : Aspect.TypeValidator {
     if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class" && type.type !== "or")
