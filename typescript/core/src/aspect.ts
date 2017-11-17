@@ -399,7 +399,7 @@ export class AspectConfiguration {
     this.install_attribute_relations(pending_relations);
   }
 
-  private _cstor(classname: string, categories: string[]) {
+  cstor(classname: string, categories: string[]) {
     let cstor = this._aspects.get(classname);
     if (!cstor)
       throw new Error(`cannot create ${classname}: no aspect found`);
@@ -410,7 +410,7 @@ export class AspectConfiguration {
   }
 
   create<T extends VersionedObject>(cc: ControlCenter, classname: string, categories: string[], ...args: any[]) : T {
-    let cstor = this._cstor(classname, categories);
+    let cstor = this.cstor(classname, categories);
     return new cstor(cc, ...args) as T;
   }
 
