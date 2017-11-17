@@ -70,8 +70,7 @@ export class ObiDataSource extends DataSource {
   async save(ccc: ControlCenterContext, tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
     const insert = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
       if (value instanceof VersionedObject) {
-        let state = value.manager().state();
-        if (state === VersionedObjectManager.State.NEW) {
+        if (value.manager().isNew()) {
           let v = versions.get(value);
           if (v)
             value = v._id;
@@ -100,8 +99,7 @@ export class ObiDataSource extends DataSource {
     };
     const remove = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
       if (value instanceof VersionedObject) {
-        let state = value.manager().state();
-        if (state === VersionedObjectManager.State.NEW) {
+        if (value.manager().isNew()) {
           reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved` });
           return;
         }
@@ -116,15 +114,14 @@ export class ObiDataSource extends DataSource {
     let manager = object.manager();
     let aspect = manager.aspect();
     let oid = manager.id();
-    let version = manager.savedVersion();
-    let state = manager.state();
+    let version = manager.version();
 
-    if (state === VersionedObjectManager.State.DELETED) {
+    if (manager.isDeleted()) {
       await this.db.raw_delete_obi(tr, reporter, oid as number);
       versions.set(object, { _id: oid, _version: version });
     }
     else {
-      let isNew = state === VersionedObjectManager.State.NEW;
+      let isNew = manager.isNew();
       if (isNew)
         oid = await this.db.nextObiId(tr);
 
@@ -137,9 +134,8 @@ export class ObiDataSource extends DataSource {
 
       let car_table = this.db.systemObiByName.get(this.db.config.CarTableLib)!;
       let car_type = this.db.systemObiByName.get(this.db.config.CarTypeLib)!;
-      let map = async (k: string, nv: any, ov: any | undefined) => {
-        let obi_car_name = this.config.aspectAttribute_to_ObiCar(k);
-        let a = aspect.attributes.get(k)!;
+      let map = async (a: Aspect.InstalledAttribute, nv: any, ov: any | undefined) => {
+        let obi_car_name = this.config.aspectAttribute_to_ObiCar(a.name);
         let car = this.db.systemObiByName.get(obi_car_name);
         if (!car) {
           if (!a.relation)
@@ -155,40 +151,19 @@ export class ObiDataSource extends DataSource {
           direct: true,
         };
 
-        switch (a.type.type) {
-          case "primitive":
-          case "or":
-          case "class": {
-            if (nv !== undefined)
-              await insert(tr, table, oid as number, car._id!, a, ci, nv);
-            if (ov !== undefined)
-              await remove(tr, table, oid as number, car._id!, a, ci, ov);
-            break;
-          }
-          case 'set': { // multi value obi style
-            for (let nvv of nv) {
-              if (!ov || !ov.has(nvv))
-                await insert(tr, table, oid as number, car._id!, a, ci, nvv);
-            }
-            if (ov) {
-              for (let ovv of ov) {
-                if (!nv.has(ovv))
-                  await remove(tr, table, oid as number, car._id!, a, ci, ovv);
-              }
-            }
-            break;
-          }
-          default:
-            reporter.diagnostic({ is: "error", msg: `unsupported attribute type ${a.type.type} by obi` });
-          }
+        let { add, del } = Aspect.diff<any>(a.type, nv, ov);
+        for (let ovv of del)
+          await remove(tr, table, oid as number, car._id!, a, ci, ovv);
+        for (let nvv of add)
+          await insert(tr, table, oid as number, car._id!, a, ci, nvv);
       };
 
       if (isNew)
         await this.db.raw_insert(tr, "ID", oid as number, this.db.config.CarEntityId, obi._id);
-      await map("_version", version + 1, isNew ? undefined : version);
+      await map(Aspect.attribute_version, version + 1, isNew ? undefined : version);
       versions.set(object, { _id: oid, _version: version + 1 });
-      for (let [k, nv] of manager.modifiedAttributes().entries())
-        await map(k, nv, isNew ? undefined : manager.savedAttributes().get(k));
+      for (let { attribute, modified } of manager.modifiedAttributes())
+        await map(attribute, modified, isNew ? undefined : manager.savedAttributeValueFast(attribute));
     }
   }
 

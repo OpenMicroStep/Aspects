@@ -50,7 +50,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
   async load({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObject[]>>  {
     let saved: VersionedObject[] = [];
     for (let vo of w.objects) {
-      if (vo.manager().state() !== VersionedObjectManager.State.NEW)
+      if (vo.manager().isNew())
         saved.push(vo);
     }
     if (saved.length > 0) {
@@ -67,9 +67,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     let reporter = new Reporter();
     let coder = new VersionedObjectCoder();
     for (let vo of objects) {
-      let manager = vo.manager();
-      let state = manager.state();
-      if (state !== VersionedObjectManager.State.UNCHANGED) {
+      if (vo.manager().isModified()) {
         vo.validate(reporter);
         coder.encode(vo);
       }
@@ -164,10 +162,8 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
   let changed = new Set<T>();
   for (let o of objects) {
     let manager = o.manager();
-    let state = manager.state();
-    if (state === VersionedObjectManager.State.NEW)
-      manager.fillNewObjectMissingValues();
-    if (state !== VersionedObjectManager.State.UNCHANGED)
+    manager.fillNewObjectMissingValues();
+    if (manager.isModified())
       changed.add(o);
   }
   return changed;
@@ -179,7 +175,6 @@ async function safeScope(
   db: DataSource.Categories.implementation & DataSource.Categories.raw & ExtDataSource,
   all: Set<VersionedObject> | undefined,
   iterator: Iterable<[VersionedObject, DataSourceInternal.ResolvedScope]>,
-  strictScope: boolean = true,
 ): Promise<void> {
   let filters = new Map<SafePostLoad, SafePostLoadContext>();
   let extras = new Map<VersionedObject, Set<string>>();
@@ -196,29 +191,7 @@ async function safeScope(
           filters.set(safe_post_load, f = safe_post_load(reporter, db));
         f.for_each(vo, path);
       }
-      if (strictScope) {
-        let extra = extras.get(vo);
-        if (!extra) {
-          extra = new Set();
-          for (let a of manager.modifiedAttributes().keys())
-            if (a !== "_id" && a !== "_version")
-              extra.add(a);
-          for (let a of manager.savedAttributes().keys())
-            if (a !== "_id" && a !== "_version")
-              extra.add(a);
-          extras.set(vo, extra);
-        }
-        for (let a of scope_attributes)
-          extra.delete(a.name);
-      }
     });
-  }
-  if (strictScope) {
-    for (let extra of extras.values()) {
-      for (let a of extra) {
-        reporter.diagnostic({ is: "error", msg: `attribute ${a} can't be loaded` });
-      }
-    }
   }
   if (filters.size > 0)
     await Promise.all([...filters.values()].map(f => f.finalize()));

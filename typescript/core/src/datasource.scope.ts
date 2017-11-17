@@ -228,22 +228,11 @@ function _traverseScope(
   for (let attribute of attributes) {
     if (Aspect.typeIsClass(attribute.type)) {
       let s_path = `${n_path}${attribute.name}.`;
-      if (Aspect.typeIsMultValue(attribute.type)) {
-        let l_values: any = manager.modifiedAttributes().get(attribute.name as keyof VersionedObject);
-        if (l_values) for (let v of l_values)
-          _traverseScope(scope, v, s_path, s_path, for_each);
-        let v_values: any = manager.savedAttributes().get(attribute.name as keyof VersionedObject);
-        if (v_values) for (let v of v_values)
-          _traverseScope(scope, v, s_path, s_path, for_each);
-      }
-      else {
-        let l_value: any = manager.modifiedAttributes().get(attribute.name as keyof VersionedObject);
-        if (l_value)
-          _traverseScope(scope, l_value, s_path, s_path, for_each);
-        let v_value: any = manager.savedAttributes().get(attribute.name as keyof VersionedObject);
-        if (v_value)
-          _traverseScope(scope, v_value, s_path, s_path, for_each);
-      }
+      let data = manager._attribute_data[attribute.index];
+      for (let value of Aspect.traverse<VersionedObject>(attribute.type, data.modified))
+        _traverseScope(scope, value, s_path, s_path, for_each);
+      for (let value of Aspect.traverse<VersionedObject>(attribute.type, data.saved))
+        _traverseScope(scope, value, s_path, s_path, for_each);
     }
   }
 }

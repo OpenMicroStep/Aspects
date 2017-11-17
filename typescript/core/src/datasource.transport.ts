@@ -11,13 +11,21 @@ export type EncodedValue = null | string | number | boolean |
   { is: "date", v: string } |
   { is: "obj", v: { [s: string]: EncodedValue } } |
   any[];
+const MODIFIED = 1;
+const SAVED = 2;
+const METADATA = 4;
+
+const IDX_FLAGS = 0;
+const IDX_MODIFIED = 1;
+const IDX_SAVED = 2;
+const IDX_METADATA = 2;
+
+const NO_VALUE = 0;
+
+export type EncodedVersionedAttribute = [/** flags */ number, /** modified */ EncodedValue, /** saved */ EncodedValue, /** metadata */ EncodedValue];
 export type EncodedVersionedObject = {
   is: string,
-  real_id: Identifier,
-  local_id: Identifier,
-  version: number,
-  local_attributes: { [s: string]: EncodedValue },
-  version_attributes: { [s: string]: EncodedValue }
+  v: (EncodedVersionedAttribute | 0)[]
 };
 export class VersionedObjectCoder {
   private _encodedVersionedObjects: EncodedVersionedObjects | undefined = [];
@@ -29,16 +37,27 @@ export class VersionedObjectCoder {
     if (!this.encodedWithLocalId.has(id)) {
       this.encodedWithLocalId.set(id, vo);
       let m = vo.manager();
-      let r: EncodedVersionedObject = {
-        is: m.classname(),
-        real_id: id,
-        local_id: this.decodedWithLocalId.get(vo) || id,
-        version: m.savedVersion(),
-        local_attributes: {},
-        version_attributes: {},
-      };
-      m.savedAttributes().forEach((v, k) => r.version_attributes[k] = this._encodeValue(v));
-      m.modifiedAttributes().forEach((v, k) => r.local_attributes[k] = this._encodeValue(v));
+      let attributes = new Array(m.aspect().attributes_by_index.length);
+      attributes[0] = [MODIFIED | SAVED, this.decodedWithLocalId.get(vo) || id, id, NO_VALUE];
+      attributes[1] = [SAVED, NO_VALUE, m.version(), NO_VALUE];
+
+      let r: EncodedVersionedObject = { is: m.classname(), v: attributes };
+
+      let attributes_by_index = m.aspect().attributes_by_index;
+      for (let i = 2; i < attributes_by_index.length; i++) {
+        let attribute = attributes_by_index[i];
+        let flags = 0;
+        let vm: any = NO_VALUE, vs: any = NO_VALUE;
+        if (m.isAttributeModifiedFast(attribute)) {
+          flags |= MODIFIED;
+          vm = m.attributeValueFast(attribute);
+        }
+        if (m.isAttributeSavedFast(attribute)) {
+          flags |= SAVED;
+          vs = m.attributeValueFast(attribute);
+        }
+        attributes[i] = flags > 0 ? [flags, this._encodeValue(vm), this._encodeValue(vs), NO_VALUE] : NO_VALUE;
+      }
       if (this._encodedVersionedObjects)
         this._encodedVersionedObjects.push(r);
       else
@@ -142,15 +161,20 @@ export class VersionedObjectCoder {
   ): VersionedObject[] {
     let ret: VersionedObject[] = [];
     this._decodePhase1(ccc, data, true);
-    for (let s of data) {
-      let vo = ccc.findChecked(s.real_id);
+    for (let { v: values } of data) {
+      let vo = ccc.findChecked(values[0]![IDX_SAVED]);
       let m = vo.manager();
-      let saved_attributes = new Map<keyof VersionedObject, any>();
-      for (let k of Object.keys(s.version_attributes))
-        saved_attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
-      m.mergeSavedAttributes(saved_attributes, s.version);
-      for (let k of Object.keys(s.local_attributes))
-        m.setAttributeValue(k as keyof VersionedObject, this._decodeValue(ccc, s.local_attributes[k]));
+      let attributes_by_index = m.aspect().attributes_by_index;
+      let merge_attributes = new Array<{ value: any } | undefined>(attributes_by_index.length - 2);
+      for (let i = 2; i < attributes_by_index.length; i++) {
+        let v = values[i];
+        merge_attributes[i - 2] = undefined;
+        if (v && v[IDX_FLAGS] & MODIFIED)
+          m.setAttributeValueFast(attributes_by_index[i], v[IDX_MODIFIED]);
+        if (v && v[IDX_FLAGS] & SAVED)
+          merge_attributes[i - 2] = { value: v[IDX_MODIFIED] };
+      }
+      m.mergeSavedAttributesFast(merge_attributes, values[1]![IDX_SAVED]);
       ret.push(vo);
     }
     return ret;
@@ -165,24 +189,29 @@ export class VersionedObjectCoder {
     this._decodePhase1(ccc, data, false);
     let missings_grouped = new Map<string, { aspect: string, objects: VersionedObject[], attributes: string[] }>();
     let missings_by_vo = new Map<VersionedObject, Mergeable>();
-    for (let s of data) {
-      let vo = ccc.findChecked(s.real_id);
+    for (let { v: values } of data) {
+      let vo = ccc.findChecked(values[0]![IDX_SAVED]);
       let m = vo.manager();
-      let attributes = new Map<keyof VersionedObject, any>();
-      for (let k of Object.keys(s.version_attributes))
-        attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
-      let missings = m.computeMissingAttributes(attributes);
+      let attributes_by_index = m.aspect().attributes_by_index;
+      let merge_attributes = new Array<{ value: any } | undefined>(attributes_by_index.length - 2);
+      for (let i = 2; i < attributes_by_index.length; i++) {
+        let v = values[i];
+        merge_attributes[i - 2] = undefined;
+        if (v && v[IDX_FLAGS] & SAVED)
+          merge_attributes[i - 2] = { value: v[IDX_MODIFIED] };
+      }
+      let missings = m.computeMissingAttributesFast(merge_attributes);
       if (missings.length) {
         let k = m.classname() + ':' + missings.sort().join(',');
         let g = missings_grouped.get(k);
-        let mergeable = { vo, version: s.version, attributes };
+        let mergeable = { vo, version: values[1]![IDX_SAVED], merge_attributes };
         if (!g)
           missings_grouped.set(k, g = { aspect: m.classname(), objects: [], attributes: missings });
         g.objects.push(vo);
         missings_by_vo.set(vo, mergeable);
       }
       else {
-        m.mergeSavedAttributes(attributes, s.version);
+        m.mergeSavedAttributesFast(merge_attributes, values[1]![IDX_SAVED]);
       }
       ret.push(vo);
     }
@@ -191,19 +220,26 @@ export class VersionedObjectCoder {
         let res = await ccc.farPromise(dataSource.distantLoad, { objects: g.objects, scope: g.attributes });
         let missing_data = res.value();
         this._decodePhase1(ccc, missing_data, false);
-        for (let s of missing_data) {
-          let vo = ccc.findChecked(s.real_id);
-          let mergeable = missings_by_vo.get(vo) || {
-            vo: vo,
-            version: s.version,
-            attributes:  new Map<keyof VersionedObject, any>()
-          };
-          for (let k of Object.keys(s.version_attributes))
-            mergeable.attributes.set(k as keyof VersionedObject, this._decodeValue(ccc, s.version_attributes[k]));
+        for (let { v: values } of missing_data) {
+          let vo = ccc.findChecked(values[0]![IDX_SAVED]);
+          let m = vo.manager();
+          let attributes_by_index = m.aspect().attributes_by_index;
+          let mergeable = missings_by_vo.get(vo);
+          if (!mergeable) {
+            mergeable = { vo, version: values[1]![IDX_SAVED], merge_attributes: new Array<{ value: any } | undefined>(attributes_by_index.length - 2) };
+            for (let i = 2; i < attributes_by_index.length; i++)
+              mergeable.merge_attributes[i - 2] = undefined;
+          }
+          let { merge_attributes } = mergeable;
+          for (let i = 2; i < attributes_by_index.length; i++) {
+            let v = values[i];
+            if (v && v[IDX_FLAGS] & SAVED)
+              merge_attributes[i - 2] = { value: v[IDX_MODIFIED] };
+          }
         }
       })));
       for (let [vo, mergeable] of missings_by_vo) {
-        vo.manager().mergeSavedAttributes(mergeable.attributes, mergeable.version);
+        vo.manager().mergeSavedAttributesFast(mergeable.merge_attributes, mergeable.version);
       }
     }
     return ret;
@@ -211,30 +247,32 @@ export class VersionedObjectCoder {
 
   private _decodePhase1(ccc: ControlCenterContext, data: EncodedVersionedObjects, allow_unknown_local_id: boolean) {
     for (let s of data) {
-      let is_local = VersionedObjectManager.isLocalId(s.real_id);
-      let l = this.encodedWithLocalId.get(s.local_id);
+      let real_id = s.v[0]![IDX_SAVED];
+      let local_id = s.v[0]![IDX_MODIFIED];
+      let is_local = VersionedObjectManager.isLocalId(real_id);
+      let l = this.encodedWithLocalId.get(local_id);
       if (!l && !is_local)
-        l = ccc.find(s.real_id);
+        l = ccc.find(real_id);
       if (!l) {
         l = ccc.create(s.is);
         if (!is_local)
-          l.manager().setId(s.real_id);
+          l.manager().setId(real_id);
         else if (allow_unknown_local_id) {
-          this.encodedWithLocalId.set(s.real_id, l);
-          this.decodedWithLocalId.set(l, s.real_id);
-          s.real_id = l.id();
+          this.encodedWithLocalId.set(real_id, l);
+          this.decodedWithLocalId.set(l, real_id);
+          s.v[0]![IDX_SAVED] = l.id();
         }
         else
-          throw new Error(`reference to locally defined object ${s.local_id}`);
+          throw new Error(`reference to locally defined object ${local_id}`);
       }
       else if (!is_local)
-        l.manager().setId(s.real_id);
+        l.manager().setId(real_id);
       else {
-        this.encodedWithLocalId.set(s.real_id, l);
-        s.real_id = l.id();
+        this.encodedWithLocalId.set(real_id, l);
+        s.v[0]![IDX_SAVED] = l.id();
       }
     }
   }
 }
-export type Mergeable = { vo: VersionedObject, version: number, attributes: Map<keyof VersionedObject, any> };
+export type Mergeable = { vo: VersionedObject, version: number, merge_attributes: ({ value: any } | undefined)[] };
 

@@ -20,16 +20,16 @@ export namespace DataSourceInternal {
   };
   export type Mapper<T> = {
     aspect(object: T): Aspect.Installed;
-    has(object: T, attribute: string): boolean;
-    get(object: T, attribute: string): any;
-    todb(object: T, attribute: string, value): any;
+    has(object: T, attribute: Aspect.InstalledAttribute): boolean;
+    get(object: T, attribute: Aspect.InstalledAttribute): any;
+    todb(object: T, attribute: Aspect.InstalledAttribute, value): any;
     sort(a, b, type: Aspect.Type): number;
   };
   export const versionedObjectMapper: Mapper<VersionedObject> = {
     aspect(vo: VersionedObject) { return vo.manager().aspect(); },
-    has(vo: VersionedObject, attribute: string) { return vo.manager().hasAttributeValue(attribute); },
-    get(vo: VersionedObject, attribute:  keyof VersionedObject) { return vo.manager().attributeValue(attribute); },
-    todb(vo: VersionedObject, attribute: string, value) { return value; },
+    has(vo: VersionedObject, attribute: Aspect.InstalledAttribute) { return vo.manager().hasAttributeValueFast(attribute); },
+    get(vo: VersionedObject, attribute:  Aspect.InstalledAttribute) { return vo.manager().attributeValueFast(attribute); },
+    todb(vo: VersionedObject, attribute: Aspect.InstalledAttribute, value) { return value; },
     sort(a, b, type: Aspect.Type) {
       if (Aspect.typeIsClass(type)) {
         a = a.id();
@@ -101,8 +101,8 @@ export namespace DataSourceInternal {
       }
       else if (constraint instanceof ConstraintValue) {
         if (set.variable(prefix + constraint.leftVariable) === set) {
-          ok = this.mapper.has(object, constraint.leftAttribute.name) &&
-              pass_value(constraint.type, this.mapper.get(object, constraint.leftAttribute.name), this.mapper.todb(object, constraint.leftAttribute.name, constraint.value));
+          ok = this.mapper.has(object, constraint.leftAttribute) &&
+              pass_value(constraint.type, this.mapper.get(object, constraint.leftAttribute), this.mapper.todb(object, constraint.leftAttribute, constraint.value));
         }
       }
       return ok;
@@ -184,15 +184,15 @@ export namespace DataSourceInternal {
         if ((lset === set1 || lset === set2) && (rset === set1 || rset === set2)) {
           let lo = (lset === set1 ? o1 : o2);
           let ro = (rset === set1 ? o1 : o2);
-          ok = this.mapper.has(lo, constraint.leftAttribute.name) && this.mapper.has(ro, constraint.rightAttribute.name)
-            && pass_value(constraint.type, this.mapper.get(lo, constraint.leftAttribute.name), this.mapper.get(ro, constraint.rightAttribute.name));
+          ok = this.mapper.has(lo, constraint.leftAttribute) && this.mapper.has(ro, constraint.rightAttribute)
+            && pass_value(constraint.type, this.mapper.get(lo, constraint.leftAttribute), this.mapper.get(ro, constraint.rightAttribute));
         }
       }
       else if (constraint instanceof ConstraintValue) {
         let lset = set.variable(prefix + constraint.leftVariable)!;
         if (lset === set2) {
-          ok = this.mapper.has(o2, constraint.leftAttribute.name) &&
-              pass_value(constraint.type, this.mapper.get(o2, constraint.leftAttribute.name), this.mapper.todb(o2, constraint.leftAttribute.name, constraint.value));
+          ok = this.mapper.has(o2, constraint.leftAttribute) &&
+              pass_value(constraint.type, this.mapper.get(o2, constraint.leftAttribute), this.mapper.todb(o2, constraint.leftAttribute, constraint.value));
         }
       }
       return ok;
@@ -227,7 +227,7 @@ export namespace DataSourceInternal {
     valueAtPath(o: T, path: Aspect.InstalledAttribute[]) {
       let v = o;
       for (let a of path) {
-        v = this.mapper.get(v, a.name);
+        v = this.mapper.get(v, a);
       }
       return v;
     }

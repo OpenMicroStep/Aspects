@@ -175,6 +175,47 @@ export namespace Aspect {
     };
   }
 
+  export function *traverse<T>(type: Aspect.Type, v: any) : IterableIterator<T> {
+    if (v) {
+      switch (type.type) {
+        case 'set':
+          for (let n of v)
+            yield n;
+          break;
+        case 'class':
+        case 'or':
+          yield v;
+          break;
+        default: throw new Error(`unsupported traverse type ${type.type}`);
+      }
+    }
+  }
+
+  export function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
+    let ret = { add: [] as T[], del: [] as T[] };
+    switch (type.type) {
+      case 'set':
+        if (newV) for (let n of newV)
+          if (!oldV || !oldV.has(n))
+            ret.add.push(n);
+        if (oldV) for (let o of oldV)
+          if (!newV || !newV.has(o))
+            ret.del.push(o);
+        break;
+      case 'primitive':
+      case 'class':
+      case 'or':
+        if (oldV !== newV) {
+          if (oldV) ret.del.push(oldV);
+          if (newV) ret.add.push(newV);
+        }
+        break;
+      default: throw new Error(`unsupported diff type ${type.type}`);
+    }
+
+    return ret;
+  }
+
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object' | 'boolean';
   export type TypeVoid       =  { is: 'type', type: 'void' };
   export type TypePrimitive  =  { is: 'type', type: 'primitive', name: PrimaryType };
@@ -230,6 +271,7 @@ export namespace Aspect {
   };
   export interface InstalledAttribute {
     name: string;
+    index: number;
     type: Type;
     validator: AttributeTypeValidator;
     relation: Reference | undefined;
@@ -245,6 +287,7 @@ export namespace Aspect {
     categories: Set<string>;
     attribute_ref: InstalledAttribute;
     attributes: Map<string, InstalledAttribute>;
+    attributes_by_index: InstalledAttribute[];
     farMethods: Map<string, InstalledFarMethod>;
     implementation: VersionedObjectConstructor;
   };
@@ -269,6 +312,7 @@ export namespace Aspect {
 
   export const attribute_id: Aspect.InstalledAttribute = {
     name: "_id",
+    index: 0,
     type: { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
     validator: Validation.validateId,
     relation: undefined,
@@ -277,6 +321,7 @@ export namespace Aspect {
   };
   export const attribute_version: Aspect.InstalledAttribute = {
     name: "_version",
+    index: 1,
     type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
     validator: Validation.validateVersion,
     relation: undefined,
@@ -356,6 +401,7 @@ export class AspectConfiguration {
           categories: new Set(),
           attribute_ref: {
             name: "_id",
+            index: 0,
             type: { is: "type", type: "class", name: name },
             validator: Validation.validateId,
             relation: undefined,
@@ -363,6 +409,7 @@ export class AspectConfiguration {
             is_sub_object: false,
           },
           attributes: new Map(voAttributes),
+          attributes_by_index: [Aspect.attribute_id, Aspect.attribute_version],
           farMethods: new Map(),
           implementation: cstor,
         };
@@ -532,13 +579,19 @@ export class AspectConfiguration {
   ) {
     if (!installed_attributes.has(aspect_cstor)) {
       let attributes = aspect_cstor.aspect.attributes;
+      let attributes_by_index = aspect_cstor.aspect.attributes_by_index;
       let cstor: VersionedObjectConstructor | undefined = aspect_cstor.aspect.implementation;
+      let will_install: VersionedObjectConstructor[] = [];
       while (cstor && cstor !== VersionedObject) {
+        will_install.unshift(cstor);
+        cstor = cstor.parent;
+      }
+      for (cstor of will_install) {
         for (let attribute of cstor.definition.attributes || []) {
-          const data = this.install_attribute(aspect_cstor, attribute, pending_relations);
+          const data = this.install_attribute(aspect_cstor, attribute, attributes_by_index.length, pending_relations);
+          attributes_by_index.push(data);
           attributes.set(data.name, data);
         }
-        cstor = cstor.parent;
       }
       installed_attributes.add(aspect_cstor);
     }
@@ -546,41 +599,45 @@ export class AspectConfiguration {
 
   private install_attribute(
     aspect_cstor: VersionedObjectConstructorCache,
-    attribute: Aspect.Attribute,
+    attribute_definition: Aspect.Attribute,
+    index: number,
     pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
   ) {
-    let contains_types = Aspect.typeToAspectNames(attribute.type);
-    const data: Aspect.InstalledAttribute = {
-      name: attribute.name as keyof VersionedObject,
-      validator: attribute.validator || this.createValidator(true, attribute.type),
-      type: attribute.type,
+    let contains_types = Aspect.typeToAspectNames(attribute_definition.type);
+    const attribute: Aspect.InstalledAttribute = {
+      name: attribute_definition.name as keyof VersionedObject,
+      index: index,
+      validator: attribute_definition.validator || this.createValidator(true, attribute_definition.type),
+      type: attribute_definition.type,
       relation: undefined,
       contains_vo: contains_types.length > 0,
-      is_sub_object: attribute.is_sub_object === true,
+      is_sub_object: attribute_definition.is_sub_object === true,
     };
     for (let name of contains_types) {
       let sub_aspect_cstor = this._aspects.get(name);
       if (!sub_aspect_cstor)
-        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${data.name} requires class ${name} to work`);
+        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${attribute.name} requires class ${name} to work`);
       let sub_aspect = sub_aspect_cstor.aspect;
-      if (data.is_sub_object && !sub_aspect.is_sub_object)
-        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${data.name} is marked as sub object while ${name} is not`);
-      sub_aspect.references.push({ class: aspect_cstor.aspect, attribute: data });
+      if (attribute.is_sub_object && !sub_aspect.is_sub_object)
+        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${attribute.name} is marked as sub object while ${name} is not`);
+      sub_aspect.references.push({ class: aspect_cstor.aspect, attribute: attribute });
     }
 
-    Object.defineProperty(aspect_cstor.prototype, data.name, {
+    Object.defineProperty(aspect_cstor.prototype, attribute.name, {
       enumerable: true,
-      get(this: VersionedObject) { return this.__manager.attributeValue(data.name as keyof VersionedObject); },
+      get(this: VersionedObject) {
+        return this.__manager.attributeValueFast(attribute);
+      },
       set(this: VersionedObject, value) {
         let manager = this.__manager;
-        value = validateValue(value, new AttributePath(manager._aspect.classname, manager.id(), '.', data.name), data.validator, manager);
-        manager.setAttributeValueFast(data.name as keyof VersionedObject, value, data);
+        value = validateValue(value, new AttributePath(manager._aspect.classname, manager.id(), '.', attribute.name), attribute.validator, manager);
+        manager.setAttributeValueFast(attribute, value);
       }
     });
 
-    if (attribute.relation)
-      pending_relations.push([aspect_cstor.aspect, data, attribute.relation]);
-    return data;
+    if (attribute_definition.relation)
+      pending_relations.push([aspect_cstor.aspect, attribute, attribute_definition.relation]);
+    return attribute;
   }
 
   private install_attribute_relations(pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]) {

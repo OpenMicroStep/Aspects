@@ -48,7 +48,7 @@ function clean(f: Flux<Context>) {
 
 function save_c0(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  assert.equal(c0.version(), VersionedObjectManager.NextVersion);
+  assert.equal(c0.version(), VersionedObjectManager.NoVersion);
   assert.equal(c0.manager().isModified(), true);
   ccc.farPromise(db.rawSave, [c0]).then((envelop) => {
     assert.deepEqual(envelop.diagnostics(), []);

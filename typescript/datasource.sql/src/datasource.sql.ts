@@ -28,46 +28,45 @@ export class SqlDataSource extends DataSource {
 
   async save(tr: SqlDataSourceTransaction, reporter: Reporter, objects: Set<VersionedObject>, object: VersionedObject) : Promise<void> {
     let manager = object.manager();
-    let state = manager.state();
     let aspect = manager.aspect();
     let id = manager.id();
-    let version = manager.savedVersion();
+    let version = manager.version();
     let mapper = this.mappers[aspect.classname];
     if (!mapper)
       return Promise.reject(`mapper not found for: ${aspect.classname}`);
     let idAttr = mapper.get("_id")!;
-    let isNew = state === VersionedObjectManager.State.NEW;
+    let isNew = manager.isNew();
     let valuesByTable = new Map<SqlInsert, Map<string, any>>();
     let valuesByPath = new Map<string, { table: string, sets: SqlBinding[], checks: SqlBinding[], where: SqlBinding }>(); // [table, key]value*[table, key]
     if (isNew) {
       for (let c of mapper.inserts)
         valuesByTable.set(c, new Map<string, { nv: any, ov: any }>());
     }
-    let map = (k: string, nv: any, ov: any | undefined) => {
-      let attribute = mapper.get(k)!;
-      if (!attribute.insert) // virtual attribute
+    let map = (k: Aspect.InstalledAttribute, modified: any, saved: any | undefined) => {
+      let mapped_attribute = mapper.get(k.name)!;
+      if (!mapped_attribute.insert) // virtual attribute
         return;
-      let last = attribute.last();
-      let nvdb = mapValue(this, mapper, attribute, nv);
-      if (isNew && attribute.insert) { // insert syntax
-        let values = valuesByTable.get(attribute.insert)!;
-        values.set(last.value, nvdb);
+      let last = mapped_attribute.last();
+      let db_modified = mapValue(this, mapper, mapped_attribute, modified);
+      if (isNew && mapped_attribute.insert) { // insert syntax
+        let values = valuesByTable.get(mapped_attribute.insert)!;
+        values.set(last.value, db_modified);
       }
       else { // update syntax
-        let iddb = attribute.toDbKey(mapper.toDbKey(id));
-        let key = attribute.pathref_uniqid();
+        let iddb = mapped_attribute.toDbKey(mapper.toDbKey(id));
+        let key = mapped_attribute.pathref_uniqid();
         let values = valuesByPath.get(key);
         if (!values) {
           valuesByPath.set(key, values = { table: last.table, sets: [], checks: [], where: { sql: "", bind: [] } });
-          if (attribute.path.length > 1) {
+          if (mapped_attribute.path.length > 1) {
             let p: SqlPath;
-            let l: SqlPath = attribute.path[0];
-            let i = 1, len = attribute.path.length - 1;
+            let l: SqlPath = mapped_attribute.path[0];
+            let i = 1, len = mapped_attribute.path.length - 1;
             let from = this.maker.from(l.table, `U0`);
             let joins: SqlBinding[] = [];
             let where = this.maker.op(this.maker.column(`U0`, l.key), ConstraintType.Equal, iddb);
             for (; i < len; i++) {
-              p = attribute.path[i];
+              p = mapped_attribute.path[i];
               joins.push(this.maker.join('inner',
                 p.table, `U${i}`,
                 this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key))
@@ -81,32 +80,32 @@ export class SqlDataSource extends DataSource {
             values.where = this.maker.op(this.maker.quote(last.key), ConstraintType.Equal, iddb);
           }
         }
-        values.sets.push(this.maker.set(last.value, nvdb));
+        values.sets.push(this.maker.set(last.value, db_modified));
         if (!isNew) {
-          let ovdb = mapValue(this, mapper, attribute, ov);
-          values.checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, ovdb));
+          let db_saved = mapValue(this, mapper, mapped_attribute, saved);
+          values.checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, db_saved));
         }
       }
     };
-    for (let [k, nv] of manager.modifiedAttributes()) {
-      if (nv instanceof VersionedObject && nv.manager().state() === VersionedObjectManager.State.NEW) {
-        if (!objects.has(nv)) {
-          reporter.diagnostic({ is: "error", msg: `cannot save ${k}: referenced object is not saved and won't be` });
+    for (let { attribute, modified } of manager.modifiedAttributes()) {
+      if (modified instanceof VersionedObject && modified.manager().isNew()) {
+        if (!objects.has(modified)) {
+          reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
           continue;
         }
-        if (!tr.versions.has(nv))
-          await this.save(tr, reporter, objects, nv);
-        let v = tr.versions.get(nv)!;
-        let name = nv.manager().classname();
+        if (!tr.versions.has(modified))
+          await this.save(tr, reporter, objects, modified);
+        let v = tr.versions.get(modified)!;
+        let name = modified.manager().classname();
         let mapper = this.mappers[name];
         if (!mapper)
           throw new Error(`cannot find mapper for ${name}`);
         let idattr = mapper.attribute_id();
-        nv = idattr.toDbKey(mapper.toDbKey(v._id));
+        modified = idattr.toDbKey(mapper.toDbKey(v._id));
       }
-      map(k, nv, isNew ? undefined : manager.savedAttributes().get(k));
+      map(attribute, modified, isNew ? undefined : manager.savedAttributeValueFast(attribute));
     }
-    map("_version", version + 1, version);
+    map(Aspect.attribute_version, version + 1, version);
     version++;
     if (isNew) {
       for (let c of mapper.inserts) {
