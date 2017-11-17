@@ -64,6 +64,7 @@ function save_c0_new_name(f: Flux<Context>) {
   c0._name = "ReNault";
   assert.equal(c0.manager().isModified(), true);
   ccc.farPromise(db.rawSave, [c0]).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0]);
     assert.equal(c0.version(), 1);
     assert.equal(c0.manager().isModified(), false);
@@ -73,6 +74,7 @@ function save_c0_new_name(f: Flux<Context>) {
 function save_c0_c1_c2(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawSave, [c0, c1, c2]).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0, c1, c2]);
     assert.equal(c0.version(), 1);
     assert.equal(c1.version(), 0);
@@ -83,6 +85,7 @@ function save_c0_c1_c2(f: Flux<Context>) {
 function query_cars(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c0, c1, c2]);
     f.continue();
@@ -91,6 +94,7 @@ function query_cars(f: Flux<Context>) {
 function query_peugeots(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, _name: "Peugeot" } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c2]);
     let lc2 = res['cars'][0];
@@ -101,6 +105,7 @@ function query_peugeots(f: Flux<Context>) {
 function query_eq_peugeots(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, _name: { $eq: "Peugeot" } } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c2]);
     let lc2 = res['cars'][0];
@@ -111,6 +116,7 @@ function query_eq_peugeots(f: Flux<Context>) {
 function query_ne_peugeots(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, _name: { $neq: "Peugeot" } } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     let res = envelop.value();
     assert.sameMembers(res['cars'], [c0, c1]);
     let lc2 = res['cars'][0];
@@ -122,6 +128,7 @@ function query_in_c2(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, $in: [c2] } }).then((envelop) => {
     assert.deepEqual(envelop.diagnostics(), []);
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value()['cars'], [c2]);
     f.continue();
   });
@@ -129,6 +136,7 @@ function query_in_c2(f: Flux<Context>) {
 function query_id_c2(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, _id: c2.id() } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value()['cars'], [c2]);
     f.continue();
   });
@@ -136,6 +144,7 @@ function query_id_c2(f: Flux<Context>) {
 function query_peoples(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "peoples", where: { $instanceOf: People } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.deepEqual(envelop.value(), {
       peoples: []
     });
@@ -148,6 +157,7 @@ function sort_c0_c1_c2_c3_asc(f: Flux<Context>) {
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: "Car" }, scope: {
     Car: { '.' : ['+_name', '+_model'] },
   } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.deepEqual(envelop.value(), {
       cars: [c2, c3, c1, c0],
     });
@@ -160,6 +170,7 @@ function sort_c0_c1_c2_c3_dsc(f: Flux<Context>) {
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: "Car" }, scope: {
     Car: { '.' : ['-_name', '-_model'] },
   } }).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.deepEqual(envelop.value(), {
       cars: [c0, c1, c3, c2],
     });
@@ -209,6 +220,7 @@ async function _query_cars(f: Flux<Context>, q: () => Promise<Result<{ [k: strin
   ccc.unregisterObjects([p0, c0]);
 
   let envelop = await q();
+  assert.deepEqual(envelop.diagnostics(), []);
   let { cars, peoples } = envelop.value();
   assert.equal(cars.length, 1);
   assert.equal(peoples.length, 1);
