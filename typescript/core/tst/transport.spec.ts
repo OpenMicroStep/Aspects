@@ -139,73 +139,90 @@ async function client_to_server_query(flux) {
 
 async function manual_server_save(flux) {
   let data_out = [
-    { is: "Car", real_id: "_localid:300095", local_id: "_localid:300095", version: -1,
-      local_attributes: { _name: "Renault", _model: "Clio 4" },
-      version_attributes: {} },
-    { is: "Car", real_id: "_localid:300088", local_id: "_localid:300088", version: -1,
-      local_attributes: { _name: "Renault", _model: "Clio 3" },
-      version_attributes: {} },
-    { is: "Car", real_id: "_localid:300089", local_id: "_localid:300089", version: -1,
-      local_attributes: { _name: "Renault", _model: "Clio 2" },
-      version_attributes: {} },
-    { is: "Car", real_id: "_localid:300090", local_id: "_localid:300090", version: -1,
-      local_attributes: { _name: "Peugeot", _model: "3008 DKR" },
-      version_attributes: {} },
-    { is: "Car", real_id: "_localid:300091", local_id: "_localid:300091", version: -1,
-      local_attributes: { _name: "Peugeot", _model: "4008 DKR" },
-      version_attributes: {} },
-    { is: "People", real_id: "_localid:300092", local_id: "_localid:300092", version: -1,
-      local_attributes: {
-        _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons", _birthDate: { is: "date", v: "2017-09-26T15:31:54.422Z" },
-        _father: { is: "vo", v: ["People", "_localid:300094"] } },
-      version_attributes: {} },
-    { is: "People", real_id: "_localid:300093", local_id: "_localid:300093", version: -1,
-      local_attributes: {
-        _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons", _birthDate: { is: "date", v: "1970-01-01T00:00:00.000Z" },
-        _father: { is: "vo", v: ["People", "_localid:300094"] } },
-      version_attributes: {} },
-    { is: "People", real_id: "_localid:300094", local_id: "_localid:300094", version: -1,
-      local_attributes: {
-        _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: { is: "date", v: "2017-09-26T15:31:54.422Z" },
-        _childrens_by_father: { is: "set", v: [{ is: "vo", v: ["People", "_localid:300092"] }, { is: "vo", v: ["People", "_localid:300093"] }] } },
-      version_attributes: {} }];
-  let common_attributes = {
-    _mother: null,
-    _childrens_by_mother: { is: "set", v: [] },
-    _cars: { is: "set", v: [] },
-    _drivenCars: { is: "set", v: [] },
-  };
+    { is: "Car", v: [[3, "_localid:300095", "_localid:300095"], [2, 0, -1],
+      [1, "Renault", 0], [1, "Clio 4", 0], 0, 0
+    ] },
+    { is: "Car", v: [[3, "_localid:300088", "_localid:300088"], [2, 0, -1],
+      [1, "Renault", 0], [1, "Clio 3", 0], 0, 0
+    ] },
+    { is: "Car", v: [[3, "_localid:300089", "_localid:300089"], [2, 0, -1],
+      [1, "Renault", 0], [1, "Clio 2", 0], 0, 0
+    ] },
+    { is: "Car", v: [[3, "_localid:300090", "_localid:300090"], [2, 0, -1],
+      [1, "Peugeot", 0], [1, "3008 DKR", 0], 0, 0
+    ] },
+    { is: "Car", v: [[3, "_localid:300091", "_localid:300091"], [2, 0, -1],
+      [1, "Peugeot", 0], [1, "4008 DKR", 0], 0, 0
+    ] },
+    { is: "People", v: [[3, "_localid:300092", "_localid:300092"], [2, 0, -1],
+      [1, "Lisa Simpsons" , 0], [1, "Lisa" , 0], [1, "Simpsons", 0],
+      [1, { is: "vo", v: ["People", "_localid:300094"] }, 0],
+      0,0,0,0,0,
+      [1, { is: "date", v: "2017-09-26T15:31:54.422Z" }, 0],
+    ] },
+    { is: "People", v: [[3, "_localid:300093", "_localid:300093"], [2, 0, -1],
+      [1, "Bart Simpsons" , 0], [1, "Bart" , 0], [1, "Simpsons", 0],
+      [1, { is: "vo", v: ["People", "_localid:300094"] }, 0],
+      0,0,0,0,0,
+      [1, { is: "date", v: "1970-01-01T00:00:00.000Z" }, 0],
+    ] },
+    { is: "People", v: [[3, "_localid:300094", "_localid:300094"], [2, 0, -1],
+      [1, "Homer Simpsons", 0], [1, "Homer", 0], [1, "Simpsons", 0],
+      0,0,
+      [1, { is: "set", v: [{ is: "vo", v: ["People", "_localid:300092"] }, { is: "vo", v: ["People", "_localid:300093"] }] }, 0],
+      0,0,0,
+      [1, { is: "date", v: "2017-09-26T15:31:54.422Z" }, 0],
+    ] },
+  ];
   let data_res = [
-    { is: "Car", real_id: "memory:1", local_id: "_localid:300095", version: 0,
-      local_attributes: {},
-      version_attributes: { _name: "Renault", _model: "Clio 4", _owner: null, _drivers: { is: "set", v: [] } } },
-    { is: "Car", real_id: "memory:2", local_id: "_localid:300088", version: 0,
-      local_attributes: {},
-      version_attributes: { _name: "Renault", _model: "Clio 3", _owner: null, _drivers: { is: "set", v: [] } } },
-    { is: "Car", real_id: "memory:3", local_id: "_localid:300089", version: 0,
-      local_attributes: {},
-      version_attributes: { _name: "Renault", _model: "Clio 2", _owner: null, _drivers: { is: "set", v: [] } } },
-    { is: "Car", real_id: "memory:4", local_id: "_localid:300090", version: 0,
-      local_attributes: {},
-      version_attributes: { _name: "Peugeot", _model: "3008 DKR", _owner: null, _drivers: { is: "set", v: [] } } },
-    { is: "Car", real_id: "memory:5", local_id: "_localid:300091", version: 0,
-      local_attributes: {},
-      version_attributes: { _name: "Peugeot", _model: "4008 DKR", _owner: null, _drivers: { is: "set", v: [] } } },
-    { is: "People", real_id: "memory:6", local_id: "_localid:300092", version: 0,
-      local_attributes: {},
-      version_attributes: {
-        _name: "Lisa Simpsons", _firstname: "Lisa", _lastname: "Simpsons", _birthDate: { is: "date", v: "2017-09-26T15:31:54.422Z" },
-        _father: { is: "vo", v: ["People", "memory:7"] }, _childrens_by_father: { is: "set", v: [] }, ...common_attributes } },
-    { is: "People", real_id: "memory:8", local_id: "_localid:300093", version: 0,
-      local_attributes: {},
-      version_attributes: {
-        _name: "Bart Simpsons", _firstname: "Bart", _lastname: "Simpsons", _birthDate: { is: "date", v: "1970-01-01T00:00:00.000Z" },
-        _father: { is: "vo", v: ["People", "memory:7"] }, _childrens_by_father: { is: "set", v: [] }, ...common_attributes } },
-    { is: "People", real_id: "memory:7", local_id: "_localid:300094", version: 0,
-      local_attributes: {},
-      version_attributes: {
-        _name: "Homer Simpsons", _firstname: "Homer", _lastname: "Simpsons", _birthDate: { is: "date", v: "2017-09-26T15:31:54.422Z" },
-        _father: null, _childrens_by_father: { is: "set", v: [{ is: "vo", v: ["People", "memory:6"] }, { is: "vo", v: ["People", "memory:8"] }] }, ...common_attributes } }];
+    { is: "Car", v: [[3, "_localid:300095", "memory:1"], [2, 0, 0],
+      [2, 0, "Renault"], [2, 0, "Clio 4"  ], [2, 0, null], [2, 0, { is: "set" }]
+    ]},
+    { is: "Car", v: [[3, "_localid:300088", "memory:2"], [2, 0, 0],
+      [2, 0, "Renault"], [2, 0, "Clio 3"  ], [2, 0, null], [2, 0, { is: "set" }]
+    ]},
+    { is: "Car", v: [[3, "_localid:300089", "memory:3"], [2, 0, 0],
+      [2, 0, "Renault"], [2, 0, "Clio 2"  ], [2, 0, null], [2, 0, { is: "set" }]
+    ]},
+    { is: "Car", v: [[3, "_localid:300090", "memory:4"], [2, 0, 0],
+      [2, 0, "Peugeot"], [2, 0, "3008 DKR"], [2, 0, null], [2, 0, { is: "set" }]
+    ]},
+    { is: "Car", v: [[3, "_localid:300091", "memory:5"], [2, 0, 0],
+      [2, 0, "Peugeot"], [2, 0, "4008 DKR"], [2, 0, null], [2, 0, { is: "set" }]
+    ]},
+    { is: "People", v: [[3, "_localid:300092", "memory:6"], [2, 0, 0],
+      [2, 0, "Lisa Simpsons" ], [2, 0, "Lisa" ], [2, 0, "Simpsons"],
+      [2, 0, { is: "vo", v: ["People", "memory:7"] }], // _father
+      [2, 0, null], // _mother
+      [2, 0, { is: "set" }], // _childrens_by_father
+      [2, 0, { is: "set" }], // _childrens_by_mother
+      [2, 0, { is: "set" }], // _cars
+      [2, 0, { is: "set" }], // _drivenCars
+      [2, 0, { is: "date", v: "2017-09-26T15:31:54.422Z" }],
+    ] },
+    { is: "People", v: [[3, "_localid:300093", "memory:8"], [2, 0, 0],
+      [2, 0, "Bart Simpsons" ], [2, 0, "Bart" ], [2, 0, "Simpsons"],
+      [2, 0, { is: "vo", v: ["People", "memory:7"] }], // _father
+      [2, 0, null], // _mother
+      [2, 0, { is: "set" }], // _childrens_by_father
+      [2, 0, { is: "set" }], // _childrens_by_mother
+      [2, 0, { is: "set" }], // _cars
+      [2, 0, { is: "set" }], // _drivenCars
+      [2, 0, { is: "date", v: "1970-01-01T00:00:00.000Z" }],
+    ] },
+    { is: "People", v: [[3, "_localid:300094", "memory:7"], [2, 0, 0],
+      [2, 0, "Homer Simpsons"], [2, 0, "Homer"], [2, 0, "Simpsons"],
+      [2, 0, null], // _father
+      [2, 0, null], // _mother
+      [2, 0, { is: "set", v: [
+        { is: "vo", v: ["People", "memory:6"] },
+        { is: "vo", v: ["People", "memory:8"] }]
+      }], // _childrens_by_father
+      [2, 0, { is: "set" }], // _childrens_by_mother
+      [2, 0, { is: "set" }], // _cars
+      [2, 0, { is: "set" }], // _drivenCars
+      [2, 0, { is: "date", v: "2017-09-26T15:31:54.422Z" }],
+    ]}];
   let ds = new InMemoryDataSource.DataStore();
   let s1 = createContext_S1(ds, new Map());
   let c1 = createContext_C1(s1.publicTransport);
