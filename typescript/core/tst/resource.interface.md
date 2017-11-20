@@ -53,3 +53,35 @@ _relation_: `_drivers`
 #### categories: local
 ### aspect s1
 #### categories: local
+
+## class RootObject
+### attributes
+#### _p1: Point
+_sub object_
+#### _p2: Point
+_sub object_
+#### _p3: Point
+_sub object_
+#### _s0: Polygon
+_sub object_
+#### _s1: Polygon
+_sub object_
+### aspect test1
+#### categories: 
+
+## class Point
+_sub object_
+### attributes
+#### _longitude: decimal
+#### _latitude: decimal
+#### _altitute: decimal
+### aspect test1
+#### categories: 
+
+## class Polygon
+_sub object_
+### attributes
+#### _points: [0, *, Point]
+_sub object_
+### aspect test1
+#### categories: 

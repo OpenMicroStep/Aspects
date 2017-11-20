@@ -178,6 +178,7 @@ export namespace Aspect {
   export function *traverse<T>(type: Aspect.Type, v: any) : IterableIterator<T> {
     if (v) {
       switch (type.type) {
+        case 'array':
         case 'set':
           for (let n of v)
             yield n;

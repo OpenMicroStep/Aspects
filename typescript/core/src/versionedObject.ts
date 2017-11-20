@@ -5,7 +5,6 @@ import {
 } from './core';
 import { Flux } from '@openmicrostep/async';
 import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsystem.shared';
-import diff = Aspect.diff;
 import traverse = Aspect.traverse;
 
 const NEW = 0x1;
@@ -15,8 +14,77 @@ const DELETED = 0x10;
 const FLAGS_MASK = 0xFF;
 const MODIFIED_OFFSET = 8; // 1 byte for flags, 3 bytes for modified counter
 
-const PARENT_ATTRIBUTE_SAVED = 1;
-const PARENT_ATTRIBUTE_ADDDEL = 2;
+const NO_POSITION = -1;
+const ANY_POSITION = 0;
+
+export function *traverseOrdered<T>(type: Aspect.Type, v: any) : IterableIterator<[number, T]> {
+  if (v) {
+    switch (type.type) {
+      case 'array':
+        yield* v.entries();
+        break;
+      case 'set':
+        for (let n of v)
+          yield [ANY_POSITION, n];
+        break;
+      case 'class':
+      case 'or':
+        yield [0, v];
+        break;
+      default: throw new Error(`unsupported traverse type ${type.type}`);
+    }
+  }
+}
+
+function diffOrdered<T>(type: Aspect.Type, newV: any, oldV: any) {
+  let ret: [number | -1, T][] = [];
+  switch (type.type) {
+    case 'array':
+      if (oldV) {
+        for (let [idx, o] of (oldV as any[]).entries()) {
+          if (!newV || newV[idx] !== o)
+            ret.push([NO_POSITION, o]);
+        }
+      }
+      if (newV) {
+        for (let [idx, n] of (newV as any[]).entries()) {
+          if (!oldV || oldV[idx] !== n)
+            ret.push([idx, n]);
+        }
+      }
+      break;
+    case 'set':
+      if (oldV) for (let o of oldV)
+        if (!newV || !newV.has(o))
+          ret.push([NO_POSITION, o]);
+      if (newV) for (let n of newV)
+        if (!oldV || !oldV.has(n))
+          ret.push([ANY_POSITION, n]);
+      break;
+    case 'primitive':
+    case 'class':
+    case 'or':
+      if (oldV !== newV) {
+        if (oldV) ret.push([NO_POSITION, oldV]);
+        if (newV) ret.push([0, newV]);
+      }
+      break;
+    default: throw new Error(`unsupported diff type ${type.type}`);
+  }
+
+  return ret;
+}
+
+function bool2delta(positive: boolean) : -1 | 1 {
+  return positive ? +1 : -1;
+}
+
+type ParentObject = {
+  manager: VersionedObjectManager,
+  attribute: Aspect.InstalledAttribute,
+  saved_position: number, // -1/0 for set, -1/idx for array
+  modified_position: number, // -1/0 for set, -1/idx for array
+}
 
 export class VersionedObjectManager<T extends VersionedObject = VersionedObject> {
   static UndefinedVersion = -2;
@@ -30,8 +98,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   /** @internal */ _controlCenter: ControlCenter;
   /** @internal */ _aspect: Aspect.Installed;
   /** @internal */ _object: T;
-  /** @internal */ _parent_manager: VersionedObjectManager | undefined;
-  /** @internal */ _parent_attribute: number; // 1 byte for flags, 3 byte for index
+  /** @internal */ _parent: ParentObject | undefined;
   /** @internal */ _components: Set<object>;
 
   /** @internal */ _flags: VersionedObjectManager.Flags;
@@ -43,8 +110,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._flags = NEW;
     this._aspect = (object.constructor as any).aspect;
     this._object = object;
-    this._parent_manager = undefined;
-    this._parent_attribute = 0;
+    this._parent = undefined;
     let len = this._aspect.attributes_by_index.length;
     this._attribute_data = new Array(len);
     this._attribute_data[0] = { // _id
@@ -76,8 +142,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   rootObject() {
     if (!this.isSubObject())
       return this._object;
-    else if (this._parent_manager)
-      return this._parent_manager.rootObject();
+    else if (this._parent)
+      return this._parent.manager.rootObject();
     throw new Error(`cannot find root object of sub object, the sub object is not linked to any parent object`);
   }
   controlCenter() { return this._controlCenter; }
@@ -249,7 +315,18 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   setVersion(version: number) {
     if (this.isNew())
       throw new Error(`version can't be set on a locally identifier object`);
-    this._markAllAttributesSaved();
+    if (this.isModified()) {
+      for (let idx = 2; idx <  this._attribute_data.length; idx++) {
+        let data = this._attribute_data[idx];
+        if (data.flags >> MODIFIED_OFFSET) {
+          let attribute = this._aspect.attributes_by_index[idx];
+          let merge_value = data.modified;
+          this._setAttributeSavedValue(attribute, data, merge_value);
+          data.saved = merge_value;
+          data.flags |= SAVED;
+        }
+      }
+    }
     this._attribute_data[1].saved = version;
     this._flags |= SAVED;
   }
@@ -292,40 +369,26 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         let merge_value = merge_data.value;
         attribute.validator.validate(reporter, path, merge_value, this);
         if (attribute.contains_vo) {
-          for (let sub_object of traverse<VersionedObject>(attribute.type, merge_value)) {
+          for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, merge_value)) {
             let sub_object_manager = sub_object.manager();
             this._assert_same_cc(sub_object_manager);
-            if (attribute.is_sub_object) {
-              this._sub_object_merge(sub_object_manager, true, attribute);
-            }
+            if (attribute.is_sub_object)
+              this._sub_object_init(sub_object_manager, attribute)
           }
         }
 
-        let are_equals = data_is_saved && areEquals(data.saved, merge_value);
+        let is_new_saved_value = data_is_saved && areEquals(data.saved, merge_value);
         if (version === this.version()) {
-          if (data_is_saved && !are_equals) // this should not happen
+          if (data_is_saved && !is_new_saved_value) // this should not happen
             this._push_conflict(ret.conflicts, attribute.name, data);
         }
         else {
-          if (!data_is_saved || !are_equals)
+          if (!data_is_saved || !is_new_saved_value)
             ret.changes.push(attribute.name);
-          let modified_counter_was = data.flags >> MODIFIED_OFFSET;
-          if (modified_counter_was) {
-            if (areEquals(data.modified, merge_value)) {
-              let modified_counter = 0;
-              if (attribute.is_sub_object) {
-                for (let sub_object of traverse<VersionedObject>(attribute.type, merge_value)) {
-                  if (sub_object.manager().isModified())
-                    modified_counter++;
-                }
-              }
-              data.flags = (data.flags & FLAGS_MASK) + (modified_counter << MODIFIED_OFFSET);
-              if (modified_counter === 0) {
-                data.modified = undefined;
-                this._mark_attribute_modified(-1);
-              }
-            }
-            if (data_is_saved && !are_equals)
+          let attribute_modified_counter = data.flags >> MODIFIED_OFFSET;
+          if (attribute_modified_counter) {
+            this._setAttributeSavedValue(attribute, data, merge_value);
+            if (data_is_saved && !is_new_saved_value)
               this._push_conflict(ret.conflicts, attribute.name, data);
           }
         }
@@ -334,9 +397,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       }
       else if (data.flags && !merge_data && version !== this.version()) {
         if (attribute.is_sub_object && data_is_saved) {
-          for (let sub_object of traverse<VersionedObject>(attribute.type, data.saved)) {
+          for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, data.saved)) {
             let sub_object_manager = sub_object.manager();
-            this._sub_object_merge(sub_object_manager, false, attribute);
+            sub_object_manager._parent!.saved_position = NO_POSITION;
           }
         }
         data.saved = undefined;
@@ -350,6 +413,39 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return ret;
   }
 
+  private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: VersionedObjectManager.InternalAttributeData, merge_value: any) {
+    let delta = -(data.flags >> MODIFIED_OFFSET);
+    if (attribute.is_sub_object) {
+      // clear saved positions
+      for (let sub_object of traverse<VersionedObject>(attribute.type, data.saved)) {
+        let pdata = sub_object.manager()._parent!;
+        pdata.saved_position = NO_POSITION;
+      }
+      // set new saved positions
+      for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, merge_value)) {
+        let pdata = sub_object.manager()._parent!;
+        pdata.saved_position = position;
+        delta++; // "del" object
+      }
+      // update modified positions
+      for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, data.modified)) {
+        let sub_object_manager = sub_object.manager();
+        let pdata = sub_object_manager._parent!;
+        delta += +sub_object_manager.isModified();
+        if (pdata.saved_position !== position) {
+          pdata.modified_position = position;
+          delta++; // "add" object
+        }
+        else {
+          pdata.modified_position = NO_POSITION;
+          delta--; // undo "del"
+        }
+      }
+    }
+    if (this._apply_attribute_delta(data, delta) === 0)
+      data.modified = undefined;
+  }
+
   private _push_conflict(conflicts: string[], attribute: string, data: VersionedObjectManager.InternalAttributeData) {
     conflicts.push(attribute);
     if (!(data.flags & INCONFLICT)) {
@@ -360,17 +456,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   fillNewObjectMissingValues() {
     if (this._flags & NEW) {
-      let changes = 0;
       for (let idx = 2; idx <  this._attribute_data.length; idx++) {
         let data = this._attribute_data[idx];
         if (data.flags === 0) {
           let attribute = this._aspect.attributes_by_index[idx];
-          data.flags += (1 << MODIFIED_OFFSET);
-          data.modified = this._missingValue(attribute);
-          changes++;
+          this.setAttributeValueFast(attribute, this._missingValue(attribute));
         }
       }
-      this._mark_modified(changes);
     }
   }
 
@@ -427,32 +519,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
   }
 
-  private _markAllAttributesSaved() {
-    if (this.isModified()) {
-      let changes = 0;
-      for (let idx = 2; idx <  this._attribute_data.length; idx++) {
-        let data = this._attribute_data[idx];
-        if (data.flags >> MODIFIED_OFFSET) {
-          let attribute = this._aspect.attributes_by_index[idx];
-          data.saved = data.modified;
-          data.modified = undefined;
-          data.flags &= FLAGS_MASK; // clear modified counter to 0
-          data.flags |= SAVED;
-          changes--;
-          if (attribute.is_sub_object) {
-            for (let sub_object of traverse<VersionedObject>(attribute.type, data.saved)) {
-              sub_object.manager()._markAllAttributesSaved();
-            }
-          }
-        }
-      }
-      this._flags &= FLAGS_MASK; // clear modified counter
-    }
-  }
-
   private _setAttributeValueFast(attribute: Aspect.InstalledAttribute, value, is_relation) {
     let hasChanged = false;
-    let changes = 0;
+    let delta: 0 | 1 | -1 = 0;
     let oldValue;
     let data = this._attribute_data[attribute.index];
     let isSaved = (data.flags & SAVED) === SAVED;
@@ -462,7 +531,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (isSaved && areEquals(data.saved, value)) {
       if (isModified) {
         oldValue = data.modified;
-        changes = -1;
+        delta = -1;
         hasChanged = true;
       }
     }
@@ -470,31 +539,34 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       if (isModified)
         oldValue = data.modified;
       else {
-        changes = +1;
+        delta = +1;
         oldValue = data.saved;
       }
-      data.modified = value;
       hasChanged = true;
     }
 
     if (hasChanged)
-      this._updateAttribute(attribute, data, changes, value, oldValue, is_relation);
+      this._updateAttribute(attribute, data, delta, value, oldValue, is_relation);
   }
 
-  private _updateAttribute(attribute: Aspect.InstalledAttribute, data: VersionedObjectManager.InternalAttributeData, changes: number, value, oldValue, is_relation: boolean) {
-    if (!attribute.is_sub_object)
-      data.flags += (changes << MODIFIED_OFFSET);
-    if (attribute.contains_vo) {
-      let subobject_changes = 0;
-      let { add, del } = diff<VersionedObject>(attribute.type, value, oldValue);
-      let is_add = true;
-      let ai = 0, di = 0;
-      while ((is_add = ai < add.length) || di < del.length) {
-        let sub_object = is_add ? add[ai++] : del[di++];
+  private _updateAttribute(attribute: Aspect.InstalledAttribute, data: VersionedObjectManager.InternalAttributeData, delta: -1 | 0 | 1, value, oldValue, is_relation: boolean) {
+    if (attribute.contains_vo && !is_relation) {
+      let diffs = diffOrdered<VersionedObject>(attribute.type, value, oldValue);
+      for (let [position, sub_object] of diffs) {
         let sub_object_manager = sub_object.manager();
+        let is_add = position !== NO_POSITION;
         this._assert_same_cc(sub_object_manager);
         if (attribute.is_sub_object) {
-          subobject_changes += this._sub_object_delta(sub_object_manager, changes, is_add, attribute);
+          let pdata = this._sub_object_init(sub_object_manager, attribute);
+          if (is_add) {
+            if (pdata.modified_position !== NO_POSITION)
+              throw new Error(`a sub object is only assignable to one parent/attribute (duplication detected in the same attribute)`);
+            delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
+          }
+          else {
+            delta += -sub_object_manager.isModified() + bool2delta(pdata.modified_position !== NO_POSITION);
+          }
+          pdata.modified_position = position;
         }
         else if (attribute.relation) {
           let relation = attribute.relation.attribute;
@@ -509,70 +581,45 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           }
         }
       }
-      if (attribute.is_sub_object)
-        data.flags += ((subobject_changes - changes) << MODIFIED_OFFSET);
     }
-
-    if ((data.flags >> MODIFIED_OFFSET) === 0)
+    if (this._apply_attribute_delta(data, delta) === 0)
       data.modified = undefined;
-    this._mark_attribute_modified(changes);
+    else
+      data.modified = value;
   }
 
   private _sub_object_init(sub_object_manager: VersionedObjectManager, attribute: Aspect.InstalledAttribute) {
-    if (!sub_object_manager._parent_manager) {
-      sub_object_manager._parent_manager = this;
-      sub_object_manager._parent_attribute = attribute.index << MODIFIED_OFFSET;
+    if (!sub_object_manager._parent) {
+      sub_object_manager._parent = {
+        manager: this,
+        attribute: attribute,
+        saved_position: NO_POSITION,
+        modified_position: NO_POSITION,
+      };
     }
-    else if (sub_object_manager._parent_manager !== this || (sub_object_manager._parent_attribute >> MODIFIED_OFFSET) !== attribute.index)
+    else if (sub_object_manager._parent.manager !== this || sub_object_manager._parent.attribute !== attribute)
       throw new Error(`a sub object is only assignable to one parent/attribute`);
+    return sub_object_manager._parent;
   }
 
-  private _sub_object_merge(sub_object_manager: VersionedObjectManager, is_saved: boolean, attribute: Aspect.InstalledAttribute) {
-    this._sub_object_init(sub_object_manager, attribute);
-    if (is_saved)
-      sub_object_manager._parent_attribute |= PARENT_ATTRIBUTE_SAVED;
-    else
-      sub_object_manager._parent_attribute &= ~ PARENT_ATTRIBUTE_SAVED;
+  private _apply_attribute_delta(data: VersionedObjectManager.InternalAttributeData, delta: number) {
+    let previous_value = data.flags >> MODIFIED_OFFSET;
+    data.flags += (delta << MODIFIED_OFFSET);
+    let new_value = data.flags >> MODIFIED_OFFSET;
+    if ((previous_value === 0) !== (new_value === 0))
+      this._mark_modified(bool2delta(new_value > 0));
+    return new_value;
   }
 
-  private _sub_object_delta(sub_object_manager: VersionedObjectManager, attribute_delta: number, is_add: boolean, attribute: Aspect.InstalledAttribute): -1 | 0 | 1 {
-    this._sub_object_init(sub_object_manager, attribute);
-
-    if (attribute_delta >= 0) { // modified > modified
-      if (is_add && sub_object_manager._parent_attribute & PARENT_ATTRIBUTE_SAVED) {
-        sub_object_manager._parent_attribute &= ~PARENT_ATTRIBUTE_ADDDEL;
-        return -1;
-      }
-      else {
-        sub_object_manager._parent_attribute |= PARENT_ATTRIBUTE_ADDDEL;
-        return 1;
-      }
-    }
-    else { // modified > saved
-      sub_object_manager._parent_attribute &= ~PARENT_ATTRIBUTE_ADDDEL;
-      return (is_add && sub_object_manager.isModified()) ? 0 : -1;
-    }
-  }
-
-  private _mark_attribute_modified(attribute_changes: number) {
-    if (!attribute_changes)
-      return;
-    this._mark_modified(attribute_changes < 0 ? -1 : +1);
-  }
   private _mark_modified(changes: number) {
     let was_modified = (this._flags >> MODIFIED_OFFSET) > 0;
     this._flags += changes << MODIFIED_OFFSET;
     let is_modified = (this._flags >> MODIFIED_OFFSET) > 0;
-    if (was_modified !== is_modified && this._parent_manager) {
-      let pm = this._parent_manager;
-      let pa_index = this._parent_attribute >> MODIFIED_OFFSET;
-      let pa_flags = this._parent_attribute & FLAGS_MASK;
-      if (!(pa_flags & PARENT_ATTRIBUTE_ADDDEL)) { // add/del are always marked modified
-        // assert pa_flags & PARENT_ATTRIBUTE_SAVED
-        let pdata = pm._attribute_data[pa_index];
-        pdata.flags += (changes << MODIFIED_OFFSET);
-        pm._mark_attribute_modified(changes);
-      }
+    if (was_modified !== is_modified && this._parent) {
+      let pm = this._parent.manager;
+      let pa = this._parent.attribute;
+      let pdata = pm._attribute_data[pa.index];
+      pm._apply_attribute_delta(pdata, changes);
     }
   }
 }
