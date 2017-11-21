@@ -1,7 +1,7 @@
 import {ControlCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
 import {
   SqlDataSource, loadSqlMappers,
-  SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory,
+  SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory, OracleDBConnectorFactory,
 } from '@openmicrostep/aspects.sql';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -84,9 +84,12 @@ function destroy(flux) {
 }
 
 export const name = "SqlDataSource";
-export const tests =
-[
-  { name: "sqlite (npm sqlite3)", tests: createTests(async function sqliteCC(flux) {
+export const tests: {
+  name: string;
+  tests: any[];
+}[] = [];
+
+const sqlite = { name: "sqlite (npm sqlite3)", tests: createTests(async function sqliteCC(flux) {
     const sqlite3 = require('sqlite3').verbose();
     const connector = SqliteDBConnectorFactory(sqlite3, { filename: 'test.sqlite' }, { max: 1 });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Version` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
@@ -100,12 +103,18 @@ export const tests =
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
-  }, destroy) },
-  { name: "mysql (npm mysql2)", tests: createTests(async function mysqlCC(flux) {
-    const host = process.env.MYSQL_PORT_3306_TCP_ADDR || 'localhost';
-    const port = +(process.env.MYSQL_PORT_3306_TCP_PORT || '3306');
+  }, destroy) };
+tests.push(sqlite);
+
+const mysql = { name: "mysql (npm mysql2)", tests: createTests(async function mysqlCC(flux) {
     const mysql2 = require('mysql2');
-    const connector = MySQLDBConnectorFactory(mysql2, { host: host, port: port, user: 'root', password: "my-secret-pw", database: "" }, { max: 1 });
+    const connector = MySQLDBConnectorFactory(mysql2, {
+      host: process.env.MYSQL_HOST || process.env.MYSQL_PORT_3306_TCP_ADDR  || 'localhost',
+      port: +(process.env.MYSQL_PORT || '3306'),
+      user: process.env.MYSQL_USER,
+      password: process.env.MYSQL_PASSWORD,
+      database: ""
+    }, { max: 1 });
     await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
@@ -116,16 +125,21 @@ export const tests =
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
-  }, destroy) },
-  { name: "postgres (npm pg)", tests: createTests(async function postgresCC(flux) {
-    const host = process.env.POSTGRES_PORT_5432_TCP_ADDR || 'localhost';
-    const port = +(process.env.POSTGRES_PORT_5432_TCP_PORT || '5432');
+  }, destroy) };
+if (process.env.MYSQL_USER)
+  tests.push(mysql);
+
+const postgres = { name: "postgres (npm pg)", tests: createTests(async function postgresCC(flux) {
+    const host = process.env.POSTGRES_HOST || process.env.POSTGRES_PORT_5432_TCP_ADDR || 'localhost';
+    const port = +(process.env.POSTGRES_PORT || '5432');
+    const user = process.env.POSTGRES_USER;
+    const password = process.env.POSTGRES_PASSWORD;
     const pg = require('pg');
-    const init = PostgresDBConnectorFactory(pg, { host: host, port: port, user: 'postgres', password: "my-secret-pw", database: "postgres" }, { max: 1 });
+    const init = PostgresDBConnectorFactory(pg, { host: host, port: port, user: user, password: password, database: "postgres" }, { max: 1 });
     await init.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await init.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     init.close();
-    const connector = PostgresDBConnectorFactory(pg, { host: host, port: port, user: 'postgres', password: "my-secret-pw", database: "aspects" }, { max: 1 });
+    const connector = PostgresDBConnectorFactory(pg, { host: host, port: port, user: user, password: password, database: "aspects" }, { max: 1 });
     await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" SERIAL PRIMARY KEY, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" SERIAL PRIMARY KEY, "idVersion" INTEGER REFERENCES "Version" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "name" VARCHAR(255))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" BIGINT, "father" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "mother" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
@@ -133,12 +147,20 @@ export const tests =
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
-  }, destroy) },
-  { name: "mssql (npm tedious)", tests: createTests(async function mssqlCC(flux) {
-    const host = process.env.MICROSOFT_MSSQL_SERVER_LINUX_PORT_1433_TCP_ADDR || 'localhost';
-    const port = +(process.env.MICROSOFT_MSSQL_SERVER_LINUX_PORT_1433_TCP_PORT || '1433');
+  }, destroy) };
+if (process.env.POSTGRES_USER)
+  tests.push(postgres);
+
+const mssql = { name: "mssql (npm tedious)", tests: createTests(async function mssqlCC(flux) {
+    const host = process.env.MSSQL_HOST || 'localhost';
+    const port = +(process.env.MSSQL_PORT || '1433');
     const tedious = require('tedious');
-    const connector = MSSQLDBConnectorFactory(tedious, { server: host, options: { port: port }, userName: 'sa', password: "7wnjijM9JihtKok4RC6" }, { max: 1 });
+    const connector = MSSQLDBConnectorFactory(tedious, {
+      server: host,
+      options: { port: port },
+      userName: process.env.MSSQL_USER,
+      password: process.env.MSSQL_PASSWORD,
+    }, { max: 1 });
     await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
@@ -149,26 +171,38 @@ export const tests =
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
-  }, destroy) },
-  /*{ name: "oracle (npm oracledb)", tests: createTests(async function oracleCC(flux) {
-    const oracledb = require('oracledb');
-    const connector = OracleDBConnectorFactory(oracledb, { connectString: '(DESCRIPTION = (ADDRESS_LIST = (ADDRESS = (PROTOCOL = TCP)(HOST = 127.0.0.1)(PORT = 1521)))(CONNECT_DATA = (SERVICE_NAME = XE)))', user: 'system', password: "oracle" }, { max: 1 });
-    await connector.unsafeRun({ sql: 'DROP TABLE "People" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-    await connector.unsafeRun({ sql: 'DROP TABLE "Car" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-    await connector.unsafeRun({ sql: 'DROP TABLE "Version" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-    await connector.unsafeRun({ sql: 'DROP TABLE "Resource" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-    await connector.unsafeRun({ sql: 'DROP SEQUENCE VersionSeq', bind: [] }).catch(err => { console.info(err); });
-    await connector.unsafeRun({ sql: 'DROP SEQUENCE ResourceSeq', bind: [] }).catch(err => { console.info(err); });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" INTEGER PRIMARY KEY NOT NULL, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE SEQUENCE VersionSeq START WITH 1', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER VersionAID BEFORE INSERT ON "Version"\nFOR EACH ROW\nBEGIN\nSELECT VersionSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" INTEGER PRIMARY KEY NOT NULL, "idVersion" INTEGER, "name" VARCHAR(255), FOREIGN KEY ("idVersion") REFERENCES "Version"("id"))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE SEQUENCE ResourceSeq START WITH 1', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER ResourceAID BEFORE INSERT ON "Resource"\nFOR EACH ROW\nBEGIN\nSELECT ResourceSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY, "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" NUMBER(19, 0), FOREIGN KEY ("id") REFERENCES "Resource"("id"))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY, "model" VARCHAR(255), "owner" INTEGER, FOREIGN KEY ("id") REFERENCES "Resource"("id"), FOREIGN KEY ("owner") REFERENCES "People"("id"))', bind: [] });
-    flux.context.connector = connector;
-    flux.setFirstElements([createSqlControlCenter]);
-    flux.continue();
-  }, destroy) },*/
-];
+  }, destroy) };
+if (process.env.MSSQL_USER)
+  tests.push(mssql);
+
+const oracle = { name: "oracle (npm oracledb)", tests: createTests(async function oracleCC(flux) {
+  const oracledb = require('oracledb');
+  const connector = OracleDBConnectorFactory(oracledb, {
+    connectString: `(DESCRIPTION = (ADDRESS_LIST = (ADDRESS = (PROTOCOL = TCP)
+      (HOST = ${process.env.ORACLE_HOST || 'localhost'})
+      (PORT = ${process.env.ORACLE_PORT || '1521'})
+    ))(CONNECT_DATA = (SERVICE_NAME = XE)))`,
+    user: process.env.ORACLE_USER,
+    password: process.env.ORACLE_PASSWORD
+  }, { max: 1 });
+  await connector.unsafeRun({ sql: 'DROP TABLE "People" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+  await connector.unsafeRun({ sql: 'DROP TABLE "Car" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+  await connector.unsafeRun({ sql: 'DROP TABLE "Version" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+  await connector.unsafeRun({ sql: 'DROP TABLE "Resource" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
+  await connector.unsafeRun({ sql: 'DROP SEQUENCE VersionSeq', bind: [] }).catch(err => { console.info(err); });
+  await connector.unsafeRun({ sql: 'DROP SEQUENCE ResourceSeq', bind: [] }).catch(err => { console.info(err); });
+  await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" INTEGER PRIMARY KEY NOT NULL, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
+  await connector.unsafeRun({ sql: 'CREATE SEQUENCE VersionSeq START WITH 1', bind: [] });
+  await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER VersionAID BEFORE INSERT ON "Version"\nFOR EACH ROW\nBEGIN\nSELECT VersionSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
+  await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" INTEGER PRIMARY KEY NOT NULL, "idVersion" INTEGER, "name" VARCHAR(255), FOREIGN KEY ("idVersion") REFERENCES "Version"("id"))', bind: [] });
+  await connector.unsafeRun({ sql: 'CREATE SEQUENCE ResourceSeq START WITH 1', bind: [] });
+  await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER ResourceAID BEFORE INSERT ON "Resource"\nFOR EACH ROW\nBEGIN\nSELECT ResourceSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
+  await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY, "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" NUMBER(19, 0), FOREIGN KEY ("id") REFERENCES "Resource"("id"))', bind: [] });
+  await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY, "model" VARCHAR(255), "owner" INTEGER, FOREIGN KEY ("id") REFERENCES "Resource"("id"), FOREIGN KEY ("owner") REFERENCES "People"("id"))', bind: [] });
+  flux.context.connector = connector;
+  flux.setFirstElements([createSqlControlCenter]);
+  flux.continue();
+}, destroy) };
+
+if (process.env.ORACLE_USER)
+  tests.push(oracle);

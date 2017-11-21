@@ -129,6 +129,8 @@ export abstract class SqlMaker {
   }
 
   sub(sql_select: SqlBinding) : SqlBinding {
+    if (sql_select.sql.startsWith('(') && sql_select.sql.endsWith(')'))
+      return sql_select;
     return {
       sql: `(${sql_select.sql})`,
       bind: sql_select.bind
