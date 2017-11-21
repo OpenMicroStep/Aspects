@@ -25,6 +25,7 @@ function basics() {
   assert.instanceOf(v1, Resource);
   assert.instanceOf(v1, VersionedObject);
   assert.equal(v1.version(), -1);
+  assert.strictEqual(v1.manager().object(), v1);
   assert.typeOf(v1.id(), 'string');
   assert(VersionedObjectManager.isLocalId(v1.id()));
   assert.equal(v1.manager().controlCenter(), cc);
@@ -171,10 +172,23 @@ function sub_object_single() {
   let p0 = Point.Aspects.test1.create(ccc);
   assert.isFalse(r0.manager().isSubObject());
   assert.isTrue(p0.manager().isSubObject());
+  assert.strictEqual(p0.manager().hasAttributeValue("_altitute"), true);
+  assert.strictEqual(p0.manager().hasEveryAttributesValue(["_altitute"]), true);
+  assert.strictEqual(p0.manager().attributeValue("_altitute"), undefined);
+  assert.strictEqual(p0.manager().savedAttributeValue("_altitute"), undefined);
 
   assert.isFalse(r0.manager().isModified());
 
+  assert.strictEqual(r0, r0.manager().rootObject());
+
+  assert.isFalse(r0.manager().isAttributeModified("_p1"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
   r0._p1 = p0;
+  assert.isTrue(r0.manager().isAttributeModified("_p1"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
+  assert.strictEqual(r0, p0.manager().rootObject());
   assert.strictEqual(r0._p1,  p0);
   assert.isTrue(r0.manager().isModified());
 
@@ -188,10 +202,23 @@ function sub_object_single() {
   r0.manager().setId("r0");
   r0.manager().setVersion(0);
   assert.isFalse(r0.manager().isModified());
+  assert.isFalse(r0.manager().isAttributeModified("_p1"));
+  assert.isTrue(r0.manager().isAttributeSaved("_p1"));
+  assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
+  assert.isFalse(p0.manager().isAttributeModified("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.strictEqual(p0.manager().attributeValue("_altitute"), undefined);
+  assert.strictEqual(p0.manager().savedAttributeValue("_altitute"), undefined);
 
   p0._altitute = 1000;
+  assert.strictEqual(p0.manager().attributeValue("_altitute"), 1000);
+  assert.strictEqual(p0.manager().savedAttributeValue("_altitute"), undefined);
   assert.isTrue(r0.manager().isModified());
   assert.isTrue(p0.manager().isModified());
+  assert.isTrue(p0.manager().isAttributeModified("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.isTrue(r0.manager().isAttributeModified("_p1"));
+  assert.isTrue(r0.manager().isAttributeSaved("_p1"));
 
   p0._altitute = undefined;
   assert.isFalse(r0.manager().isModified());
@@ -200,6 +227,89 @@ function sub_object_single() {
   assert.strictEqual(r0._p2, undefined);
   assert.throw(() => r0._p2 = p0, "a sub object is only assignable to one parent/attribute");
   assert.strictEqual(r0._p2, undefined);
+}
+
+function sub_object_set() {
+  let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
+
+  let r0 = RootObject.Aspects.test1.create(ccc);
+  let s0 = Polygon.Aspects.test1.create(ccc);
+  let p0 = Point.Aspects.test1.create(ccc);
+  let p1 = Point.Aspects.test1.create(ccc);
+  let p2 = Point.Aspects.test1.create(ccc);
+
+  assert.isFalse(r0.manager().isSubObject());
+  assert.isTrue(s0.manager().isSubObject());
+  assert.isTrue(p0.manager().isSubObject());
+  assert.isTrue(p1.manager().isSubObject());
+  assert.isTrue(p2.manager().isSubObject());
+
+  assert.isFalse(r0.manager().isModified());
+
+  s0._set = new Set([p0, p1, p2]);
+  r0._s0 = s0;
+
+  assert.strictEqual(r0._s0,  s0);
+  assert.sameMembers([...s0._set], [p0, p1, p2]);
+
+  assert.isTrue(r0.manager().isModified());
+  assert.isTrue(s0.manager().isModified());
+
+  p0.manager().fillNewObjectMissingValues();
+  p0.manager().setId("p0");
+  p0.manager().setVersion(0);
+  assert.isFalse(p0.manager().isModified());
+  assert.isTrue(s0.manager().isModified());
+  assert.isTrue(r0.manager().isModified());
+
+  p1.manager().fillNewObjectMissingValues();
+  p1.manager().setId("p1");
+  p1.manager().setVersion(0);
+  assert.isFalse(p1.manager().isModified());
+  assert.isTrue(s0.manager().isModified());
+  assert.isTrue(r0.manager().isModified());
+
+  p2.manager().fillNewObjectMissingValues();
+  p2.manager().setId("p2");
+  p2.manager().setVersion(0);
+  assert.isFalse(p2.manager().isModified());
+  assert.isTrue(s0.manager().isModified());
+  assert.isTrue(r0.manager().isModified());
+
+  s0.manager().fillNewObjectMissingValues();
+  s0.manager().setId("s0");
+  s0.manager().setVersion(0);
+  assert.isFalse(p2.manager().isModified());
+  assert.isFalse(s0.manager().isModified());
+  assert.isTrue(r0.manager().isModified());
+
+  r0.manager().fillNewObjectMissingValues();
+  r0.manager().setId("r0");
+  r0.manager().setVersion(0);
+  assert.isFalse(p2.manager().isModified());
+  assert.isFalse(s0.manager().isModified());
+  assert.isFalse(r0.manager().isModified());
+
+  s0._set = new Set([p1, p0, p2]);
+  assert.isFalse(s0.manager().isModified());
+  assert.isFalse(r0.manager().isModified());
+
+  s0._set = new Set([p1, p2]);
+  assert.isTrue(s0.manager().isModified());
+  assert.isTrue(r0.manager().isModified());
+
+  s0._set = new Set([p0, p1, p2]);
+  assert.isFalse(s0.manager().isModified());
+  assert.isFalse(r0.manager().isModified());
+
+  s0._set = new Set([p1, p2]);
+  assert.isTrue(s0.manager().isModified());
+  assert.isTrue(r0.manager().isModified());
+
+  s0.manager().setVersion(0);
+  assert.isFalse(s0.manager().isModified());
+  assert.isFalse(r0.manager().isModified());
 }
 
 function sub_object_array() {
@@ -271,6 +381,17 @@ function sub_object_array() {
   s0._points = [p0, p1, p2];
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
+
+  s0._points = [p1, p0, p2];
+  assert.isTrue(s0.manager().isModified());
+  assert.isTrue(r0.manager().isModified());
+
+  s0.manager().setVersion(0);
+  assert.isFalse(s0.manager().isModified());
+  assert.isFalse(r0.manager().isModified());
+
+  assert.throw(() => s0._points = [p1, p0, p2, p1], "a sub object is only assignable to one parent/attribute (duplication detected in the same attribute)");
+  assert.sameOrderedMembers([...s0._points], [p1, p0, p2]);
 }
 
 export const tests = { name: 'VersionedObject', tests: [
@@ -279,6 +400,7 @@ export const tests = { name: 'VersionedObject', tests: [
   relation_1_n,
   relation_n_n,
   sub_object_single,
+  sub_object_set,
   sub_object_array,
   tests_perfs
 ]};

@@ -425,21 +425,15 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, merge_value)) {
         let pdata = sub_object.manager()._parent!;
         pdata.saved_position = position;
+        pdata.modified_position = position;
         delta++; // "del" object
       }
       // update modified positions
       for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, data.modified)) {
         let sub_object_manager = sub_object.manager();
         let pdata = sub_object_manager._parent!;
-        delta += +sub_object_manager.isModified();
-        if (pdata.saved_position !== position) {
-          pdata.modified_position = position;
-          delta++; // "add" object
-        }
-        else {
-          pdata.modified_position = NO_POSITION;
-          delta--; // undo "del"
-        }
+        delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
+        pdata.modified_position = position;
       }
     }
     if (this._apply_attribute_delta(data, delta) === 0)
@@ -564,7 +558,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
             delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
           }
           else {
-            delta += -sub_object_manager.isModified() + bool2delta(pdata.modified_position !== NO_POSITION);
+            delta += -sub_object_manager.isModified() + bool2delta(pdata.modified_position !== pdata.saved_position);
           }
           pdata.modified_position = position;
         }

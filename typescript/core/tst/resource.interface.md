@@ -83,5 +83,6 @@ _sub object_
 ### attributes
 #### _points: [0, *, Point]
 _sub object_
+#### _set: <0, *, Point>
 ### aspect test1
 #### categories: 
