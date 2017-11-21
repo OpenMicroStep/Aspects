@@ -147,7 +147,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     throw new Error(`cannot find root object of sub object, the sub object is not linked to any parent object`);
   }
   controlCenter() { return this._controlCenter; }
-  isRegistered() { return this._components.size > 0; }
 
   *modifiedAttributes() {
     for (let idx = 2; idx <  this._attribute_data.length; idx++) {
