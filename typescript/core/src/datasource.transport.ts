@@ -57,7 +57,7 @@ export class VersionedObjectCoder {
           flags |= SAVED;
           vs = m.savedAttributeValueFast(attribute);
         }
-        attributes[i] = flags > 0 ? [flags, this._encodeValue(vm), this._encodeValue(vs)] : NO_VALUE;
+        attributes[i] = flags > 0 ? [flags, this._encodeValue(vm, attribute.is_sub_object), this._encodeValue(vs, attribute.is_sub_object)] : NO_VALUE;
       }
       if (this._encodedVersionedObjects)
         this._encodedVersionedObjects.push(r);
@@ -66,11 +66,13 @@ export class VersionedObjectCoder {
     }
   }
 
-  private _encodeValue(value: any): EncodedValue {
+  private _encodeValue(value: any, is_sub_object: boolean): EncodedValue {
     if (value === undefined || value === null)
       return null;
     if (value instanceof VersionedObject) {
       let m = value.manager();
+      if (is_sub_object)
+        this.encode(value);
       return { is: "vo", v: [m.classname(), m.id()] };
     }
     else if (value instanceof Set) {
@@ -78,13 +80,13 @@ export class VersionedObjectCoder {
         return { is: "set" };
       let r: any[] = [];
       for (let v of value)
-        r.push(this._encodeValue(v));
+        r.push(this._encodeValue(v, is_sub_object));
       return { is: "set", v: r };
     }
     else if (value instanceof Array) {
       let r: any[] = [];
       for (let v of value)
-        r.push(this._encodeValue(v));
+        r.push(this._encodeValue(v, is_sub_object));
       return r;
     }
     else if (value instanceof Date) {
@@ -95,7 +97,7 @@ export class VersionedObjectCoder {
         throw new Error(`cannot encode non std objects ${value.constructor && value.constructor.name}`);
       let r = {};
       for (let k in value)
-        r[k] = this._encodeValue(value[k]);
+        r[k] = this._encodeValue(value[k], is_sub_object);
       return { is: "obj", v: r };
     }
     else if (typeof value === "function" || typeof value === "symbol") {

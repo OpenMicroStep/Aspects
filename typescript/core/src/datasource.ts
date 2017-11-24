@@ -2,7 +2,7 @@ import {
   Identifier, VersionedObject, VersionedObjectManager, VersionedObjectCoder,
   ControlCenter, ControlCenterContext, Result,
   DataSourceInternal, EncodedVersionedObjects,
-  ImmutableSet,
+  ImmutableSet, Aspect,
 } from './core';
 import {Reporter} from '@openmicrostep/msbuildsystem.shared';
 import {DataSource} from '../../../generated/aspects.interfaces';
@@ -160,13 +160,29 @@ export type SafeValidators = Map<string, SafeValidator>;
 
 function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T[]) : Set<T> {
   let changed = new Set<T>();
-  for (let o of objects) {
+  for (let o of objects)
+    add(o);
+  return changed;
+
+  function add(o) {
     let manager = o.manager();
     manager.fillNewObjectMissingValues();
-    if (manager.isModified())
+    if (manager.isModified()) {
+      let attributes_by_index = manager.aspect().attributes_by_index;
+      for (let i = 2; i < attributes_by_index.length; i++) {
+        let attribute = attributes_by_index[i];
+        if (attribute.is_sub_object && manager.isAttributeModifiedFast(attribute)) {
+          for (let sub of Aspect.traverse<VersionedObject>(attribute.type, manager.attributeValueFast(attribute)))
+            if (!changed.has(o))
+              add(o);
+          for (let sub of Aspect.traverse<VersionedObject>(attribute.type, manager.savedAttributeValueFast(attribute)))
+            if (!changed.has(o))
+              add(o);
+        }
+      }
       changed.add(o);
+    }
   }
-  return changed;
 }
 
 async function safeScope(
