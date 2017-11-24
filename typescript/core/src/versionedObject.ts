@@ -169,7 +169,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   id()     : Identifier { return this._attribute_data[0].saved; }
   version(): number { return this._attribute_data[1].saved; }
   object() { return this._object; }
-  rootObject() {
+  rootObject(): VersionedObject {
     if (!this.isSubObject())
       return this._object;
     else if (this._parent)
@@ -178,57 +178,12 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   }
   controlCenter() { return this._controlCenter; }
 
-  *modifiedAttributes() {
-    for (let idx = 2; idx <  this._attribute_data.length; idx++) {
-      let data = this._attribute_data[idx];
-      if (data.flags >> MODIFIED_OFFSET) {
-        yield { attribute: this._aspect.attributes_by_index[idx], modified: data.modified };
-      }
-    }
-  }
-
   // Definition
   classname() { return this._aspect.classname; }
   aspect() { return this._aspect; }
   isSubObject() { return this._aspect.is_sub_object; }
 
-  // Modified attributes
-  clearAllModifiedAttributes() : void {
-    for (let idx = 2; idx <  this._attribute_data.length; idx++) {
-      let data = this._attribute_data[idx];
-      let attribute = this._aspect.attributes_by_index[idx];
-      this._clearModifiedAttribute(attribute, data);
-    }
-  }
-
-  clearModifiedAttributes(attribute_names: string[]) {
-    for (let attribute_name of attribute_names) {
-      let attribute = this._checkedAttribute(attribute_name);
-      if (attribute.index > 2) {
-        let data = this._attribute_data[attribute.index];
-        this._clearModifiedAttribute(attribute, data);
-      }
-    }
-  }
-
-  // Saved attributes
-  savedAttributeValue(attribute_name: string) : any;
-  savedAttributeValue<K extends keyof T>(attribute_name: K) : T[K];
-  savedAttributeValue<K extends keyof T>(attribute_name: K) : T[K] {
-    return this.savedAttributeValueFast(this._checkedAttribute(attribute_name));
-  }
-
-
-  savedAttributeValueFast(attribute: Aspect.InstalledAttribute) : any {
-    let data = this._attribute_data[attribute.index];
-    if (data.flags & SAVED)
-      return data.saved;
-    if (this.isNew())
-      return this._missingValue(attribute);
-    throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
-  }
-
-  // Live attributes
+  // State
   isSaved()      { return (this._flags & SAVED) > 0; }
   isNew()        { return (this._flags & FLAGS_MASK) === 0; }
   isModified()   { return (this._flags >> MODIFIED_OFFSET) > 0; }
@@ -253,6 +208,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return this._attribute_data[attribute.index].flags > 0 || this.isNew();
   }
 
+  // Values
   attributeValue(attribute_name: string) : any;
   attributeValue<K extends keyof T>(attribute_name: K) : T[K];
   attributeValue<K extends keyof T>(attribute_name: K) : T[K] {
@@ -272,6 +228,21 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
   }
 
+  savedAttributeValue(attribute_name: string) : any;
+  savedAttributeValue<K extends keyof T>(attribute_name: K) : T[K];
+  savedAttributeValue<K extends keyof T>(attribute_name: K) : T[K] {
+    return this.savedAttributeValueFast(this._checkedAttribute(attribute_name));
+  }
+
+  savedAttributeValueFast(attribute: Aspect.InstalledAttribute) : any {
+    let data = this._attribute_data[attribute.index];
+    if (data.flags & SAVED)
+      return data.saved;
+    if (this.isNew())
+      return this._missingValue(attribute);
+    throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
+  }
+
   validateAttributeValue(attribute_name: string, value: any): Diagnostic[] {
     let reporter = new Reporter();
     let attribute = this._aspect.attributes.get(attribute_name);
@@ -283,6 +254,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return reporter.diagnostics;
   }
 
+
+  // Management
   setAttributeValue<K extends keyof T>(attribute_name: K, value: T[K]) {
     this.setAttributeValueFast(this._checkedAttribute(attribute_name), value);
   }
@@ -291,14 +264,42 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._setAttributeValueFast(attribute, value, false);
   }
 
-  // Management
-  unloadAttributes(attribute_names: string[]) {
-    for (let attribute_name of attribute_names) {
-      let attribute = this._checkedAttribute(attribute_name);
-      if (attribute.index > 2) {
-        let data = this._attribute_data[attribute.index];
-        this._unloadAttributeData(data);
+  *modifiedAttributes() {
+    for (let idx = 2; idx <  this._attribute_data.length; idx++) {
+      let data = this._attribute_data[idx];
+      if (data.flags >> MODIFIED_OFFSET) {
+        yield { attribute: this._aspect.attributes_by_index[idx], modified: data.modified };
       }
+    }
+  }
+
+  clearModifiedAttribute(attribute_name: string) {
+    this.clearModifiedAttributeFast(this._checkedAttribute(attribute_name));
+  }
+
+  clearModifiedAttributeFast(attribute: Aspect.InstalledAttribute) {
+    if (attribute.index > 2) {
+      let data = this._attribute_data[attribute.index];
+      this._clearModifiedAttribute(attribute, data);
+    }
+  }
+
+  clearAllModifiedAttributes() : void {
+    for (let idx = 2; idx <  this._attribute_data.length; idx++) {
+      let data = this._attribute_data[idx];
+      let attribute = this._aspect.attributes_by_index[idx];
+      this._clearModifiedAttribute(attribute, data);
+    }
+  }
+
+  unloadAttribute(attribute_name: string) {
+    this.unloadAttributeFast(this._checkedAttribute(attribute_name));
+  }
+
+  unloadAttributeFast(attribute: Aspect.InstalledAttribute) {
+    if (attribute.index > 2) {
+      let data = this._attribute_data[attribute.index];
+      this._unloadAttributeData(data);
     }
   }
 
