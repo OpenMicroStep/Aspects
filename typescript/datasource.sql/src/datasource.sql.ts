@@ -287,7 +287,7 @@ export class SqlDataSource extends DataSource {
     let sets = new Set<ObjectSet>();
     for (let [aspect, list] of types) {
       let set = new ObjectSet(aspect.classname);
-      set.addType({ type: ConstraintType.MemberOf, value: aspect });
+      set.addType({ type: ConstraintType.Is, value: aspect });
       set.and(new DataSourceInternal.ConstraintValue(ConstraintType.In, set._name, Aspect.attribute_id, list));
       sets.add(set);
     }

@@ -117,7 +117,7 @@ export namespace DataSourceInternal {
             case ConstraintType.InstanceOf:
               ok = this.mapper.aspect(object).classname === c.value.classname; // TODO: real instanceof
               break;
-            case ConstraintType.MemberOf:
+            case ConstraintType.Is:
               ok = this.mapper.aspect(object).classname === c.value.classname;
               break;
             case ConstraintType.Union:
@@ -254,30 +254,38 @@ export namespace DataSourceInternal {
 
   export enum ConstraintType {
     // a operator b
+    BEGIN_a_op_b = 0,
     Equal = 0,
-    NotEqual,
-    GreaterThan,
-    GreaterThanOrEqual,
-    LessThan,
-    LessThanOrEqual,
+    NotEqual = 1,
+    GreaterThan = 2,
+    GreaterThanOrEqual = 3,
+    LessThan = 4,
+    LessThanOrEqual = 5,
+    END_a_op_b = 9,
 
     // A operator b
-    Contains,
-    NotContains,
+    BEGIN_A_op_b = 10,
+    Contains = 10,
+    NotContains = 11,
+    END_A_op_b = 19,
 
     // a operator B
-    In,
-    NotIn,
+    BEGIN_a_op_B = 20,
+    In = 21,
+    NotIn = 22,
+    END_a_op_B = 29,
 
     // A operator B
-    Intersects,
-    NotIntersects,
-    SubSetOf,
-    NotSubSetOf,
-    SuperSetOf,
-    NotSuperSetOf,
-    SameSetAs,
-    NotSameSetAs,
+    BEGIN_A_op_B = 30,
+    Intersects = 30,
+    NotIntersects = 31,
+    SubSet = 32,
+    NotSubSet = 33,
+    SuperSet = 34,
+    NotSuperSet = 35,
+    SameSet = 36,
+    NotSameSet = 37,
+    END_A_op_B = 39,
 
     // a operator value
     Text,
@@ -287,7 +295,7 @@ export namespace DataSourceInternal {
     SubIn,
     SubNotIn,
     InstanceOf,
-    MemberOf,
+    Is,
     Union,
     UnionForAlln,
     Recursion,
@@ -315,12 +323,12 @@ export namespace DataSourceInternal {
   export type ConstraintBetweenValueSetAndValueSet =
     ConstraintType.Intersects |
     ConstraintType.NotIntersects |
-    ConstraintType.SubSetOf |
-    ConstraintType.NotSubSetOf |
-    ConstraintType.SuperSetOf |
-    ConstraintType.NotSuperSetOf |
-    ConstraintType.SameSetAs |
-    ConstraintType.NotSameSetAs;
+    ConstraintType.SubSet |
+    ConstraintType.NotSubSet |
+    ConstraintType.SuperSet |
+    ConstraintType.NotSuperSet |
+    ConstraintType.SameSet |
+    ConstraintType.NotSameSet;
   export type ConstraintBetweenAnyValueAndAnyValue =
     ConstraintBetweenValueAndValue |
     ConstraintBetweenValueSetAndValue |
@@ -333,7 +341,7 @@ export namespace DataSourceInternal {
 
 
   export type ConstraintOnType =
-     { type: ConstraintType.InstanceOf | ConstraintType.MemberOf, value: Aspect.Installed } |
+     { type: ConstraintType.InstanceOf | ConstraintType.Is, value: Aspect.Installed } |
      { type: ConstraintType.Union, value: Set<ObjectSet> } |
      { type: ConstraintType.UnionForAlln, value: [ObjectSet, ObjectSet, ObjectSet] } |
      { type: ConstraintType.Recursion, value: ObjectSet };
@@ -431,7 +439,7 @@ export namespace DataSourceInternal {
     attributes: Map<string, Aspect.InstalledAttribute> | undefined
   ) {
     for (let c of set.typeConstraints) {
-      if (c.type === ConstraintType.InstanceOf || c.type === ConstraintType.MemberOf) {
+      if (c.type === ConstraintType.InstanceOf || c.type === ConstraintType.Is) {
         aspects.add(c.value);
       }
       else if (c.type === ConstraintType.Union) {
@@ -610,13 +618,11 @@ export namespace DataSourceInternal {
     return false;
   }
   function a_subsetof_b(a: ValueSet, b: ValueSet) { // TODO: fix O(a.size * b.size) -> O(a.size * log(b.size))
-    let n = 0;
     for (let va of a) {
       if (!find(b, va))
         return false;
-      n++;
     }
-    return n > 0;
+    return true;
   }
   function a_samesetas_b(a: ValueSet, b: ValueSet) { // TODO: fix O(a.size * b.size * 2) -> O(a.size * log(b.size))
     return a_subsetof_b(a, b) && a_subsetof_b(b, a);
@@ -643,12 +649,12 @@ export namespace DataSourceInternal {
       // A operator B
       case ConstraintType.Intersects: return a_intersects_b(left as ValueSet, right as ValueSet);
       case ConstraintType.NotIntersects: return !a_intersects_b(left as ValueSet, right as ValueSet);
-      case ConstraintType.SubSetOf: return a_subsetof_b(left as ValueSet, right as ValueSet);
-      case ConstraintType.NotSubSetOf: return !a_subsetof_b(left as ValueSet, right as ValueSet);
-      case ConstraintType.SuperSetOf: return a_subsetof_b(right as ValueSet, left as ValueSet);
-      case ConstraintType.NotSuperSetOf: return !a_subsetof_b(right as ValueSet, left as ValueSet);
-      case ConstraintType.SameSetAs: return a_samesetas_b(left as ValueSet, right as ValueSet);
-      case ConstraintType.NotSameSetAs: return !a_samesetas_b(left as ValueSet, right as ValueSet);
+      case ConstraintType.SubSet: return a_subsetof_b(left as ValueSet, right as ValueSet);
+      case ConstraintType.NotSubSet: return !a_subsetof_b(left as ValueSet, right as ValueSet);
+      case ConstraintType.SuperSet: return a_subsetof_b(right as ValueSet, left as ValueSet);
+      case ConstraintType.NotSuperSet: return !a_subsetof_b(right as ValueSet, left as ValueSet);
+      case ConstraintType.SameSet: return a_samesetas_b(left as ValueSet, right as ValueSet);
+      case ConstraintType.NotSameSet: return !a_samesetas_b(left as ValueSet, right as ValueSet);
 
       // a operator value
       case ConstraintType.Text: return (left as string).indexOf(right as string) !== -1;
@@ -680,7 +686,7 @@ export namespace DataSourceInternal {
     $intersection: Instance<ObjectSetDefinition>[];
     $diff: [Instance<ObjectSetDefinition>, Instance<ObjectSetDefinition>];
     $instanceOf: string | Function;
-    $memberOf: string | Function;
+    $is: string | Function;
     $text: string;
     $out: string;
     $or: ConstraintDefinition[];
@@ -722,8 +728,8 @@ export namespace DataSourceInternal {
     $instanceOf: (context, p, set, value) => {
       set.addType({ type: ConstraintType.InstanceOf, value: context.aspect(value) });
     },
-    $memberOf: (context, p, set, value) => {
-      set.addType({ type: ConstraintType.MemberOf, value: context.aspect(value) });
+    $is: (context, p, set, value) => {
+      set.addType({ type: ConstraintType.Is, value: context.aspect(value) });
     },
     $union: (context, p, set, value) => {
       p.pushArray();
@@ -859,6 +865,8 @@ export namespace DataSourceInternal {
     return (a as Aspect.TypeArray | Aspect.TypeSet).itemType;
   }
   const a_op_b: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
+    if (left_var.attribute === Aspect.attribute_id && !right_fixed)
+      p.diagnostic(reporter, { is: "error", msg: `right operand must be defined for _id` });
     return validate_var_is_value(reporter, p, left_var, 'left')
       && right_var
       ? validate_var_is_value(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, left_var.attribute.type, right_var.attribute.type)
@@ -914,12 +922,12 @@ export namespace DataSourceInternal {
     // A operator B
     $intersects:  { is: A_op_B, type: ConstraintType.Intersects    },
     $nintersects: { is: A_op_B, type: ConstraintType.NotIntersects },
-    $subsetOf:    { is: A_op_B, type: ConstraintType.SubSetOf      },
-    $supersetOf:  { is: A_op_B, type: ConstraintType.NotSubSetOf   },
-    $nsubsetOf:   { is: A_op_B, type: ConstraintType.SuperSetOf    },
-    $nsupersetOf: { is: A_op_B, type: ConstraintType.NotSuperSetOf },
-    $sameSetAs:   { is: A_op_B, type: ConstraintType.SameSetAs     },
-    $nsameSetAs:  { is: A_op_B, type: ConstraintType.NotSameSetAs  },
+    $subset:      { is: A_op_B, type: ConstraintType.SubSet        },
+    $nsubset:     { is: A_op_B, type: ConstraintType.NotSubSet     },
+    $superset:    { is: A_op_B, type: ConstraintType.SuperSet      },
+    $nsuperset:   { is: A_op_B, type: ConstraintType.NotSuperSet   },
+    $sameset:     { is: A_op_B, type: ConstraintType.SameSet       },
+    $nsameset:    { is: A_op_B, type: ConstraintType.NotSameSet    },
 
     // a operator value
     $text:   { is: a_op_v, type: ConstraintType.Text   },
@@ -927,7 +935,7 @@ export namespace DataSourceInternal {
 
     // set operators
     $instanceOf:   { is: set_op, type: ConstraintType.InstanceOf   },
-    $memberOf:     { is: set_op, type: ConstraintType.MemberOf     },
+    $is:           { is: set_op, type: ConstraintType.Is           },
     $union:        { is: set_op, type: ConstraintType.Union        },
     $unionForAlln: { is: set_op, type: ConstraintType.UnionForAlln },
     $or:           { is: set_op, type: ConstraintType.Or           },
@@ -1060,7 +1068,7 @@ export namespace DataSourceInternal {
 
       const recurse = (set: ObjectSet) => {
         for (let c_self of set.typeConstraints) {
-          if (c_self.type === ConstraintType.InstanceOf || c_self.type === ConstraintType.MemberOf) {
+          if (c_self.type === ConstraintType.InstanceOf || c_self.type === ConstraintType.Is) {
             n++;
             setAttr(name ? c_self.value.attributes.get(name) : c_self.value.attribute_ref);
           }

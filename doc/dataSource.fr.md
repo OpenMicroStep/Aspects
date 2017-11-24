@@ -277,7 +277,9 @@ __mult-variable__ _opérateur_ __mult-variable__/__mult-constante__ ( `a: { $op:
 | _A_ $sameset     _B_ | _A_ = _B_     | l'ensemble _A_ à les mêmes valeurs que l'ensemble _B_              |
 | _A_ $nsameset    _B_ | _A_ ≠ _B_     | l'ensemble _A_ n'à pas les mêmes valeurs que l'ensemble _B_        |
  
-__Attention__: Toutes les comparaisons sur les chaînes de caractères (tri, `$eq`, `$neq`, `$lt`, ...) sont insensibles à la casse et suivent la spécification _Unicode Collation Algorithm_.
+__Attention__:
+ - L'ensemble vide est sous-ensemble de tout ensemble (_∅_ ⊆ _B_ est vrai).
+ - Toutes les comparaisons sur les chaînes de caractères (tri, `$eq`, `$neq`, `$lt`, ...) sont insensibles à la casse et suivent la spécification _Unicode Collation Algorithm_.
 Donc `"abc": { $eq: "ABC" }` est vrai.
 
 

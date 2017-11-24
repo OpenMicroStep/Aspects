@@ -16,7 +16,7 @@ export function mapValue(ctx: { mappers: { [s: string]: SqlMappedObject }  }, m
     if (!mapper)
       throw new Error(`cannot find mapper for ${name}`);
     let idattr = mapper.get("_id")!;
-    value = idattr.toDbKey(mapper.toDbKey(value.id()));
+    value = idattr.toDbKey(mapper.toDbKey( value.id()));
   }
   else if (attribute.name === "_id") {
     value = mapper.toDbKey(value);
@@ -96,8 +96,20 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   abstract sql_column(attribute: string, required: boolean): string | undefined;
   abstract execute(): Promise<VersionedObject[]>;
   abstract execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>>;
-  abstract mapValue(attribute: Aspect.InstalledAttribute, value): any;
+  abstract mapSingleValue(attribute: Aspect.InstalledAttribute, value): any;
   abstract setInitialUnionOfAlln(q_0: SqlQuery<SharedContext>, q_n: SqlQuery<SharedContext>, q_np1: SqlQuery<SharedContext>): Promise<void>;
+
+  abstract sql_sub_count_lvar_intersects_value(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, value: any): SqlBinding;
+  abstract sql_sub_count_var(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute): SqlBinding;
+  abstract sql_sub_count_lvar_intersects_rvar_single(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, sql_right_column: string): SqlBinding;
+  abstract sql_sub_count_lvar_intersects_rvar_mult(
+    lset: ObjectSet, lattribute: Aspect.InstalledAttribute,
+    rset: ObjectSet, rattribute: Aspect.InstalledAttribute
+  ): SqlBinding;
+
+  mapValue(attribute: Aspect.InstalledAttribute, value): any {
+    return Array.isArray(value) ? value.map(v => this.mapSingleValue(attribute, v)) : this.mapSingleValue(attribute, value);
+  }
 
   setInitialUnion(queries: SqlQuery<SharedContext>[]) {
     let maker = this.ctx.maker;
@@ -218,22 +230,123 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     this.columns_ordered.push(name);
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
-    value = Array.isArray(value) ? value.map(v => this.mapValue(var_attribute, v)) : this.mapValue(var_attribute, value);
-    return this.ctx.maker.op(this.buildVariable(var_set, var_attribute), operator, value);
+  buildConstraintValue(
+    var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute,
+    operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue,
+    value: any
+  ): SqlBinding {
+    if (ConstraintType.BEGIN_A_op_B <= operator && operator <= ConstraintType.END_A_op_B) {
+      let count_var_intersects_value: SqlBinding = this.sql_sub_count_lvar_intersects_value(var_set, var_attribute, value);
+      if (operator === ConstraintType.Intersects) {
+        return this.ctx.maker.op_bind(count_var_intersects_value, ConstraintType.GreaterThan, 0);
+      }
+      else if (operator === ConstraintType.NotIntersects) {
+        return this.ctx.maker.op_bind(count_var_intersects_value, ConstraintType.Equal, 0);
+      }
+      else if (operator === ConstraintType.SubSet) {
+        let count_var: SqlBinding = this.sql_sub_count_var(var_set, var_attribute);
+        return this.ctx.maker.compare_bind(count_var_intersects_value, ConstraintType.Equal, count_var);
+      }
+      else if (operator === ConstraintType.NotSubSet) {
+        let count_var: SqlBinding = this.sql_sub_count_var(var_set, var_attribute);
+        return this.ctx.maker.compare_bind(count_var_intersects_value, ConstraintType.NotEqual, count_var);
+      }
+      else if (operator === ConstraintType.SuperSet) {
+        return this.ctx.maker.op_bind(count_var_intersects_value, ConstraintType.Equal, value.length);
+      }
+      else if (operator === ConstraintType.NotSuperSet) {
+        return this.ctx.maker.op_bind(count_var_intersects_value, ConstraintType.NotEqual, value.length);
+      }
+      else if (operator === ConstraintType.SameSet) {
+        let count_var: SqlBinding = this.sql_sub_count_var(var_set, var_attribute);
+        return this.ctx.maker.and([
+          this.ctx.maker.op_bind(count_var_intersects_value, ConstraintType.Equal, value.length),
+          this.ctx.maker.op_bind(count_var, ConstraintType.Equal, value.length)
+        ]);
+      }
+      else { // if (operator === ConstraintType.NotSameSet)
+        let count_var: SqlBinding = this.sql_sub_count_var(var_set, var_attribute);
+        return this.ctx.maker.or([
+          this.ctx.maker.op_bind(count_var_intersects_value, ConstraintType.NotEqual, value.length),
+          this.ctx.maker.op_bind(count_var, ConstraintType.NotEqual, value.length)
+        ]);
+      }
+    }
+    else if (ConstraintType.BEGIN_A_op_b <= operator && operator <= ConstraintType.END_A_op_b) {
+      let sql_select_count: SqlBinding = this.sql_sub_count_lvar_intersects_value(var_set, var_attribute, value);
+      if (operator === ConstraintType.Contains)
+        return this.ctx.maker.op_bind(sql_select_count, ConstraintType.GreaterThan, 0);
+      else
+        return this.ctx.maker.op_bind(sql_select_count, ConstraintType.Equal, 0);
+    }
+    else {
+      return this.ctx.maker.op(this.buildVariable(var_set, var_attribute), operator, value);
+    }
+  }
+
+  buildConstraintVariable(
+    lset: ObjectSet, lattribute: Aspect.InstalledAttribute,
+    operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue,
+    rset: ObjectSet, rattribute: Aspect.InstalledAttribute
+  ) {
+    if (ConstraintType.BEGIN_A_op_B <= operator && operator <= ConstraintType.END_A_op_B) {
+      let count_lvar_intersects_rvar: SqlBinding = this.sql_sub_count_lvar_intersects_rvar_mult(lset, lattribute,rset,rattribute);
+      if (operator === ConstraintType.Intersects) {
+        return this.ctx.maker.op_bind(count_lvar_intersects_rvar, ConstraintType.GreaterThan, 0);
+      }
+      else if (operator === ConstraintType.NotIntersects) {
+        return this.ctx.maker.op_bind(count_lvar_intersects_rvar, ConstraintType.Equal, 0);
+      }
+      else if (operator === ConstraintType.SubSet) {
+        let count_lvar: SqlBinding = this.sql_sub_count_var(lset, lattribute);
+        return this.ctx.maker.compare_bind(count_lvar_intersects_rvar, ConstraintType.Equal, count_lvar);
+      }
+      else if (operator === ConstraintType.NotSubSet) {
+        let count_lvar: SqlBinding = this.sql_sub_count_var(lset, lattribute);
+        return this.ctx.maker.compare_bind(count_lvar_intersects_rvar, ConstraintType.NotEqual, count_lvar);
+      }
+      else if (operator === ConstraintType.SuperSet) {
+        let count_rvar: SqlBinding = this.sql_sub_count_var(rset, rattribute);
+        return this.ctx.maker.compare_bind(count_lvar_intersects_rvar, ConstraintType.Equal, count_rvar);
+      }
+      else if (operator === ConstraintType.NotSuperSet) {
+        let count_rvar: SqlBinding = this.sql_sub_count_var(rset, rattribute);
+        return this.ctx.maker.compare_bind(count_lvar_intersects_rvar, ConstraintType.NotEqual, count_rvar);
+      }
+      else if (operator === ConstraintType.SameSet) {
+        let count_lvar: SqlBinding = this.sql_sub_count_var(lset, lattribute);
+        let count_rvar: SqlBinding = this.sql_sub_count_var(rset, rattribute);
+        return this.ctx.maker.and([
+          this.ctx.maker.compare_bind(count_lvar_intersects_rvar, ConstraintType.Equal, count_lvar),
+          this.ctx.maker.compare_bind(count_lvar, ConstraintType.Equal, count_rvar)
+        ]);
+      }
+      else { // if (operator === ConstraintType.NotSameSet)
+        let count_lvar: SqlBinding = this.sql_sub_count_var(lset, lattribute);
+        let count_rvar: SqlBinding = this.sql_sub_count_var(rset, rattribute);
+        return this.ctx.maker.or([
+          this.ctx.maker.compare_bind(count_lvar_intersects_rvar, ConstraintType.NotEqual, count_lvar),
+          this.ctx.maker.compare_bind(count_lvar, ConstraintType.NotEqual, count_rvar)
+        ]);
+      }
+    }
+    else if (ConstraintType.BEGIN_A_op_b <= operator && operator <= ConstraintType.END_A_op_b) {
+      let sql_select_count: SqlBinding = this.sql_sub_count_lvar_intersects_rvar_single(lset, lattribute, this.buildVariable(rset, rattribute));
+      if (operator === ConstraintType.Contains)
+        return this.ctx.maker.op_bind(sql_select_count, ConstraintType.GreaterThan, 0);
+      else
+        return this.ctx.maker.op_bind(sql_select_count, ConstraintType.Equal, 0);
+    }
+    else {
+      let lc = this.buildVariable(lset, lattribute);
+      let rc = this.buildVariable(rset, rattribute);
+      return this.ctx.maker.compare(lc, operator, rc);
+    }
   }
 
   buildVariable(var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute): string {
     let q = this.ctx.queries.get(var_set)!;
     return q.sql_column(var_attribute.name);
-  }
-
-  mapContraintType(type: ConstraintType) : any {
-    if (type === ConstraintType.Contains)
-      return ConstraintType.Equal;
-    if (type === ConstraintType.NotContains)
-      return ConstraintType.NotEqual;
-    return type;
   }
 
   buildConstraint(constraint: DataSourceInternal.Constraint, prefix: string): SqlBinding {
@@ -246,16 +359,14 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     }
     else if (constraint instanceof DataSourceInternal.ConstraintValue) {
       let lset = this.set.variable(prefix + constraint.leftVariable)!;
-      let type = this.mapContraintType(constraint.type);
-      return this.buildConstraintValue(lset, constraint.leftAttribute, type, constraint.value);
+      let value = constraint.value;
+      value = this.mapValue(constraint.leftAttribute, value);
+      return this.buildConstraintValue(lset, constraint.leftAttribute, constraint.type, value);
     }
     else if (constraint instanceof DataSourceInternal.ConstraintVariable) {
       let lset = this.set.variable(prefix + constraint.leftVariable)!;
       let rset = this.set.variable(prefix + constraint.rightVariable)!;
-      let lc = this.buildVariable(lset, constraint.leftAttribute);
-      let rc = this.buildVariable(rset, constraint.rightAttribute);
-      let type = this.mapContraintType(constraint.type);
-      return this.ctx.maker.compare(lc, type, rc);
+      return this.buildConstraintVariable(lset, constraint.leftAttribute, constraint.type, rset, constraint.rightAttribute);
     }
     throw new Error(`unsupported constraint`);
   }
@@ -307,7 +418,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   async buildTypeConstraints() {
     for (let c of this.set.typeConstraints) {
       switch (c.type) {
-        case ConstraintType.MemberOf:
+        case ConstraintType.Is:
           this.setInitialType(c.value.classname, false);
           break;
         case ConstraintType.InstanceOf:
@@ -356,6 +467,15 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
       this.sql_join(),
       this.sql_where(),
       this.sql_sort(),
+    );
+  }
+
+  sql_select_count(): SqlBinding {
+    return this.ctx.maker.select(
+      [this.ctx.maker.column_count()],
+      this.sql_from(),
+      this.sql_join(),
+      this.sql_where(),
     );
   }
 
@@ -583,7 +703,11 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     return monoAttributes.values();
   }
 
-  buildConstraintValue(var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value: any): SqlBinding {
+  buildConstraintValue(
+    var_set: ObjectSet, var_attribute: Aspect.InstalledAttribute,
+    operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue,
+    value: any
+  ): SqlBinding {
     if (operator === ConstraintType.Text && var_attribute.name === "_id") {
       // TODO: add support for external full text search ?
       let constraints: SqlBinding[] = [];
@@ -593,7 +717,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         for (let a of aspect.attributes.values()) {
           if (a.type.type === "primitive" && !attr.has(a.name)) {
             attr.add(a.name);
-            constraints.push(super.buildConstraintValue(var_set, a, operator, value));
+            constraints.push(this.ctx.maker.op(this.buildVariable(var_set, var_attribute), operator, value));
           }
         }
       }
@@ -604,7 +728,100 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     }
   }
 
-  mapValue(attribute: Aspect.InstalledAttribute, value) {
+  sql_sub_count_lvar_intersects_value(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, value: any) {
+    return this.sql_sub_count_mutate(var_set, var_attribute, (sub_var_query) => {
+      sub_var_query.addConstraint(this.ctx.maker.op(
+        sub_var_query.sql_column(var_attribute.name),
+        Array.isArray(value) ? ConstraintType.In : ConstraintType.Equal,
+        value)
+      );
+    });
+  }
+
+  sql_sub_count_var(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute) {
+    return this.sql_sub_count_mutate(var_set, var_attribute, (sub_var_query) => {
+      sub_var_query.sql_column(var_attribute.name);
+    });
+  }
+
+  sql_sub_count_lvar_intersects_rvar_single(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, sql_right_column: string) {
+    return this.sql_sub_count_mutate(var_set, var_attribute, (sub_var_query) => {
+      sub_var_query.addConstraint(this.ctx.maker.compare(
+        sub_var_query.sql_column(var_attribute.name),
+        ConstraintType.Equal,
+        sql_right_column)
+      );
+    });
+  }
+
+  sql_sub_count_lvar_intersects_rvar_mult(
+    lset: ObjectSet, lattribute: Aspect.InstalledAttribute,
+    rset: ObjectSet, rattribute: Aspect.InstalledAttribute
+  ) {
+    let rvar_query = this.ctx.queries.get(rset)!;
+    let cases = new Map<string, SqlBinding>();
+    for (let rmapper of rvar_query.mappers) {
+      let sql = this.sql_sub_count_mutate(lset, lattribute, (lsub_var_query) => {
+        let rsub_var_set = new ObjectSet(rmapper.name);
+        let rsub_var_query = new SqlMappedQuery(this.ctx, rsub_var_set);
+        this.ctx.queries.set(rsub_var_set, rsub_var_query);
+        rsub_var_query.setInitialType(rmapper.name, false);
+
+        rsub_var_query.addConstraint(this.ctx.maker.compare(
+          rsub_var_query.sql_column(Aspect.attribute_id.name),
+          ConstraintType.Equal,
+          rvar_query.sql_column(Aspect.attribute_id.name)
+        ));
+
+        lsub_var_query.variables.add(rsub_var_query);
+
+
+        lsub_var_query.addConstraint(this.ctx.maker.compare(
+          lsub_var_query.sql_column(lattribute.name),
+          ConstraintType.Equal,
+          rsub_var_query.sql_column(rattribute.name),
+        ));
+      });
+      cases.set(rmapper.name, sql);
+    }
+    let sql_select_count: SqlBinding;
+    if (cases.size === 1) {
+      sql_select_count = [...cases.values()][0];
+    }
+    else {
+      sql_select_count = this.ctx.maker.case({ sql: rvar_query.sql_column("__is"), bind: [] }, cases);
+    }
+    return this.ctx.maker.sub(sql_select_count);
+  }
+
+  sql_sub_count_mutate(lset: DataSourceInternal.ObjectSet, lattribute: Aspect.InstalledAttribute, mutate: (sub_var_query: SqlMappedQuery) => void) {
+    let lvar_query = this.ctx.queries.get(lset)!;
+    let cases = new Map<string, SqlBinding>();
+    for (let lmapper of lvar_query.mappers) {
+      let lsub_var_set = new ObjectSet(lmapper.name);
+      let lsub_var_query = new SqlMappedQuery(this.ctx, lsub_var_set);
+      this.ctx.queries.set(lsub_var_set, lsub_var_query);
+      lsub_var_query.setInitialType(lmapper.name, false);
+      lsub_var_query.addConstraint(this.ctx.maker.compare(
+        lsub_var_query.sql_column(Aspect.attribute_id.name),
+        ConstraintType.Equal,
+        lvar_query.sql_column(Aspect.attribute_id.name)
+      ));
+      mutate(lsub_var_query);
+      let sql_select_count = lsub_var_query.sql_select_count();
+      cases.set(lmapper.name, sql_select_count);
+    }
+    let sql_select_count: SqlBinding;
+    if (cases.size === 1) {
+      sql_select_count = [...cases.values()][0];
+    }
+    else {
+      sql_select_count = this.ctx.maker.case({ sql: lvar_query.sql_column("__is"), bind: [] }, cases);
+    }
+    return this.ctx.maker.sub(sql_select_count);
+  }
+
+  mapSingleValue(attribute: Aspect.InstalledAttribute, value) {
     let finalValue;
     let hasFinalValue = false;
     for (let mapper of this.mappers) {
@@ -733,7 +950,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
 
               this.ctx.queries.set(s_m, q_m);
               q_m.setInitialType(aspect.classname, false);
-              q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, [...ids]));
+              q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, this.mapValue(Aspect.attribute_id, [...ids])));
 
               q_r.variables.add(q_m);
               q_r.addConstraint(this.ctx.maker.compare(q_r.sql_column("_id"), ConstraintType.Equal, q_m.sql_column(attribute.name)));
@@ -752,7 +969,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
             q_m.setInitialType(aspect.classname, false);
             q_m.addAttribute("_id");
             q_m.addAttribute(attribute.name);
-            q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, [...ids]));
+            q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, this.mapValue(Aspect.attribute_id, [...ids])));
             let sql_select = q_m.sql_select();
             let rows = await this.ctx.db.select(sql_select);
             for (let row of rows) {

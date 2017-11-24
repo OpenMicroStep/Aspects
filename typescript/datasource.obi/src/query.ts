@@ -235,7 +235,69 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     }
   }
 
-  mapValue(attribute: Aspect.InstalledAttribute, value) {
+  sql_sub_count_lvar_intersects_value(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, value: any) {
+    return this.sql_sub_count_mutate(
+      var_set, var_attribute,
+      (sql_left_column) => this.ctx.maker.op(sql_left_column,  Array.isArray(value) ? ConstraintType.In : ConstraintType.Equal, value)
+    );
+  }
+
+  sql_sub_count_var(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute) {
+    return this.sql_sub_count_mutate(var_set, var_attribute, undefined);
+  }
+
+  sql_sub_count_lvar_intersects_rvar_single(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, sql_right_column: string) {
+    return this.sql_sub_count_mutate(
+      var_set, var_attribute,
+      (sql_left_column) => this.ctx.maker.compare(sql_left_column, ConstraintType.Equal, sql_right_column)
+    );
+  }
+
+  sql_sub_count_mutate(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, mutate?: (sql_left_column: string) => SqlBinding) {
+    let maker = this.ctx.maker;
+    let columns = [maker.column_count()];
+    let joins: SqlBinding[] = [];
+    let lcar = this.car_info(var_attribute.name);
+    let and = [
+      maker.compare(maker.column(lcar.table, column_id(lcar.direct)), ConstraintType.Equal, this.buildVariable(var_set, Aspect.attribute_id)),
+      maker.op(maker.column(lcar.table, "VAL_CAR"), ConstraintType.Equal, lcar.car._id),
+    ];
+    if (mutate)
+      and.push(mutate(maker.column(lcar.table, column_val(lcar.direct))));
+    let query = maker.sub(maker.select(
+      [maker.column_count()],
+      maker.from(lcar.table), [],
+      maker.and(and)
+    ));
+    return query;
+  }
+
+  sql_sub_count_lvar_intersects_rvar_mult(
+    lset: ObjectSet, lattribute: Aspect.InstalledAttribute,
+    rset: ObjectSet, rattribute: Aspect.InstalledAttribute
+  ) {
+    let maker = this.ctx.maker;
+    let columns = [maker.column_count()];
+    let joins: SqlBinding[] = [];
+    let lcar = this.car_info(lattribute.name);
+    let rcar = this.car_info(rattribute.name);
+    let ltable = this.nextAlias();
+    let rtable = this.nextAlias();
+    let query = maker.sub(maker.select(
+      [maker.column_count()],
+      maker.from(lcar.table, ltable), [maker.join("", rcar.table, rtable)],
+      maker.and([
+        maker.compare(maker.column(ltable, column_id(lcar.direct)), ConstraintType.Equal, this.buildVariable(lset, Aspect.attribute_id)),
+        maker.op(maker.column(ltable, "VAL_CAR"), ConstraintType.Equal, lcar.car._id),
+        maker.compare(maker.column(rtable, column_id(rcar.direct)), ConstraintType.Equal, this.buildVariable(rset, Aspect.attribute_id)),
+        maker.op(maker.column(rtable, "VAL_CAR"), ConstraintType.Equal, rcar.car._id),
+        maker.compare(maker.column(ltable, column_val(lcar.direct)), ConstraintType.Equal, maker.column(rtable, column_val(rcar.direct))),
+      ])
+    ));
+    return query;
+  }
+
+  mapSingleValue(attribute: Aspect.InstalledAttribute, value) {
     if (value instanceof VersionedObject) {
       value = value.id();
     }

@@ -162,6 +162,10 @@ export abstract class SqlMaker {
     return alias ? this.column_alias(r, alias) : r;
   }
 
+  column_count() {
+    return "COUNT(*)";
+  }
+
   column_alias(sql_column: string, alias: string) {
     return `${sql_column} ${this.quote(alias)}`;
   }
@@ -234,6 +238,20 @@ export abstract class SqlMaker {
     let b = this.op(sql_column.sql, operator, value) as SqlBindingM;
     b.bind.unshift(...sql_column.bind);
     return b;
+  }
+
+  case(sql_case: SqlBinding, cases: Iterable<[string, SqlBinding]>, sql_else?: SqlBinding) : SqlBinding {
+    let sql: SqlBindingM = { sql: `CASE ${sql_case.sql}`, bind: [...sql_case.bind] };
+    for (let [value, expr] of cases) {
+      sql.sql += ` WHEN ? THEN ${this.sub(expr).sql}`;
+      sql.bind.push(value, ...expr.bind);
+    }
+    if (sql_else) {
+      sql.sql += ` ELSE ${this.sub(sql_else).sql}`;
+      sql.bind.push(...sql_else.bind);
+    }
+    sql.sql += ' END';
+    return sql;
   }
 
   compare(sql_columnLeft: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: string): SqlBinding {

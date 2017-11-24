@@ -27,9 +27,9 @@ function init(flux: Flux<Context>) {
   let {db, cc} = ctx;
   let ccc = ctx.ccc = cc.registerComponent({});
   ctx.c0 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 3" });
-  ctx.c1 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 2"  , _tags: new Set(['Trop', 'Vieux']) });
-  ctx.c2 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "3008 DKR", _tags: new Set(['Dakkar']) });
-  ctx.c3 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "4008 DKR", _tags: new Set(['Dakkar', 'Top1', 'Top2']) });
+  ctx.c1 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Renault", _model: "Clio 2"  , _tags: new Set(['Renault', 'Trop', 'Vieux']) });
+  ctx.c2 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "3008 DKR", _tags: new Set(['Peugeot', 'Dakkar']) });
+  ctx.c3 = Object.assign(Car.Aspects.test1.create(ccc), { _name: "Peugeot", _model: "4008 DKR", _tags: new Set(['Peugeot', 'Renault', 'Dakkar', 'Top1', 'Top2']) });
   ctx.p4 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Abraham Simpson", _firstname: "Abraham", _lastname: "Simpson", _birthDate: new Date()  });
   ctx.p2 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Homer Simpson"  , _firstname: "Homer"  , _lastname: "Simpson", _birthDate: new Date(), _father: ctx.p4 });
   ctx.p3 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Marge Simpson"  , _firstname: "Marge"  , _lastname: "Simpson", _birthDate: new Date()  });
@@ -714,6 +714,129 @@ function insert1by1SeqWithCC(flux, nb) {
   flux.continue();
 }
 
+async function _query_op_value_check_both(f: Flux<Context>,op:string,value:string|string[],expected:Car[]) {
+  let {c0, c1, c2, c3} = f.context;
+  await _query_op_value_check(f, `$${op}`, value, expected);
+  await _query_op_value_check(f, `$n${op}`, value, [c0,c1, c2, c3].filter(v => expected.indexOf(v) === -1));
+}
+
+async function _query_op_value_check(f: Flux<Context>,op:string,value:string|string[],expected:Car[]) {
+  let {db, cc, ccc} = f.context;
+  let envelop = await ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: Car, _tags: { [op]: value } } });
+  assert.deepEqual(envelop.diagnostics(), []);
+  assert.sameMembers(envelop.value()['cars'].map(v => v.id()), expected.map(v => v.id()));
+  assert.sameMembers(envelop.value()['cars'], expected);
+}
+
+async function _query_op_variable_check_both(f: Flux<Context>,op:string, model: string, rattribute: string, expected:Car[]) {
+  let {c0, c1, c2, c3} = f.context;
+  await _query_op_variable_check(f, `$${op}`, model, rattribute, expected);
+  await _query_op_variable_check(f, `$n${op}`, model, rattribute, [c0,c1, c2, c3].filter(v => expected.indexOf(v) === -1));
+}
+async function _query_op_variable_check(f: Flux<Context>,op:string, model: string, rattribute: string, expected:Car[]) {
+  let {db, cc, ccc} = f.context;
+  let envelop = await ccc.farPromise(db.rawQuery, {
+    name: "cars",
+    where: {
+      $out: "=l",
+      "l=": { $elementOf: { $instanceOf: Car,  } },
+      "r=": { $elementOf: { $instanceOf: Car, _model: model } },
+      "=l._tags": { [op]: `=r.${rattribute}` }
+    }
+  });
+  assert.deepEqual(envelop.diagnostics(), []);
+  assert.sameMembers(envelop.value()['cars'].map(v => v.id()), expected.map(v => v.id()));
+  assert.sameMembers(envelop.value()['cars'], expected);
+}
+
+async function query_contains_value(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_value_check_both(f,"contains","",[]);
+  await _query_op_value_check_both(f,"contains","Vieux",[c1]);
+  await _query_op_value_check_both(f,"contains","Dakkar",[c2,c3]);
+  await _query_op_value_check_both(f,"contains","Dummy",[]);
+  f.continue();
+}
+
+async function query_contains_variable(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_variable_check(f,"$contains", "none", "_name", []);
+  await _query_op_variable_check(f,"$ncontains", "none", "_name", []);
+  await _query_op_variable_check_both(f,"contains", "Clio 3", "_name", [c1, c3]); // $contains: "Renault"
+  f.continue();
+}
+
+async function query_subset_value(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_value_check_both(f,"subset",[],[c0]);
+  await _query_op_value_check_both(f,"subset",["Peugeot"],[c0]);
+  await _query_op_value_check_both(f,"subset",["Peugeot","Dakkar"],[c0,c2]);
+  await _query_op_value_check_both(f,"subset",["Peugeot","Renault","Dakkar","Vieux"],[c0,c2]);
+  await _query_op_value_check_both(f,"subset",["Peugeot","Renault","Dakkar","Top1","Top2"],[c0,c2,c3]);
+  f.continue();
+}
+
+async function query_subset_variable(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_variable_check_both(f,"subset","Clio 3", "_tags", [c0]);
+  await _query_op_variable_check_both(f,"subset","Clio 2", "_tags", [c0, c1]);
+  await _query_op_variable_check_both(f,"subset","4008 DKR", "_tags", [c0, c2, c3]);
+  f.continue();
+}
+
+async function query_superset_value(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_value_check_both(f,"superset",[],[c0,c1,c2,c3]);
+  await _query_op_value_check_both(f,"superset",["Trop"],[c1]);
+  await _query_op_value_check_both(f,"superset",["Renault","Top1"],[c3]);
+  await _query_op_value_check_both(f,"superset",["Peugeot", "Dakkar"],[c2,c3]);
+  await _query_op_value_check_both(f,"superset",["Dummy"],[]);
+  f.continue();
+}
+
+async function query_superset_variable(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_variable_check_both(f,"superset","Clio 3", "_tags", [c0, c1, c2, c3]);
+  await _query_op_variable_check_both(f,"superset","Clio 2", "_tags", [c1]);
+  await _query_op_variable_check_both(f,"superset","3008 DKR", "_tags", [c2, c3]);
+  f.continue();
+}
+
+async function query_sameset_value(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_value_check_both(f,"sameset",[],[c0]);
+  await _query_op_value_check_both(f,"sameset",["Peugeot","Renault","Dakkar"],[]);
+  await _query_op_value_check_both(f,"sameset",["Peugeot","Renault"],[]);
+  await _query_op_value_check_both(f,"sameset",["Top1","Peugeot","Top2","Renault","Dakkar"],[c3]);
+  await _query_op_value_check_both(f,"sameset",["Top1","Peugeot","Top2","Renault","Dakkar","Vieux"],[]);
+  f.continue();
+}
+
+async function query_sameset_variable(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_variable_check_both(f,"sameset","Clio 3", "_tags", [c0]);
+  await _query_op_variable_check_both(f,"sameset","Clio 2", "_tags", [c1]);
+  await _query_op_variable_check_both(f,"sameset","3008 DKR", "_tags", [c2]);
+  f.continue();
+}
+
+async function query_intersects_value(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_value_check_both(f,"intersects",[],[]);
+  await _query_op_value_check_both(f,"intersects",["Trop"],[c1]);
+  await _query_op_value_check_both(f,"intersects",["Peugeot","Renault","Dakkar"],[c1,c2,c3]);
+  f.continue();
+}
+
+async function query_intersects_variable(f: Flux<Context>) {
+  let {db, cc, ccc, c0, c1, c2, c3} = f.context;
+  await _query_op_variable_check_both(f,"intersects","Clio 3", "_tags", []);
+  await _query_op_variable_check_both(f,"intersects","Clio 2", "_tags", [c1,c3]);
+  await _query_op_variable_check_both(f,"intersects","3008 DKR", "_tags", [c2,c3]);
+  await _query_op_variable_check_both(f,"intersects","4008 DKR", "_tags", [c1,c2,c3]);
+  f.continue();
+}
+
 export function createTests(createControlCenter: (flux) => void, destroyControlCenter: (flux) => void = (f) => f.continue()) : any[] {
 
   /*function create1k(flux) { runWithNewCC(flux, f => createWithCC(f, 1000)); }
@@ -771,6 +894,20 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_union_cars_peoples,
       query_cars_sub_scope,
       query_parents,
+
+      query_contains_value,
+      query_contains_variable,
+
+      query_subset_value,
+      query_subset_variable,
+      query_superset_value,
+      query_superset_variable,
+
+      query_sameset_value,
+      query_sameset_variable,
+      query_intersects_value,
+      query_intersects_variable,
+
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]},
     ]//, create1k, insert100, insert1k, insert1k_1by1Seq, insert1k_1by1Par];
