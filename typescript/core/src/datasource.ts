@@ -50,7 +50,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
   async load({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObject[]>>  {
     let saved: VersionedObject[] = [];
     for (let vo of w.objects) {
-      if (vo.manager().isNew())
+      if (vo.manager().isSaved())
         saved.push(vo);
     }
     if (saved.length > 0) {

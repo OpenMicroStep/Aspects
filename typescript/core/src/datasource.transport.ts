@@ -55,7 +55,7 @@ export class VersionedObjectCoder {
         }
         if (m.isAttributeSavedFast(attribute)) {
           flags |= SAVED;
-          vs = m.attributeValueFast(attribute);
+          vs = m.savedAttributeValueFast(attribute);
         }
         attributes[i] = flags > 0 ? [flags, this._encodeValue(vm), this._encodeValue(vs)] : NO_VALUE;
       }
@@ -172,12 +172,15 @@ export class VersionedObjectCoder {
       for (let i = 2; i < attributes_by_index.length; i++) {
         let v = values[i];
         merge_attributes[i - 2] = undefined;
-        if (v && v[IDX_FLAGS] & MODIFIED)
-          m.setAttributeValueFast(attributes_by_index[i], this._decodeValue(ccc, v[IDX_MODIFIED]));
         if (v && v[IDX_FLAGS] & SAVED)
           merge_attributes[i - 2] = { value: this._decodeValue(ccc, v[IDX_SAVED]) };
       }
       m.mergeSavedAttributesFast(merge_attributes, values[1]![IDX_SAVED]);
+      for (let i = 2; i < attributes_by_index.length; i++) {
+        let v = values[i];
+        if (v && v[IDX_FLAGS] & MODIFIED)
+          m.setAttributeValueFast(attributes_by_index[i], this._decodeValue(ccc, v[IDX_MODIFIED]));
+      }
       ret.push(vo);
     }
     return ret;

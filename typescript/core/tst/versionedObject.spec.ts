@@ -173,7 +173,6 @@ function sub_object_single() {
   assert.isFalse(r0.manager().isSubObject());
   assert.isTrue(p0.manager().isSubObject());
   assert.strictEqual(p0.manager().hasAttributeValue("_altitute"), true);
-  assert.strictEqual(p0.manager().hasEveryAttributesValue(["_altitute"]), true);
   assert.strictEqual(p0.manager().attributeValue("_altitute"), undefined);
   assert.strictEqual(p0.manager().savedAttributeValue("_altitute"), undefined);
 

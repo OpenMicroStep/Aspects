@@ -7,7 +7,6 @@ import { Flux } from '@openmicrostep/async';
 import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsystem.shared';
 import traverse = Aspect.traverse;
 
-const NEW = 0x1;
 const INCONFLICT = 0x4;
 const SAVED = 0x8;
 const DELETED = 0x10;
@@ -107,7 +106,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   constructor(controlCenter: ControlCenter, object: T) {
     this._controlCenter = controlCenter;
     this._components = new Set();
-    this._flags = NEW;
+    this._flags = 0;
     this._aspect = (object.constructor as any).aspect;
     this._object = object;
     this._parent = undefined;
@@ -163,10 +162,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   isSubObject() { return this._aspect.is_sub_object; }
 
   // Modified attributes
-  isOneOfAttributesModified(scope: (keyof T)[]): boolean {
-    return scope.some(attribute_name => this.isAttributeModified(attribute_name));
-  }
-
   clearAllModifiedAttributes() : void {
     for (let idx = 2; idx <  this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
@@ -197,17 +192,17 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let data = this._attribute_data[attribute.index];
     if (data.flags & SAVED)
       return data.saved;
-    if (this._flags & NEW)
+    if (this.isNew())
       return this._missingValue(attribute);
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
   }
 
   // Live attributes
-  isSaved()      { return (this._flags & SAVED) > 0;      }
-  isNew()        { return (this._flags & NEW) > 0;        }
+  isSaved()      { return (this._flags & SAVED) > 0; }
+  isNew()        { return (this._flags & FLAGS_MASK) === 0; }
   isModified()   { return (this._flags >> MODIFIED_OFFSET) > 0; }
   isInConflict() { return (this._flags & INCONFLICT) > 0; }
-  isDeleted()    { return (this._flags & DELETED) > 0;    }
+  isDeleted()    { return (this._flags & DELETED) > 0; }
 
   isAttributeSaved(attribute_name: string)      { return this.isAttributeSavedFast(this._checkedAttribute(attribute_name)); }
   isAttributeModified(attribute_name: string)   { return this.isAttributeModifiedFast(this._checkedAttribute(attribute_name)); }
@@ -224,13 +219,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   }
 
   hasAttributeValueFast(attribute: Aspect.InstalledAttribute) {
-    return this._attribute_data[attribute.index].flags > 0 || (this._flags & NEW) > 0;
-  }
-
-  hasEveryAttributesValue(attribute_names: string[]) : boolean;
-  hasEveryAttributesValue(attribute_names: (keyof T)[]) : boolean;
-  hasEveryAttributesValue(attribute_names: (keyof T)[]) : boolean {
-    return attribute_names.every(attribute_name => this.hasAttributeValue(attribute_name));
+    return this._attribute_data[attribute.index].flags > 0 || this.isNew();
   }
 
   attributeValue(attribute_name: string) : any;
@@ -245,7 +234,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return data.modified;
     if (data.flags & SAVED)
       return data.saved;
-    if (this._flags & NEW)
+    if (this.isNew())
       return this._missingValue(attribute);
     if (data.flags & INCONFLICT)
       throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible due to version change`);
@@ -308,7 +297,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._attribute_data[0].saved = id; // local -> real id (ie. object _id attribute got loaded)
     if (this._attribute_data[1].saved === VersionedObjectManager.NoVersion)
       this._attribute_data[1].saved = VersionedObjectManager.UndefinedVersion;
-    this._flags &= ~NEW;
+    this._flags |= SAVED;
   }
 
   setVersion(version: number) {
@@ -327,7 +316,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       }
     }
     this._attribute_data[1].saved = version;
-    this._flags |= SAVED;
   }
 
   mergeSavedAttributes(attributes: Map<string, any>, version: number) {
@@ -376,20 +364,18 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           }
         }
 
-        let is_new_saved_value = data_is_saved && areEquals(data.saved, merge_value);
+        let data_saved_same = data_is_saved && areEquals(data.saved, merge_value);
         if (version === this.version()) {
-          if (data_is_saved && !is_new_saved_value) // this should not happen
+          if (data_is_saved && !data_saved_same) // this should not happen
             this._push_conflict(ret.conflicts, attribute.name, data);
         }
         else {
-          if (!data_is_saved || !is_new_saved_value)
+          if (!data_is_saved || !data_saved_same)
             ret.changes.push(attribute.name);
-          let attribute_modified_counter = data.flags >> MODIFIED_OFFSET;
-          if (attribute_modified_counter) {
+          if (data.flags >> MODIFIED_OFFSET)
             this._setAttributeSavedValue(attribute, data, merge_value);
-            if (data_is_saved && !is_new_saved_value)
-              this._push_conflict(ret.conflicts, attribute.name, data);
-          }
+          if (data_is_saved && !data_saved_same && (data.flags >> MODIFIED_OFFSET))
+            this._push_conflict(ret.conflicts, attribute.name, data);
         }
         data.saved = merge_value;
         data.flags |= SAVED;
@@ -414,6 +400,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: VersionedObjectManager.InternalAttributeData, merge_value: any) {
     let delta = -(data.flags >> MODIFIED_OFFSET);
+    if (!areEquals(data.modified, merge_value))
+      delta++;
     if (attribute.is_sub_object) {
       // clear saved positions
       for (let sub_object of traverse<VersionedObject>(attribute.type, data.saved)) {
@@ -448,7 +436,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   }
 
   fillNewObjectMissingValues() {
-    if (this._flags & NEW) {
+    if (this.isNew()) {
       for (let idx = 2; idx <  this._attribute_data.length; idx++) {
         let data = this._attribute_data[idx];
         if (data.flags === 0) {
@@ -612,7 +600,12 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       let pm = this._parent.manager;
       let pa = this._parent.attribute;
       let pdata = pm._attribute_data[pa.index];
-      pm._apply_attribute_delta(pdata, changes);
+      let pprevious_value = pdata.flags >> MODIFIED_OFFSET;
+      let pnew_value = pm._apply_attribute_delta(pdata, changes);
+      if (pnew_value === 0)
+        pdata.modified = undefined;
+      else if (pprevious_value === 0)
+        pdata.modified = pdata.saved; // pdata.saved can't be undefined
     }
   }
 }
