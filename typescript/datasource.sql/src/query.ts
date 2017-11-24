@@ -1,4 +1,8 @@
-import { Aspect, ControlCenterContext, VersionedObject, Identifier, ControlCenter, DataSourceInternal, AComponent } from '@openmicrostep/aspects';
+import {
+  ControlCenter, ControlCenterContext, Identifier, AComponent,
+  DataSourceInternal,
+  Aspect, VersionedObject, VersionedObjectSnapshot,
+} from '@openmicrostep/aspects';
 import { SqlBinding, SqlBindingW, SqlMaker } from './index';
 import { SqlInsert, SqlValue, SqlPath, SqlMappedAttribute, SqlMappedObject } from './mapper';
 import ObjectSet = DataSourceInternal.ObjectSet;
@@ -518,12 +522,10 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     return this.sort;
   }
 
-  mergeRemotes(remotes: Map<VersionedObject, Map<string, any>>) {
-    for (let [vo, remoteAttributes] of remotes) {
-      let version = remoteAttributes.get('_version');
+  mergeSnapshots(remotes: Map<VersionedObject, VersionedObjectSnapshot>) {
+    for (let [vo, snapshot] of remotes) {
       let manager = vo.manager();
-      remoteAttributes.delete('_version');
-      manager.mergeSavedAttributes(remoteAttributes as Map<keyof VersionedObject, any>, version);
+      manager.mergeSavedAttributes(snapshot);
     }
   }
 }
@@ -868,15 +870,16 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   async execute(): Promise<VersionedObject[]> {
     let ccc = this.ctx.ccc;
     let maker = this.ctx.maker;
-    let remotes = new Map<VersionedObject, Map<string, any>>();
+    let snapshots = new Map<VersionedObject, VersionedObjectSnapshot>();
     let ret: VersionedObject[] = [];
 
     const loadMultValue = (rtype: string, rdb_id: any, rname: string, value: any) => {
       let rmapper = this.ctx.mappers[rtype]!;
       let rid = rmapper.fromDbKey(rmapper.attribute_id().fromDbKey(rdb_id));
       let rvo = ccc.findChecked(rid);
-      let rremoteAttributes = remotes.get(rvo)!;
-      let rset = rremoteAttributes.get(rname);
+      let rsnapshot = snapshots.get(rvo)!;
+      let rattribute = rvo.manager().aspect().attributes.get(rname)!;
+      let rset = rsnapshot.attributeValueFast(rattribute);
       if (rset instanceof Set)
         rset.add(value);
       else
@@ -893,9 +896,9 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(db_id));
       let version = row[prefix + "_version"];
       let vo = ccc.findOrCreate(id, type);
-      let remoteAttributes = remotes.get(vo);
-      if (!remoteAttributes)
-        remotes.set(vo, remoteAttributes = new Map<string, any>());
+      let snapshot = snapshots.get(vo);
+      if (!snapshot)
+        snapshots.set(vo, snapshot = new VersionedObjectSnapshot(vo.manager().aspect(), vo.id()));
 
       let rtype = row[prefix + "__ris"];
       if (rtype) {
@@ -908,14 +911,14 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         ret.push(vo);
 
       version = mapper.attribute_version().fromDb(version);
-      remoteAttributes.set("_version", version);
+      snapshot.setAttributeValueFast(Aspect.attribute_version, version);
       for (let a of scope_path) {
         if (isMonoAttribute(a)) {
           let k = a.name;
           let v = row[prefix + k];
           v = mapper.get(k)!.fromDb(v);
           v = this.loadValue(ccc, a.type, v);
-          remoteAttributes.set(k, v);
+          snapshot.setAttributeValueFast(a, v);
         }
         else {
           let m_attrs = mult_items.get(vo.manager().aspect());
@@ -925,7 +928,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           if (!objects)
             m_attrs.set(a, objects = new Set());
           objects.add(id);
-          remoteAttributes.set(a.name, a.type.type === "set" ? new Set() : []);
+          snapshot.setAttributeValueFast(a, a.type.type === "set" ? new Set() : []);
         }
       }
     }
@@ -1032,7 +1035,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         await loadMultRows(mult_items[idx + 1], path);
     };
     await doQuery(this, this.sql_columns(), [...this.mappers].map(m => m.name), '.', '');
-    this.mergeRemotes(remotes);
+    this.mergeSnapshots(snapshots);
     return ret;
   }
 

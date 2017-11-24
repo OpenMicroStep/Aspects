@@ -1,4 +1,9 @@
-import {DataSource, areEquals, VersionedObject, VersionedObjectManager, Result, Identifier, ControlCenter, DataSourceInternal, ControlCenterContext, Aspect, ImmutableMap} from './core';
+import {
+  ControlCenter, ControlCenterContext, Result, Identifier,
+  DataSource, DataSourceInternal,
+  Aspect, VersionedObject, VersionedObjectManager, VersionedObjectSnapshot,
+  areEquals, ImmutableMap,
+} from './core';
 import {Diagnostic} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 declare var console: any;
@@ -30,7 +35,7 @@ export class InMemoryDataSource extends DataSource {
   ) {
     let lManager = lObject.manager();
     let aspect = lManager.aspect();
-    let remoteAttributes = new Map<keyof VersionedObject, any>();
+    let snapshot = new VersionedObjectSnapshot(aspect, lManager.id());
     function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
       let cls_scope = scope[aspect.classname];
       if (!cls_scope)
@@ -49,18 +54,19 @@ export class InMemoryDataSource extends DataSource {
         this._load(ccc, ds, scope, spath, spath, lObject, dObject);
       }
     };
-    for (let a of attributes(aspect, scope, path)) {
-      let v = dObject.get(a);
+    snapshot.setAttributeValueFast(Aspect.attribute_version, dObject.get(Aspect.attribute_version));
+    for (let attribute of attributes(aspect, scope, path)) {
+      let v = dObject.get(attribute);
       if (v instanceof Set || v instanceof Array) {
         for (let vi of v)
-          load(a, vi);
+          load(attribute, vi);
       }
       else {
-        load(a, v);
+        load(attribute, v);
       }
-      remoteAttributes.set(a.name as keyof VersionedObject, ds.fromDSValue(ccc, v));
+      snapshot.setAttributeValueFast(attribute, ds.fromDSValue(ccc, v));
     }
-    lManager.mergeSavedAttributes(remoteAttributes, dObject.get(Aspect.attribute_version));
+    lManager.mergeSavedAttributes(snapshot);
   }
 
   implQuery({ context: { ccc } }, { tr, sets }: { tr?: InMemoryDataSource.DataStoreTransaction, sets: ObjectSet[] }): { [k: string]: VersionedObject[] } {
@@ -160,10 +166,10 @@ export class InMemoryDataSource extends DataSource {
               dObject.set(attribute, tr.toDSValue(modified, create));
           }
           if (diags.length > n) {
-            let remoteAttributes = new Map<keyof VersionedObject, any>();
+            let snapshot = new VersionedObjectSnapshot(lManager.aspect(), lManager.id());
             for (let { attribute, modified } of lManager.modifiedAttributes())
-              remoteAttributes.set(attribute.name as any, tr.fromDSValue(ccc, dObject.get(attribute)));
-            lManager.mergeSavedAttributes(remoteAttributes, dObject.get(Aspect.attribute_version));
+              snapshot.setAttributeValueFast(attribute, tr.fromDSValue(ccc, dObject.get(attribute)));
+            lManager.mergeSavedAttributes(snapshot);
           }
         }
         return dObject;

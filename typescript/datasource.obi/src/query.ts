@@ -1,4 +1,4 @@
-import {Aspect, VersionedObject, Identifier, DataSourceInternal, ControlCenterContext} from '@openmicrostep/aspects';
+import {Aspect, VersionedObject, VersionedObjectSnapshot, Identifier, DataSourceInternal, ControlCenterContext} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlBinding, SqlQuery, SqlQuerySharedContext, DBConnectorCRUD} from '@openmicrostep/aspects.sql';
@@ -335,7 +335,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
   async execute(): Promise<VersionedObject[]> {
     let ccc = this.ctx.ccc;
     let maker = this.ctx.maker;
-    let remotes = new Map<VersionedObject, Map<string, any>>();
+    let snapshots = new Map<VersionedObject, VersionedObjectSnapshot>();
     let idsByPathType = new Map<string, Map<Aspect.Installed, number[]>>();
     let ret: VersionedObject[] = [];
 
@@ -361,9 +361,10 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         if (_path === ".")
           ret.push(vo);
 
-        let remoteAttributes = remotes.get(vo);
-        if (!remoteAttributes) {
-          remotes.set(vo, remoteAttributes = new Map<string, any>());
+        let snapshot = snapshots.get(vo);
+        if (!snapshot) {
+          snapshots.set(vo, snapshot = new VersionedObjectSnapshot(manager.aspect(), manager.id()));
+          snapshot.setAttributeValueFast(Aspect.attribute_version, _version);
           for (let a of scope_at_type_path(this.set.scope, manager.classname(), _path)) {
             let d: undefined | Set<any> | any[] = undefined;
             if (a.type.type === "set")
@@ -380,10 +381,9 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
                 sub_ids.ids.push(_id);
               }
             }
-            remoteAttributes.set(a.name, d);
+            snapshot.setAttributeValueFast(a, d);
           }
         }
-        remoteAttributes.set("_version", _version);
       }
       let queries: SqlBinding[] = [];
       for (let [path_a, { ids, car_info }] of subs) {
@@ -404,19 +404,19 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       for (let row of row_values) {
         let {__is, _id, car, val, direct} = row as {__is?: number, _id: number, car: number, val: any, direct: boolean};
         let vo = ccc.find(_id)!;
-        let remoteAttributes = remotes.get(vo)!;
+        let snapshot = snapshots.get(vo)!;
         let a = (direct ? car2attr_d : car2attr_r).get(car)!;
         val = this.ctx.config.obiValue_to_aspectValue(val, a);
         val = this.loadValue(ccc, val, __is);
         if (a.type.type === "set" || a.type.type === "array") {
-          let c = remoteAttributes.get(a.name);
+          let c = snapshot.attributeValueFast(a);
           if (a.type.type === "set")
             c.add(val);
           else // array
             c.push(val);
         }
         else {
-          remoteAttributes.set(a.name, val);
+          snapshot.setAttributeValueFast(a, val);
         }
       }
     };
@@ -453,7 +453,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       }
     }
 
-    this.mergeRemotes(remotes);
+    this.mergeSnapshots(snapshots);
     return ret;
   }
 

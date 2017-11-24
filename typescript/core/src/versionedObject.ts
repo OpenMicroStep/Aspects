@@ -85,6 +85,37 @@ type ParentObject = {
   modified_position: number, // -1/0 for set, -1/idx for array
 }
 
+export class VersionedObjectSnapshot {
+  constructor(aspect: Aspect.Installed, id: Identifier) {
+    this._attributes = new Array(aspect.attributes_by_index.length);
+  }
+
+  id(): Identifier {
+    return this._attributes[0]!.value;
+  }
+
+  version(): number {
+    let d = this._attributes[1];
+    if (!d)
+      throw new Error(`no version in this snapshot`);
+    return d.value;
+  }
+
+  /** @internal */ _attributes: ({ value: any } | undefined)[];
+  setAttributeValueFast(attribute: Aspect.InstalledAttribute, value) {
+    this._attributes[attribute.index] = { value: value };
+  }
+
+  hasAttributeValueFast(attribute: Aspect.InstalledAttribute): boolean {
+    return this._attributes[attribute.index] !== undefined;
+  }
+
+  attributeValueFast(attribute: Aspect.InstalledAttribute): any {
+    let d = this._attributes[attribute.index];
+    return d && d.value;
+  }
+}
+
 export class VersionedObjectManager<T extends VersionedObject = VersionedObject> {
   static UndefinedVersion = -2;
   static NoVersion = -1;
@@ -318,38 +349,29 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._attribute_data[1].saved = version;
   }
 
-  mergeSavedAttributes(attributes: Map<string, any>, version: number) {
-    let merge_attributes = new Array<{ value: any } | undefined>(this._attribute_data.length - 2);
-    for (let idx = 2; idx <  this._attribute_data.length; idx++) {
-      let data = this._attribute_data[idx];
-      let attribute = this._aspect.attributes_by_index[idx];
-      merge_attributes[idx - 2] = attributes.has(attribute.name) ? { value: attributes.get(attribute.name) } : undefined;
-    }
-    return this.mergeSavedAttributesFast(merge_attributes, version);
-  }
-
-  computeMissingAttributesFast(merge_attributes: ({ value: any } | undefined)[]) {
+  computeMissingAttributes(snapshot: VersionedObjectSnapshot) {
     let missings: string[] = [];
     for (let idx = 2; idx <  this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
       if (data.flags > 0) {
         let attribute = this._aspect.attributes_by_index[idx];
-        if (!merge_attributes[idx - 2])
+        if (!snapshot.hasAttributeValueFast(attribute))
           missings.push(attribute.name);
       }
     }
     return missings;
   }
 
-  mergeSavedAttributesFast(merge_attributes: ({ value: any } | undefined)[], version: number) {
+  mergeSavedAttributes(snapshot: VersionedObjectSnapshot) {
     // _attributes_ can't be trusted, so we need to validate _attributes_ keys and types
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     let reporter = new Reporter();
     let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', '');
+    let version = snapshot.version();
     for (let idx = 2; idx <  this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
       let attribute = this._aspect.attributes_by_index[idx];
-      let merge_data = merge_attributes[idx - 2];
+      let merge_data = snapshot._attributes[idx];
       let data_is_saved = (data.flags & SAVED) > 0;
       path.set(attribute.name);
       if (merge_data) {
