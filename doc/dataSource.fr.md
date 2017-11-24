@@ -9,7 +9,7 @@ La sécurité autour des sources de données est un point très important, on va
  - le client ne doit JAMAIS être considéré comme fiable,
  - la vérification des droits et la cohérence doit TOUJOURS être fait coté serveur
  - les requêtes ne peuvent être considérées comme sécurisées que si elles sont générées coté serveur
- - les droits à considérer sont ceux s'appliquant sur les données (le droit _imprimer_ est donc sans intérêt par example)
+ - les droits à considérer sont ceux s'appliquant sur les données (le droit _imprimer_ est donc sans intérêt par exemple)
 
 ## Intégrité et sécurité des données
 
@@ -32,10 +32,9 @@ Dans le cas d'une modification:
  - application des modifications
  - vérification des droits et de la cohérence après modifications
 
-A tout objet est associé une fonction de validation qui a uniquement pour rôle la validation de l'objet et non de son entourage. Cela permet d'effectuer les vérifications simples de cohérence. Cette fonction est toujours appelée par la datasource lors d'un _save_.
+A tout objet est associé une fonction de validation (`validate`) qui a uniquement pour rôle la validation de l'objet et non de son entourage. Cela permet d'effectuer les vérifications simples de cohérence. Cette fonction est toujours appelée par la datasource lors d'un _save_.
 
-En plus de cette simple validation, a une datasource est attaché un ensemble de validateurs.
-Ces validateurs sont définies par rapport au nom des classes des objects qui seront manipulés.
+En plus de cette simple validation, à datasource est attaché un ensemble de validateurs.
 Ainsi, pour chaque classe, il est possible de définir trois ensemble de validateurs:
 
   - `safe_post_load`: vérification des droits et de la cohérence sur le résultat
@@ -60,14 +59,14 @@ Coté client (non fiable), il n'est donc pas possible de saisir une requête dir
 Il faut systématique passer par la création d'un objet contenant l'identifiant de la requête et les paramètres associés.
 
 ```ts
-dataSource.farEvent('query', R.allPersons());
+ccc.farPromise(datasource.query, { id: "allpersons", ...parameters });
 ```
 
 ## Définition d'une recherche
 
 Une recherche à pour sortie un dictionnaire dont les clés sont définit dans la requête et les valeurs associées sont des listes d'objets.
 
-Il y a 3 façons de définir la sortie:
+Il y a 2 façons de définir la sortie:
 
  - Simple: le dictionaire racine définit directement la sortie (une unique clé et l'ensemble d'objets associé)
  - Multiple: la clé '_result_' contient une liste d'objet définissant la sortie
@@ -76,8 +75,37 @@ Pour chaque objet définissant la sortie on a:
 
  - `name`: le nom de clé qui sera utilisé pour la sortie
  - `where`: les contraintes à appliquer
- - `sort`: si définit comment les données sont triés
- - `scope`: les attributs à chargés
+ - `scope`: les attributs à chargés et si définit l'ordre des objets
+
+Exemples:
+
+```js
+// Requête "simple":
+{
+  name: "result name",
+  where: { $is: "Person" },
+}
+// Résultat:
+=> { "result name": Person[] }
+```
+
+```js
+// Requête "multiple":
+{
+  result: [
+    { 
+      name: "a",
+      where: { $is: "Person" } 
+    },
+    { 
+      name: "b",
+      where: { $is: "Cat" } 
+    },
+  ]
+}
+// Résultat:
+=> { "a": Person[], "b": Cat[] }
+```
 
 ### Contraintes de recherche
 
@@ -92,7 +120,9 @@ Un __ensemble__ est définisable de plusieurs façons:
 
 Pour nommée un _ensemble_, il suffit que la clé associé à sa définition se termine par le caractère `=`.
 Cet _ensemble_ est alors référencable via `=` suivi du nom de l'ensemble. Cette référence peut-être suivi de `:` puis du nom d'un attribut présent sur les éléments de cet ensemble.
-Cela signifie alors toutes les éléments de cet attribut pour tous les éléments de cet ensemble (voir: Définition par parcours d'attributs des éléments d'un ensemble).
+Cela signifie alors:
+
+> _tous les éléments de cet attribut pour tous les éléments de cet ensemble_
 
 #### Définition par parcours d'attributs des éléments d'un ensemble
 
@@ -160,39 +190,96 @@ et de la même façon on le définit pour datasource:
 }
 ```
 
-#### Opérateurs sur les ensembles
+#### Opérateurs de constructions
 
 Les opérateurs sur les ensembles permettent à partir d'ensembles de définir de nouveaux ensembles.
 
  - Union `$union: [<ensemble>, ...] => <ensemble A ⋃ B>`: l'ensemble des objets des ensembles de la liste;
  - Intersection `$intersection: [<ensemble>, ...] => <ensemble A ⋂ B>`: l'ensemble des objets commun aux ensembles de la liste;
- - Différence `$diff: [<ensemble A>, <ensemble B>] => <ensemble A ∖ B>`: l'ensemble des objets de l'ensemble A qui ne sont pas présent dans l'ensemble B
+ - Différence `$substract: [<ensemble A>, <ensemble B>] => <ensemble A - B>`: l'ensemble des objets de l'ensemble A qui ne sont pas présent dans l'ensemble B
 
-#### Opérateurs sur les valeurs
+#### Opérateurs de contraintes
 
-Les opérateurs sur les valeurs permettent de définir des contraintes.
+Les opérateurs de contraintes sont regroupés en fonction des types des valeurs à gauche et à droite de l'opérateur.
 
- - Existance `$exists: <YES | NO>`: pour un attribut, c'est l'existance de cette attribut, pour un ensemble c'est le fait que celui-ci soit vide ou non;
- - Classe `$instanceOf: <type>`: uniquement les objets qui sont une instance de cette classe.
- - Classe `$memberOf: <type>`: uniquement les objets qui ont pour classe;
+On appelle:
+
+ - __variable__, une valeur qui provient de l'attribut d'un objet sur un ensemble,
+ - __constante__, une valeur qui provient directement de la requête.
+ - __mono-variable__, une variable représentant une unique valeur (ex: un nombre, une chaîne de caractère, mais pas un tableau),
+ - __mono-constante__, une constante représentant une unique valeur (ex: un nombre, une chaîne de caractère, mais pas un tableau),
+ - __mult-variable__, une variable représentant un ensemble de valeurs (ex: un tableau de nombres),
+ - __mult-constante__, une constante représentant un ensemble de valeurs (ex: un tableau de nombres),
+
+_opérateurs structurels_ (`$op: [...]`):
+
+Il existe deux opérateurs structurels permettant de structurer les contraintes: __$or__ et __$and__.
+La valeur associé est un ensemble de définition de contraintes.
+
+Exemple:
+
+{ $is: "Person", $or: [{ _name: { $eq: "A" }, { _name: { $eq: "B" }] }`
+
+_opérateur_ __mono-constante__ ( `$op: k` ) :
+
+| opérateur _k_   | valeurs de _k_  |                                                            | 
+|-----------------|-----------------|------------------------------------------------------------|
+| $is  _k_        | string / classe | l'objet est de classe _k_                                  |
+| $instanceOf _k_ | string / classe | l'objet est de classe _k_ ou d'une des sous-classes de _k_ |
+| $text _k_       | string          | l'objet contient dans l'un de ses attributs le texte _k_   |
+
+__mono-variable__ _opérateur_ __mono-constante__ ( `a: { $op: k }` ) :
+
+| _a_ opérateur _k_ | valeurs de _k_ |                                 |
+|-------------------|----------------|---------------------------------|
+| _a_ $exists _k_   | true / false   | _a_ possède ou non une valeur   |
+| _a_ $text _k_     | string         | _a_ contient le texte _k_       |
 
 
- - Egal à `$eq: <value>`
- - N'est pas égal à `$ne: <value>`
- - Plus grand que `$gt: <nombre | date | string>`
- - Plus grand ou égal à `$gte: <nombre | date | string>`
- - Plus petit que `$lt: <nombre | date | string>`
- - Plus petit ou égal à `$lte: <nombre | date | string>`
+__mono-variable__ _opérateur_ __mono-variable__/__mono-constante__ ( `a: { $op: b }` ) :
+
+| _a_ opérateur _b_ |           |                                 |
+|-------------------|-----------|---------------------------------|
+| _a_ $eq  _b_      | _a_ = _b_ | _a_ est égal à _b_              |
+| _a_ $neq _b_      | _a_ ≠ _b_ | _a_ est différent de _b_        |
+| _a_ $gt  _b_      | _a_ > _b_ | _a_ est supérieur à _b_         |
+| _a_ $gte _b_      | _a_ ≥ _b_ | _a_ est supérieur ou égal à _b_ |
+| _a_ $lt  _b_      | _a_ < _b_ | _a_ est inférieur à _b_         |
+| _a_ $lte _b_      | _a_ ≤ _b_ | _a_ est inférieur ou égal à _b_ |
 
 
- - A une valeur égal à `$has: <value>`
- - Est une valeur de la liste `$in: [<value>, ...]`
- - N'est pas une valeur de la liste `$nin: [<value>, ...]`
+__mult-variable__ _opérateur_ __mono-variable__/__mono-constante__ ( `A: { $op: b }` ) :
 
- - Fulltext search `$text: <string value>`
+| _A_ opérateur _b_  |           |                                              |
+|--------------------|-----------|----------------------------------------------|
+| _A_ $contains  _b_ | _b_ ∈ _A_ | l'ensemble _A_ contient la valeur _b_        |
+| _A_ $ncontains _b_ | _b_ ∉ _A_ | l'ensemble _A_ ne contient pas la valeur _b_ |
+
+
+__mono-variable__ _opérateur_ __mult-variable__/__mult-constante__ ( `a: { $op: B }` ) :
+
+| _a_ opérateur _B_ |           |                                             |
+|-------------------|-----------|---------------------------------------------|
+| _a_ $in  _B_      | _a_ ∈ _B_ | la valeur _a_ est dans l'ensemble _B_       |
+| _a_ $nin _B_      | _a_ ∉ _B_ | la valeur _a_ n'est pas dans l'ensemble _B_ |
+
+
+__mult-variable__ _opérateur_ __mult-variable__/__mult-constante__ ( `a: { $op: B }` ) :
+
+| _a_ opérateur _B_    |               |                                                                    |
+|----------------------|---------------|--------------------------------------------------------------------|
+| _A_ $intersects  _B_ | _A_ ∩ _B_ ≠ 0 | l'ensemble _A_ et l'ensemble _B_ ont au moins une valeur en commun |
+| _A_ $nintersects _B_ | _A_ ∩ _B_ = 0 | l'ensemble _A_ et l'ensemble _B_ n'ont aucune valeur en commun     |
+| _A_ $subset      _B_ | _A_ ⊆ _B_     | l'ensemble _A_ est contenu en totalité dans l'ensemble _B_         |
+| _A_ $superset    _B_ | _A_ ⊇ _B_     | l'ensemble _A_ contient la totalité de l'ensemble _B_              |
+| _A_ $nsubset     _B_ | _A_ ⊈ _B_     | l'ensemble _A_ n'est pas contenu en totalité dans l'ensemble _B_   |
+| _A_ $nsuperset   _B_ | _A_ ⊉ _B_     | l'ensemble _A_ ne pas contient la totalité de l'ensemble _B_       |
+| _A_ $sameset     _B_ | _A_ = _B_     | l'ensemble _A_ à les mêmes valeurs que l'ensemble _B_              |
+| _A_ $nsameset    _B_ | _A_ ≠ _B_     | l'ensemble _A_ n'à pas les mêmes valeurs que l'ensemble _B_        |
  
 __Attention__: Toutes les comparaisons sur les chaînes de caractères (tri, `$eq`, `$neq`, `$lt`, ...) sont insensibles à la casse et suivent la spécification _Unicode Collation Algorithm_.
 Donc `"abc": { $eq: "ABC" }` est vrai.
+
 
 ### Scope des objets trouvées
 
@@ -207,7 +294,7 @@ On définit ainsi:
  - `_`: tous les chemins/types
  - `.`: le chemin d'accès aux objets de premier niveau, soit les objets trouvées par la recherche
  - `x.`: le chemin d'accès aux objets de second niveau via l'attribut _x_.
- - `x.y.`: le chemin d'accès aux objets de troisième niveau via l'attribute _x_ puis _y_.
+ - `x.y.`: le chemin d'accès aux objets de troisième niveau via l'attribute _x_ puis _y_ et ainsi de suite.
 
 Cette définition accepte autant de niveaux que nécéssaire.
 Si l'on souhaite uniquement charger des attributs de 1er niveau, il est possible de donner uniquement la liste des attributs possibles.
@@ -232,73 +319,6 @@ La priorité du tri est définit par l'ordre des éléments dans le tableau, du 
 Si un attribut est utile uniquement pour le tri, il est possible d'ajouter `#` après `+` ou `-`, l'attribut ne sera alors pas chargé au sein de l'objet.
 
 ## Exemples:
-
-### Cohérence et droits
-
-```ts
-Cat.category('db', {
-  validateConsistency(reporter: Reporter) {
-    super.validateConsistency(reporter: Reporter); // default implementation will validate types
-    let manager = this.manager();
-    if (manager.isModified('_color') || manager.isModified('_name'))
-      if (this.color() === this.name())
-        reporter.diagnostic({ type: 'error', msg:`name and color can't be the same value` });
-  }
-});
-registerGraphConsistencyValidator(function validateCatColorByOwner(f: Flux<{ reporter: Reporter }>, objects: (Cat | Person)[]) {
-  dataSource.query({
-    "O=": objects,
-    "AC=": { $instanceOf: "Cat" },
-    "AP=": { $instanceOf: "Person" },
-    "C=" : { $intersection: ["=O", "=AC"] },
-    "P=" : { $intersection: ["=O", "=AP"] },
-    "cats=": {
-      "c=": { $elementOf: "=C" },
-      "p=": { $elementOf: "=AP" },
-      "=c._owner": { $eq: "=p" },
-      $out: "=c"
-    },
-    "persons=": { $intersection: ["=cats:_owner", "=AP"] }
-    result: [{
-        name: "cats",
-        where: ["=C", "=PC"],
-        scope: ["_color", "_owner"]
-      },
-      {
-        name: "persons",
-        where: "=persons",
-        scope: ["_age"]
-      }]
-  }, (invocation) => {
-    if (invocation.sucess()) {
-      let cats = invocation.result().cats;
-      for (let cat of cats) {
-        let m = o.manager();
-        if (o.color() === 'pink' && o.owner().age() < 18)
-          f.context.reporter.diagnostic({ type: 'error', msg:`cat color can't be the same value` });
-      }
-    }
-    else {
-      f.context.reporter.diagnostic({ type: 'error', msg:`unable to load objects` });
-    }
-    f.continue();
-  });
-}, [
-  { class: Cat   , when: (cat   : Cat   ) => {
-    let m = cat.manager();
-    return m.isModified('_color') && (m.attributeValue('_color') === 'pink' || m.versionAttributeValue('_color') === 'pink');
-  }},
-  { class: Person, when: (person: Person) => {
-    let m = person.manager();
-    if (!m.isModified('_age')) return false;
-    let isMajor = m.attributeValue('_age') >= 18;
-    let wasMajor = m.versionAttributeValue('_age') >= 18;
-    return isMajor != wasMajor;
-  }},
-  { class: Person, when: (person: Person) => person.age() === 'pink' }
-]);
-```
-
 
 ### Requêtes
 
