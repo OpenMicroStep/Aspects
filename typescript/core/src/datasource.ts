@@ -168,6 +168,7 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
     let manager = o.manager();
     manager.fillNewObjectMissingValues();
     if (manager.isModified()) {
+      changed.add(o);
       let attributes_by_index = manager.aspect().attributes_by_index;
       for (let i = 2; i < attributes_by_index.length; i++) {
         let attribute = attributes_by_index[i];
@@ -180,7 +181,6 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
               add(o);
         }
       }
-      changed.add(o);
     }
   }
 }
