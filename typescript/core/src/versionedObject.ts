@@ -411,6 +411,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   setVersion(version: number) {
     if (this.isNew())
       throw new Error(`version can't be set on a locally identifier object`);
+    if (this.isInConflict())
+      throw new Error(`version can't be set on a conflicted object`);
     if (this.isModified()) {
       for (let idx = 2; idx <  this._attribute_data.length; idx++) {
         let data = this._attribute_data[idx];

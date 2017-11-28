@@ -172,7 +172,9 @@ __!__: Lève une exception si:
 #### setVersion(version: number)
 Marque l'objet comme sauvé, l'ensemble des modifications sont placés sont considérés comme sauvé.
 
-__!__: Lève une exception si l'objet est nouveau (ne possède pas d'identifiant réel)
+__!__: Lève une exception si:
+ - l'objet est _nouveau_ (ne possède pas d'identifiant réel)
+ - l'objet est en _conflit_
 
 #### computeMissingAttributes(snapshot: VersionedObjectSnapshot): string[]
 Retourne la liste des attributs actuellement chargé qui ne sont pas présent dans l'instantané _snapshot_.
