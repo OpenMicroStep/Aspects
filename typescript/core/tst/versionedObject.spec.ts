@@ -311,6 +311,79 @@ function basics() {
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
   assert.isFalse(v1.manager().isPendingDeletion());
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 6);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test6");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 6);
+  assert.strictEqual(v1.manager().attributeValue("_name"), "testM3");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test6");
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "test5");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+
+  v1.manager().setAttributeValue("_name", "test5");
+  assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test6");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.sameOrderedMembers([...v1.manager().outdatedAttributes()], []);
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 7);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test7");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 7);
+  assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test7");
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "test6");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 8);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test6");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 8);
+  assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test6");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
 }
 
 function shared() {
