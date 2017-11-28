@@ -116,7 +116,7 @@ export class ObiDataSource extends DataSource {
     let oid = manager.id();
     let version = manager.version();
 
-    if (manager.isDeleted()) {
+    if (manager.isPendingDeletion()) {
       await this.db.raw_delete_obi(tr, reporter, oid as number);
       versions.set(object, { _id: oid, _version: version });
     }

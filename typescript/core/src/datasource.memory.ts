@@ -140,7 +140,7 @@ export class InMemoryDataSource extends DataSource {
       }
 
       let lVersion = lObject.manager().version();
-      if (lObject.manager().isDeleted()) {
+      if (lObject.manager().isPendingDeletion()) {
         let dbId = this.ds.toDSId(lObject.id());
         if (!tr.delete(dbId))
           diags.push({ is: "error", msg: `cannot delete ${lObject.id()}: object not found` });

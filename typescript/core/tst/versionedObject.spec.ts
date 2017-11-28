@@ -55,7 +55,7 @@ function basics() {
   assert.isFalse(v1.manager().isModified());
   assert.isFalse(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
   assert.instanceOf(v1, Resource);
   assert.instanceOf(v1, VersionedObject);
   assert.equal(v1.version(), -1);
@@ -89,7 +89,7 @@ function basics() {
   assert.isFalse(c1.manager().isModified());
   assert.isFalse(c1.manager().isSaved());
   assert.isFalse(c1.manager().isInConflict());
-  assert.isFalse(c1.manager().isDeleted());
+  assert.isFalse(c1.manager().isPendingDeletion());
   assert.sameOrderedMembers([...c1.manager().modifiedAttributes()], []);
   assert.sameOrderedMembers([...c1.manager().outdatedAttributes()], []);
 
@@ -100,7 +100,7 @@ function basics() {
   assert.isFalse(c1.manager().isModified());
   assert.isFalse(c1.manager().isSaved());
   assert.isFalse(c1.manager().isInConflict());
-  assert.isFalse(c1.manager().isDeleted());
+  assert.isFalse(c1.manager().isPendingDeletion());
 
   c1._name = "MyCar";
   c1._model = "MyModel";
@@ -110,7 +110,7 @@ function basics() {
   assert.isTrue(c1.manager().isModified());
   assert.isFalse(c1.manager().isSaved());
   assert.isFalse(c1.manager().isInConflict());
-  assert.isFalse(c1.manager().isDeleted());
+  assert.isFalse(c1.manager().isPendingDeletion());
   assert.sameDeepOrderedMembers([...c1.manager().modifiedAttributes()], [
     { attribute: c1.manager().aspect().checkedAttribute("_name"), modified: "MyCar" },
     { attribute: c1.manager().aspect().checkedAttribute("_model"), modified: "MyModel" },
@@ -128,7 +128,7 @@ function basics() {
   assert.isFalse(c1.manager().isModified());
   assert.isFalse(c1.manager().isSaved());
   assert.isFalse(c1.manager().isInConflict());
-  assert.isFalse(c1.manager().isDeleted());
+  assert.isFalse(c1.manager().isPendingDeletion());
   assert.sameOrderedMembers([...v1.manager().modifiedAttributes()], []);
   assert.sameOrderedMembers([...v1.manager().outdatedAttributes()], []);
 
@@ -167,7 +167,7 @@ function basics() {
   assert.isFalse(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
   assert.throw(() => v1.manager().attributeValue("_name"), `attribute 'Resource._name' is unaccessible and never was`);
   assert.throw(() => v1.manager().savedAttributeValue("_name"), `attribute 'Resource._name' is unaccessible and never was`);
   assert.throw(() => v1.manager().outdatedAttributeValue("_name"), `attribute 'Resource._name' is not in conflict`);
@@ -191,7 +191,7 @@ function basics() {
   assert.isFalse(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 
   v1.manager().setAttributeValue("_name", "testM");
   assert.strictEqual(v1.manager().attributeValue("_name"), "testM");
@@ -204,7 +204,7 @@ function basics() {
   assert.isTrue(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 
   {
     let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
@@ -224,7 +224,7 @@ function basics() {
   assert.isTrue(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isTrue(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
   assert.sameDeepOrderedMembers([...v1.manager().modifiedAttributes()], [
     { attribute: v1.manager().aspect().checkedAttribute("_name"), modified: "testM" },
   ]);
@@ -243,7 +243,7 @@ function basics() {
   assert.isTrue(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 
   v1.manager().unloadAttribute("_name");
   assert.isFalse(v1.manager().hasAttributeValue("_name"));
@@ -254,7 +254,7 @@ function basics() {
   assert.isFalse(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 
   {
     let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
@@ -271,7 +271,7 @@ function basics() {
   assert.isFalse(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 
   v1.manager().setAttributeValue("_name", "testM2");
   assert.strictEqual(v1.manager().attributeValue("_name"), "testM2");
@@ -284,7 +284,7 @@ function basics() {
   assert.isTrue(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 
   v1.manager().clearAllModifiedAttributes();
   assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
@@ -297,7 +297,7 @@ function basics() {
   assert.isFalse(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 
   v1.manager().setAttributeValue("_name", "testM3");
   assert.strictEqual(v1.manager().attributeValue("_name"), "testM3");
@@ -310,7 +310,7 @@ function basics() {
   assert.isTrue(v1.manager().isModified());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
-  assert.isFalse(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().isPendingDeletion());
 }
 
 function shared() {

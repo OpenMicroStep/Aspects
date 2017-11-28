@@ -8,9 +8,9 @@ import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsyste
 import traverse = Aspect.traverse;
 
 // 16bits for modified, 2bits for flags, 14bits for outdated
-const SAVED      = 0x00010000;
-const DELETED    = 0x00020000;
-const FLAGS_MASK = 0x00030000;
+const SAVED       = 0x00010000;
+const WILL_DELETE = 0x00020000;
+const FLAGS_MASK  = 0x00030000;
 
 function _modified_get(flags: number): number {
   return flags & 0x0000FFFF; // 16bits
@@ -213,7 +213,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   isNew()        { return (this._flags & FLAGS_MASK) === 0; }
   isModified()   { return _modified_get(this._flags) > 0; }
   isInConflict() { return _outdated_get(this._flags) > 0; }
-  isDeleted()    { return (this._flags & DELETED) > 0; }
+  isPendingDeletion() { return (this._flags & WILL_DELETE) > 0; }
 
   isAttributeSaved(attribute_name: string)      { return this.isAttributeSavedFast(this._aspect.checkedAttribute(attribute_name)); }
   isAttributeModified(attribute_name: string)   { return this.isAttributeModifiedFast(this._aspect.checkedAttribute(attribute_name)); }
@@ -384,11 +384,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
   }
 
-  delete() {
+  setPendingDeletion(will_delete: boolean) {
     if (this.isSubObject())
-      throw new Error(`${this.classname()}{id=${this.id()}}.delete(): forbidden on subobject, change the parent attribute directly`);
-    // TODO: remove or check any relation to this object or any of its subobject
-    this._flags = DELETED;
+      throw new Error(`${this.classname()}{id=${this.id()}}.setPendingDeletion(): forbidden on subobject, change the parent attribute directly`);
+    if (will_delete)
+      this._flags |= WILL_DELETE;
+    else
+      this._flags &= ~WILL_DELETE;
   }
 
   setId(id: Identifier) {

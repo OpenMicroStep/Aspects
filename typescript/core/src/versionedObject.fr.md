@@ -36,7 +36,9 @@ Un attribut est considéré chargé si:
 
 Une fois qu'un objet possède un identifiant réel, il n'est plus considéré comme _nouveau_.
 
-Un sous-objet ne peut-être supprimé, cette information étant porté par la présence ou non du sous-objet dans les valeurs de l'objet racine. Ainsi un sous-objet renverra toujours faux à la question `isDeleted()`.
+Un sous-objet ne peut-être supprimé, cette information étant porté par la présence ou non du sous-objet dans les valeurs de l'objet racine. Ainsi un sous-objet renverra toujours faux à la question `isPendingDeletion()`.
+
+La suppression d'un objet n'implique aucun effet immédiat, cette information étant appliquer au moment de l'enregistrement de l'objet, résultant en la suppréssion réel de l'objet.
 
 ### Environnement
 #### id(): Identifier
@@ -155,8 +157,10 @@ Décharge l'attribut _attribute\_name_, si l'attribut est modifié, les modifica
 #### unloadAllAttributes(): void
 Décharge tous les attributs.
 
-#### delete(): void
-Marque l'objet pour suppression. Un objet marqué pour suppression est considéré comme totalement déchargé.
+#### setPendingDeletion(will_delete: boolean): void
+Marque ou démarque l'objet pour suppression. Un objet marqué pour suppression sera effectivement supprimé à la prochaine sauvegarde.
+
+__!__: Lève une exception si l'objet est un sous-objet
 
 #### setId(id: Identifier)
 Définit l'identifiant réel de l'objet.
