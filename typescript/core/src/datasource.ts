@@ -249,7 +249,11 @@ async function safeLoad(
 ) : Promise<Result<VersionedObject[]>> {
   let reporter = new Reporter();
   let rscope = DataSourceInternal.resolveScopeForObjects(w.scope, db.controlCenter(), w.objects);
-  let res = await ccc.farPromise(db.implLoad, { tr: undefined, objects: w.objects, scope: rscope });
+  let saved: VersionedObject[] = [];
+  for (let o of w.objects)
+    if (o.manager().isSaved())
+      saved.push(o);
+  let res = await ccc.farPromise(db.implLoad, { tr: undefined, objects: saved, scope: rscope });
   if (res.hasOneValue()) {
     let v = res.value();
     await safeScope(ccc, reporter, db, all, (function*(): Iterable<[VersionedObject, DataSourceInternal.ResolvedScope]> {
@@ -260,7 +264,7 @@ async function safeLoad(
     if (reporter.failed)
       return Result.fromItemsWithoutValue([...res.items(), ...reporter.diagnostics]);
   }
-  return res;
+  return Result.fromResultWithNewValue(res, w.objects);
 }
 
 DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categories.implementation & DataSource.Categories.raw & ExtDataSource>>{
@@ -333,9 +337,14 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
       return ccc.farPromise(this.implQuery, { tr: undefined, sets: sets.value() });
     return Promise.resolve(Result.fromResultWithoutValue(sets));
   },
-  rawLoad({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
+  async rawLoad({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }) {
     let rscope = DataSourceInternal.resolveScopeForObjects(w.scope,  this.controlCenter(), w.objects);
-    return ccc.farPromise(this.implLoad, { tr: undefined, objects: w.objects, scope: rscope });
+    let saved: VersionedObject[] = [];
+    for (let o of w.objects)
+      if (o.manager().isSaved())
+        saved.push(o);
+    let res = await ccc.farPromise(this.implLoad, { tr: undefined, objects: saved, scope: rscope });
+    return Result.fromResultWithNewValue(res, w.objects);
   },
   async rawSave({ context: { ccc } }, objects: VersionedObject[]) {
     let changed = filterChangedObjectsAndPrepareNew(objects);
