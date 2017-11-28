@@ -1,4 +1,7 @@
-import {VersionedObject, VersionedObjectManager, ControlCenter, AspectConfiguration, AspectSelection} from '@openmicrostep/aspects';
+import {
+  Aspect, AspectSelection, AspectConfiguration, ControlCenter,
+  VersionedObject, VersionedObjectManager, VersionedObjectSnapshot,
+} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People, Point, Polygon, RootObject} from '../../../generated/aspects.interfaces';
@@ -12,11 +15,42 @@ const cfg = new AspectConfiguration(new AspectSelection([
   Polygon.Aspects.test1,
   RootObject.Aspects.test1,
 ]));
+
+function snapshot() {
+  let cc = new ControlCenter(cfg);
+  let aspect_resource = cfg.aspectChecked("Resource");
+  let ccc = cc.registerComponent({});
+
+  let snapshot = new VersionedObjectSnapshot(aspect_resource, "s1");
+  assert.strictEqual(snapshot.id(), "s1");
+  assert.strictEqual(snapshot.attributeValueFast(Aspect.attribute_id), "s1");
+  assert.strictEqual(snapshot.attributeValueFast(Aspect.attribute_version), undefined);
+  assert.strictEqual(snapshot.attributeValueFast(aspect_resource.checkedAttribute("_name")), undefined);
+  assert.throw(() => snapshot.version(), `no version in this snapshot`);
+  assert.isTrue(snapshot.hasAttributeValueFast(Aspect.attribute_id));
+  assert.isFalse(snapshot.hasAttributeValueFast(Aspect.attribute_version));
+  assert.isFalse(snapshot.hasAttributeValueFast(aspect_resource.checkedAttribute("_name")));
+
+  snapshot.setAttributeValueFast(Aspect.attribute_version, 3);
+  assert.strictEqual(snapshot.version(), 3);
+  assert.strictEqual(snapshot.attributeValueFast(Aspect.attribute_version), 3);
+  assert.isTrue(snapshot.hasAttributeValueFast(Aspect.attribute_id));
+  assert.isTrue(snapshot.hasAttributeValueFast(Aspect.attribute_version));
+  assert.isFalse(snapshot.hasAttributeValueFast(aspect_resource.checkedAttribute("_name")));
+
+  snapshot.setAttributeValueFast(aspect_resource.checkedAttribute("_name"), "test3");
+  assert.strictEqual(snapshot.attributeValueFast(aspect_resource.checkedAttribute("_name")), "test3");
+  assert.isTrue(snapshot.hasAttributeValueFast(Aspect.attribute_id));
+  assert.isTrue(snapshot.hasAttributeValueFast(Aspect.attribute_version));
+  assert.isTrue(snapshot.hasAttributeValueFast(aspect_resource.checkedAttribute("_name")));
+}
+
 function basics() {
   let cc = new ControlCenter(cfg);
   let ccc = cc.registerComponent({});
   let v1 = Resource.Aspects.test1.create(ccc);
 
+  assert.strictEqual(v1.manager().aspect(), cfg.aspectChecked("Resource"));
   assert.isTrue(v1.manager().isNew());
   assert.isFalse(v1.manager().isModified());
   assert.isFalse(v1.manager().isSaved());
@@ -29,6 +63,8 @@ function basics() {
   assert.typeOf(v1.id(), 'string');
   assert(VersionedObjectManager.isLocalId(v1.id()));
   assert.equal(v1.manager().controlCenter(), cc);
+  assert.sameOrderedMembers([...v1.manager().modifiedAttributes()], []);
+  assert.sameOrderedMembers([...v1.manager().outdatedAttributes()], []);
 
   let v2 = Resource.Aspects.test1.create(ccc);
   assert.instanceOf(v2, Resource);
@@ -54,6 +90,8 @@ function basics() {
   assert.isFalse(c1.manager().isSaved());
   assert.isFalse(c1.manager().isInConflict());
   assert.isFalse(c1.manager().isDeleted());
+  assert.sameOrderedMembers([...c1.manager().modifiedAttributes()], []);
+  assert.sameOrderedMembers([...c1.manager().outdatedAttributes()], []);
 
   assert.equal(c1.name(), undefined);
   assert.equal(c1.model(), undefined);
@@ -68,12 +106,31 @@ function basics() {
   c1._model = "MyModel";
   assert.equal(c1.name(), `MyCar - MyModel`);
   assert.equal(c1.model(), `MyModel`);
-
   assert.isTrue(c1.manager().isNew());
   assert.isTrue(c1.manager().isModified());
   assert.isFalse(c1.manager().isSaved());
   assert.isFalse(c1.manager().isInConflict());
   assert.isFalse(c1.manager().isDeleted());
+  assert.sameDeepOrderedMembers([...c1.manager().modifiedAttributes()], [
+    { attribute: c1.manager().aspect().checkedAttribute("_name"), modified: "MyCar" },
+    { attribute: c1.manager().aspect().checkedAttribute("_model"), modified: "MyModel" },
+  ]);
+  assert.sameOrderedMembers([...c1.manager().outdatedAttributes()], []);
+
+  c1.manager().setAttributeValue("_name", "MyCar2");
+  assert.sameDeepOrderedMembers([...c1.manager().modifiedAttributes()], [
+    { attribute: c1.manager().aspect().checkedAttribute("_name"), modified: "MyCar2" },
+    { attribute: c1.manager().aspect().checkedAttribute("_model"), modified: "MyModel" },
+  ]);
+
+  c1.manager().clearAllModifiedAttributes();
+  assert.isTrue(c1.manager().isNew());
+  assert.isFalse(c1.manager().isModified());
+  assert.isFalse(c1.manager().isSaved());
+  assert.isFalse(c1.manager().isInConflict());
+  assert.isFalse(c1.manager().isDeleted());
+  assert.sameOrderedMembers([...v1.manager().modifiedAttributes()], []);
+  assert.sameOrderedMembers([...v1.manager().outdatedAttributes()], []);
 
   let p1 = People.Aspects.test1.create(ccc);
   assert.notInstanceOf(p1, Car);
@@ -98,11 +155,162 @@ function basics() {
   assert.equal(v1.name(), undefined);
   assert.doesNotThrow(() => { v1.manager().setId(v1.id()); });
   assert.throw(() => { v1.manager().setId(v2.id()); }, `cannot change identifier to a local identifier`);
+
   v1.manager().setId(2);
   assert.equal(v1.id(), 2);
   assert.throw(() => { v1.manager().setId(3); }, `id can't be modified once assigned (not local)`);
   assert.throw(() => { v1.name(); }, `attribute 'Resource._name' is unaccessible and never was`);
+
   v1.manager().setVersion(2);
+  assert.equal(v1.version(), 2);
+  assert.isFalse(v1.manager().isNew());
+  assert.isFalse(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.throw(() => v1.manager().attributeValue("_name"), `attribute 'Resource._name' is unaccessible and never was`);
+  assert.throw(() => v1.manager().savedAttributeValue("_name"), `attribute 'Resource._name' is unaccessible and never was`);
+  assert.throw(() => v1.manager().outdatedAttributeValue("_name"), `attribute 'Resource._name' is not in conflict`);
+  assert.throw(() => v1.manager().setAttributeValue("_name", "bad"), `attribute 'Resource._name' is unaccessible and never was`);
+  assert.sameOrderedMembers([...v1.manager().modifiedAttributes()], []);
+  assert.sameOrderedMembers([...v1.manager().outdatedAttributes()], []);
+
+  let v1_aspect = v1.manager().aspect();
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 3);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test3");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 3);
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isFalse(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isFalse(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+
+  v1.manager().setAttributeValue("_name", "testM");
+  assert.strictEqual(v1.manager().attributeValue("_name"), "testM");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test3");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 4);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test4");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 4);
+  assert.strictEqual(v1.manager().attributeValue("_name"), "testM");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test4");
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "test3");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.sameDeepOrderedMembers([...v1.manager().modifiedAttributes()], [
+    { attribute: v1.manager().aspect().checkedAttribute("_name"), modified: "testM" },
+  ]);
+  assert.sameDeepOrderedMembers([...v1.manager().outdatedAttributes()], [
+    { attribute: v1.manager().aspect().checkedAttribute("_name"), outdated: "test3" },
+  ]);
+
+  v1.manager().resolveOutdatedAttribute("_name");
+  assert.strictEqual(v1.manager().attributeValue("_name"), "testM");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test4");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+
+  v1.manager().unloadAttribute("_name");
+  assert.isFalse(v1.manager().hasAttributeValue("_name"));
+  assert.isFalse(v1.manager().isAttributeSaved("_name"));
+  assert.isFalse(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isFalse(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 5);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test5");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 5);
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isFalse(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isFalse(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+
+  v1.manager().setAttributeValue("_name", "testM2");
+  assert.strictEqual(v1.manager().attributeValue("_name"), "testM2");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test5");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+
+  v1.manager().clearAllModifiedAttributes();
+  assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test5");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isFalse(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isFalse(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
+
+  v1.manager().setAttributeValue("_name", "testM3");
+  assert.strictEqual(v1.manager().attributeValue("_name"), "testM3");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test5");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isDeleted());
 }
 
 function shared() {
@@ -175,14 +383,26 @@ function sub_object_single() {
   assert.strictEqual(p0.manager().hasAttributeValue("_altitute"), true);
   assert.strictEqual(p0.manager().attributeValue("_altitute"), undefined);
   assert.strictEqual(p0.manager().savedAttributeValue("_altitute"), undefined);
-
   assert.isFalse(r0.manager().isModified());
-
   assert.strictEqual(r0, r0.manager().rootObject());
-
   assert.isFalse(r0.manager().isAttributeModified("_p1"));
   assert.isFalse(r0.manager().isAttributeSaved("_p1"));
   assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
+
+  r0._p1 = p0;
+  assert.isTrue(r0.manager().isAttributeModified("_p1"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
+  assert.strictEqual(r0, p0.manager().rootObject());
+  assert.strictEqual(r0._p1,  p0);
+  assert.isTrue(r0.manager().isModified());
+
+  r0.manager().clearModifiedAttribute("_p1");
+  assert.isFalse(r0.manager().isAttributeModified("_p1"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
+  assert.isFalse(r0.manager().isModified());
+
   r0._p1 = p0;
   assert.isTrue(r0.manager().isAttributeModified("_p1"));
   assert.isFalse(r0.manager().isAttributeSaved("_p1"));
@@ -254,6 +474,9 @@ function sub_object_set() {
 
   assert.isTrue(r0.manager().isModified());
   assert.isTrue(s0.manager().isModified());
+
+
+  s0._set = new Set([p0, p1, p2]);
 
   p0.manager().fillNewObjectMissingValues();
   p0.manager().setId("p0");
@@ -394,6 +617,7 @@ function sub_object_array() {
 }
 
 export const tests = { name: 'VersionedObject', tests: [
+  snapshot,
   basics,
   shared,
   relation_1_n,

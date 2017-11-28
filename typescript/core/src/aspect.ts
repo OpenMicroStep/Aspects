@@ -1,6 +1,7 @@
 import {
   ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
   Validation, Result,
+  ImmutableList, ImmutableMap, ImmutableSet
 } from './core';
 import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
 
@@ -207,8 +208,8 @@ export namespace Aspect {
       case 'class':
       case 'or':
         if (oldV !== newV) {
-          if (oldV) ret.del.push(oldV);
-          if (newV) ret.add.push(newV);
+          if (oldV !== undefined) ret.del.push(oldV);
+          if (newV !== undefined) ret.add.push(newV);
         }
         break;
       default: throw new Error(`unsupported diff type ${type.type}`);
@@ -279,18 +280,47 @@ export namespace Aspect {
     contains_vo: boolean;
     is_sub_object: boolean;
   };
-  export interface Installed {
-    classname: string;
-    aspect: string;
-    version: number;
-    is_sub_object: boolean;
-    references: Reference[];
-    categories: Set<string>;
-    attribute_ref: InstalledAttribute;
-    attributes: Map<string, InstalledAttribute>;
-    attributes_by_index: InstalledAttribute[];
-    farMethods: Map<string, InstalledFarMethod>;
-    implementation: VersionedObjectConstructor;
+  export class Installed {
+    readonly classname: string;
+    readonly aspect: string;
+    readonly version: number;
+    readonly is_sub_object: boolean;
+    readonly references: ImmutableList<Reference>;
+    readonly categories: ImmutableSet<string>;
+    readonly attribute_ref: InstalledAttribute;
+    readonly attributes: ImmutableMap<string, InstalledAttribute>;
+    readonly attributes_by_index: ImmutableList<InstalledAttribute>;
+    readonly farMethods: ImmutableMap<string, InstalledFarMethod>;
+    readonly implementation: VersionedObjectConstructor;
+
+    /** @internal */ constructor(classname: string, aspect: string, version: number, is_sub_object: boolean, implementation: VersionedObjectConstructor) {
+      this.classname = classname;
+      this.version = version;
+      this.aspect = aspect;
+      this.is_sub_object = is_sub_object;
+      this.references = [];
+      this.categories = new Set();
+      this.attribute_ref = {
+        name: "_id",
+        index: 0,
+        type: { is: "type", type: "class", name: classname },
+        validator: Validation.validateId,
+        relation: undefined,
+        contains_vo: false,
+        is_sub_object: false,
+      },
+      this.attributes = new Map(voAttributes);
+      this.attributes_by_index = [Aspect.attribute_id, Aspect.attribute_version];
+      this.farMethods = new Map();
+      this.implementation = implementation;
+    }
+
+    checkedAttribute(attribute_name: string): InstalledAttribute {
+      let attribute = this.attributes.get(attribute_name);
+      if (!attribute)
+        throw new Error(`attribute '${this.classname}.${attribute_name}' doesn't exists`);
+      return attribute;
+    }
   };
   export interface Factory<T extends VersionedObject> {
     (...args): T;
@@ -393,27 +423,13 @@ export class AspectConfiguration {
         throw new Error(`an aspect with class name ${name} already exists`);
 
       aspect_cstor = nameClass(`${name}:${aspect}`, `${name}`, class CachedAspect extends cstor {
-        static aspect: Aspect.Installed = {
-          classname: name,
-          version: cstor.definition.version,
-          aspect: aspect,
-          is_sub_object: cstor.definition.is_sub_object === true,
-          references: [],
-          categories: new Set(),
-          attribute_ref: {
-            name: "_id",
-            index: 0,
-            type: { is: "type", type: "class", name: name },
-            validator: Validation.validateId,
-            relation: undefined,
-            contains_vo: false,
-            is_sub_object: false,
-          },
-          attributes: new Map(voAttributes),
-          attributes_by_index: [Aspect.attribute_id, Aspect.attribute_version],
-          farMethods: new Map(),
-          implementation: cstor,
-        };
+        static aspect = new Aspect.Installed(
+          name,
+          aspect,
+          cstor.definition.version,
+          cstor.definition.is_sub_object === true,
+          cstor,
+        );
       });
       this._aspects.set(name, aspect_cstor);
     }
@@ -423,7 +439,7 @@ export class AspectConfiguration {
     for (let { name, aspect, cstor } of selection.classes()) {
       let aspect_cstor = this._aspects.get(name)!;
 
-      let categories = aspect_cstor.aspect.categories;
+      let categories = aspect_cstor.aspect.categories as Set<string>;
       let aspect_def = cstor.definition.aspects.find(a => a.name === aspect);
       if (!aspect_def)
         throw new Error(`aspect ${aspect} not found in ${name} definition`);
@@ -537,7 +553,7 @@ export class AspectConfiguration {
       if (typeof localImpl !== "function")
         throw new Error(`implementation of local method ${local_method.name} must be a function, got ${typeof localImpl}`);
       if (local_method.transport) {
-        aspect_cstor.aspect.farMethods.set(category_name, Object.assign({}, local_method, {
+        (aspect_cstor.aspect.farMethods as Map<string, Aspect.InstalledMethod>).set(category_name, Object.assign({}, local_method, {
           transport: {
             remoteCall(ctx, to: VersionedObject, method: string, args: any[]): Promise<any> {
               return fastSafeCall(ctx, localImpl, to, args[0]);
@@ -558,7 +574,7 @@ export class AspectConfiguration {
     cache.forEach((far_method, method_name) => {
       if (!far_method.transport)
         throw new Error(`${far_method.name} is not a far method`);
-      aspect_cstor.aspect.farMethods.set(method_name, Object.assign({}, far_method as Aspect.InstalledFarMethod, { transport: transport }));
+      (aspect_cstor.aspect.farMethods as Map<string, Aspect.InstalledMethod>).set(method_name, Object.assign({}, far_method as Aspect.InstalledFarMethod, { transport: transport }));
       this.installCanFarInvokable(aspect_cstor, method_name);
     });
   }
@@ -590,8 +606,8 @@ export class AspectConfiguration {
       for (cstor of will_install) {
         for (let attribute of cstor.definition.attributes || []) {
           const data = this.install_attribute(aspect_cstor, attribute, attributes_by_index.length, pending_relations);
-          attributes_by_index.push(data);
-          attributes.set(data.name, data);
+          (attributes_by_index as Aspect.InstalledAttribute[]).push(data);
+          (attributes as Map<string, Aspect.InstalledAttribute>).set(data.name, data);
         }
       }
       installed_attributes.add(aspect_cstor);
@@ -621,7 +637,7 @@ export class AspectConfiguration {
       let sub_aspect = sub_aspect_cstor.aspect;
       if (attribute.is_sub_object && !sub_aspect.is_sub_object)
         throw new Error(`attribute ${aspect_cstor.aspect.classname}.${attribute.name} is marked as sub object while ${name} is not`);
-      sub_aspect.references.push({ class: aspect_cstor.aspect, attribute: attribute });
+      (sub_aspect.references as Aspect.Reference[]).push({ class: aspect_cstor.aspect, attribute: attribute });
     }
 
     Object.defineProperty(aspect_cstor.prototype, attribute.name, {

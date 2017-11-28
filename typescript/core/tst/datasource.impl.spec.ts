@@ -292,7 +292,7 @@ async function query_cars_peoples_relation_in_scope(f: Flux<Context>) {
 function query_cars_peoples_constraint_on_relation(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   let p0_cpy = { id: p0.id(), _firstname: p0._firstname, _lastname: p0._lastname, _birthDate: p0._birthDate };
-  c0.manager().unload();
+  c0.manager().unloadAllAttributes();
   ccc.farPromise(db.rawQuery, { results: [
     { name: "peoples", where: { $instanceOf: People, _cars: { $contains: c0 } }, scope: ['_firstname', '_lastname', '_birthDate', '_cars'] },
   ]}).then((envelop) => {
@@ -438,7 +438,7 @@ function query_elementof_c1c2(f: Flux<Context>) {
 
 function query_mother_father_peoples(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
-  [...ccc.componentObjects()].map(vo => vo.manager().unload());
+  [...ccc.componentObjects()].map(vo => vo.manager().unloadAllAttributes());
   ccc.farPromise(db.rawQuery, { name: "peoples", where: { $instanceOf: "People" }, scope: {
     People: {
       _: ['_firstname', '_lastname'],
@@ -463,7 +463,7 @@ function query_mother_father_peoples(f: Flux<Context>) {
 
 function query_father_tree(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p4, p2, p3, p0, p1} = f.context;
-  [...ccc.componentObjects()].map(vo => vo.manager().unload());
+  [...ccc.componentObjects()].map(vo => vo.manager().unloadAllAttributes());
   ccc.farPromise(db.rawQuery, {
     name: "peoples",
     where: { $instanceOf: "People" },
@@ -502,8 +502,8 @@ function deepEqual(a, b, attributes: string[]) {
 async function load_mixed_attributes(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p0, p1, p2} = f.context;
 
-  c0.manager().unload();
-  p0.manager().unload();
+  c0.manager().unloadAllAttributes();
+  p0.manager().unloadAllAttributes();
 
   let inv = await ccc.farPromise(db.safeLoad, { objects: [c0, p0], scope: {
       People: { '.': ['_name', '_firstname', '_lastname'] },
@@ -521,8 +521,8 @@ async function load_mixed_attributes(f: Flux<Context>) {
 }
 async function load_sub_attributes(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  c0.manager().unload();
-  p0.manager().unload();
+  c0.manager().unloadAllAttributes();
+  p0.manager().unloadAllAttributes();
 
   let inv = await ccc.farPromise(db.safeLoad, { objects: [c0], scope: {
       Car: { '.': ['_name', '_owner', '_model'] },
@@ -540,9 +540,9 @@ async function load_sub_attributes(f: Flux<Context>) {
 }
 async function load_sub_mult_attributes(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p0, p1, p2} = f.context;
-  c0.manager().unload();
-  c1.manager().unload();
-  p0.manager().unload();
+  c0.manager().unloadAllAttributes();
+  c1.manager().unloadAllAttributes();
+  p0.manager().unloadAllAttributes();
 
   let inv = await ccc.farPromise(db.safeLoad, { objects: [p0], scope: {
       People: { '.': ['_name', '_firstname', '_lastname', '_cars'] },
