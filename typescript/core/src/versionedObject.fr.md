@@ -2,7 +2,7 @@
 
 La classe VersionedObject est la classe mère dont héritent tous les objets aspects.
 
-### core
+### core
 #### id(): Identifier
 L'identifiant de l'objet géré.
 
@@ -22,7 +22,7 @@ __!__: Lève une exception si l'attribut n'est pas chargé
 
 ### validation
 
-#### validate(reporter: Reporter)
+#### validate(reporter: Reporter)
 Validation de l'objet sans considération pour son entourage et report des diagnostics dans _reporter_.
 
 ## class VersionedObjectManager
@@ -71,28 +71,28 @@ Vrai si l'objet est un sous-object.
 
 ### Etat & Valeurs
 #### isSaved(): boolean
-Vrai si l'objet est sauvé
+Vrai si l'objet est sauvé.
 
 #### isNew(): boolean
 Vrai si l'objet est nouveau.
 
 #### isModified(): boolean
-Vrai si l'objet est modifié
+Vrai si l'objet est modifié.
 
 #### isInConflict(): boolean
-Vrai si l'objet à un conflit
+Vrai si l'objet à un conflit.
 
-#### isDeleted(): boolean
-Vrai si l'objet est supprimé.
+#### isPendingDeletion(): boolean
+Vrai si l'objet sera supprimé à la prochaine sauvegarde.
 
 #### isAttributeSaved(attribute_name: string): boolean
-Vrai si l'attribut _attribute\_name_ est sauvé
+Vrai si l'attribut _attribute\_name_ est sauvé.
 
 #### isAttributeModified(attribute_name: string): boolean
-Vrai si l'attribut _attribute\_name_ est modifié
+Vrai si l'attribut _attribute\_name_ est modifié.
 
 #### isAttributeInConflict(attribute_name: string): boolean
-Vrai si l'attribut _attribute\_name_ est en conflit
+Vrai si l'attribut _attribute\_name_ est en conflit.
 
 #### hasAttributeValue(attribute_name: string): boolean
 Vrai si l'attribut _attribute\_name_ est chargé.
@@ -128,7 +128,7 @@ Retourne un itérateur sur l'ensemble des attributs en conflits et l'ancienne va
 
 ### Gestion
 
-#### setAttributeValue(attribute_name: string, value: any): void
+#### setAttributeValue(attribute_name: string, value: any): void
 Change la valeur courante de l'attribut _attribute\_name_.
 
 __!__: Lève une exception si:
@@ -144,16 +144,16 @@ Si l'attribut contient des sous-objets en conflit, ces conflits sont aussi marqu
 Marque tous les éventuels conflits sur les attributs de l'objet comme résolu.
 
 #### clearModifiedAttribute(attribute_name: string): void
-Annule les modifications faites à l'attribut _attribute\_name_
+Annule les modifications faites à l'attribut _attribute\_name_.
 
 #### clearAllModifiedAttributes(): void
-Annule toutes les modifications
+Annule toutes les modifications.
 
 #### unloadAttribute(attribute_name: string): void
 Décharge l'attribut _attribute\_name_, si l'attribut est modifié, les modifications sont perdues.
 
 #### unloadAllAttributes(): void
-Décharge tous les attributs
+Décharge tous les attributs.
 
 #### delete(): void
 Marque l'objet pour suppression. Un objet marqué pour suppression est considéré comme totalement déchargé.
@@ -194,7 +194,7 @@ La version de l'objet au moment de sa capture.
 Définit la valeur de l'attribut _attribute_ au moment de sa capture.
 
 #### hasAttributeValueFast(attribute: Aspect.InstalledAttribute): boolean
-Vrai si la valeur de l'attribut _attribute_ fait partie de la capture
+Vrai si la valeur de l'attribut _attribute_ fait partie de la capture.
 
 #### attributeValueFast(attribute: Aspect.InstalledAttribute): any
 La valeur de l'attribut _attribute_ au moment de sa capture.
@@ -244,4 +244,4 @@ Le comptage du nombre de conflits est présent pour gérer correctement les sous
 Il correspond simplement au nombre de sous-objet en conflits plus un si la valeur de l'attribut est lui-même la source d'un conflit.
 
 Ainsi lorsqu'un sous-objet lève tous ses conflits, le compteur de l'attribut contenant le sous-objet est décrémenté.
-Lever un conflit sur l'attribut en question peut donc ne pas toujours vouloir dire que l'attribut n'est plus en conflit.
+Levé un conflit sur un attribut contenant des sous objects impliques la levé de tous les conflits possibles sur ces sous-objets
