@@ -114,17 +114,18 @@ export class SqlDataSource extends DataSource {
             requests.update_checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, db_saved));
         }
         else {
-          let {add, del} = Aspect.diff(attribute.type, db_modified, db_saved);
-          for (let new_value_db_i of add) {
-            let insert = inserts.get(mapped_attribute.insert);
-            if (!insert)
-              inserts.set(mapped_attribute.insert, insert = []);
-            let m = new Map<string, any>();
-            m.set(last.value, new_value_db_i);
-            insert.push(m);
-          }
-          for (let old_value_db_i of del) {
-            requests.delete.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, old_value_db_i));
+          for (let [idx, value_db_i] of attribute.diffValue(db_modified, db_saved)) {
+            if (idx !== -1) {
+              let insert = inserts.get(mapped_attribute.insert);
+              if (!insert)
+                inserts.set(mapped_attribute.insert, insert = []);
+              let m = new Map<string, any>();
+              m.set(last.value, value_db_i);
+              insert.push(m);
+            }
+            else {
+              requests.delete.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, value_db_i));
+            }
           }
         }
       }

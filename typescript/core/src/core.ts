@@ -3,6 +3,7 @@ export * from './deepEqual';
 export * from './notificationCenter';
 export * from './aspect';
 export * from './versionedObject';
+export * from './traverse';
 export * from './controlCenter';
 export * from './invocation';
 export * from './result';

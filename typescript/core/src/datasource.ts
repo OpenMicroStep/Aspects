@@ -164,7 +164,7 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
     add(o);
   return changed;
 
-  function add(o) {
+  function add(o: T) {
     let manager = o.manager();
     manager.fillNewObjectMissingValues();
     if (manager.isModified()) {
@@ -173,10 +173,10 @@ function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T
       for (let i = 2; i < attributes_by_index.length; i++) {
         let attribute = attributes_by_index[i];
         if (attribute.is_sub_object && manager.isAttributeModifiedFast(attribute)) {
-          for (let sub of Aspect.traverse<VersionedObject>(attribute.type, manager.attributeValueFast(attribute)))
+          for (let sub of attribute.traverseValue<VersionedObject>(manager.attributeValueFast(attribute)))
             if (!changed.has(o))
               add(o);
-          for (let sub of Aspect.traverse<VersionedObject>(attribute.type, manager.savedAttributeValueFast(attribute)))
+          for (let sub of attribute.traverseValue<VersionedObject>(manager.savedAttributeValueFast(attribute)))
             if (!changed.has(o))
               add(o);
         }

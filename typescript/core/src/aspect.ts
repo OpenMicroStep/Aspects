@@ -13,6 +13,81 @@ export interface PublicTransport {
   installMethod(cstor: VersionedObjectConstructor, method: Aspect.InstalledFarMethod);
 }
 
+export const NO_POSITION = -1;
+export const ANY_POSITION = 0;
+
+function *traverseValueOrdered_array<T>(v: T[]) : IterableIterator<[number, T]> {
+  if (v)
+    yield* v.entries();
+}
+function *traverseValueOrdered_set<T>(v: T[]) : IterableIterator<[number, T]> {
+  if (v)
+    for (let n of v)
+      yield [ANY_POSITION, n];
+}
+function *traverseValueOrdered_single<T>(v: T) : IterableIterator<[number, T]> {
+  if (v)
+    yield [0, v];
+}
+function *traverseValue_array<T>(v: T[]) : IterableIterator<T> {
+  if (v)
+    yield* v;
+}
+function *traverseValue_set<T>(v: T[]) : IterableIterator<T> {
+  if (v)
+    for (let n of v)
+      yield n;
+}
+function *traverseValue_single<T>(v: T) : IterableIterator<T> {
+  if (v)
+    yield v;
+}
+
+function *diffValue_array<T>(newV: any, oldV: any) : IterableIterator<[number, T]> {
+  if (oldV) {
+    for (let [idx, o] of (oldV as any[]).entries()) {
+      if (!newV || newV[idx] !== o)
+        yield [NO_POSITION, o];
+    }
+  }
+  if (newV) {
+    for (let [idx, n] of (newV as any[]).entries()) {
+      if (!oldV || oldV[idx] !== n)
+        yield [idx, n];
+    }
+  }
+}
+function *diffValue_set<T>(newV: any, oldV: any) : IterableIterator<[number, T]> {
+  if (oldV) for (let o of oldV)
+    if (!newV || !newV.has(o))
+      yield [NO_POSITION, o];
+  if (newV) for (let n of newV)
+    if (!oldV || !oldV.has(n))
+      yield [ANY_POSITION, n];
+}
+function *diffValue_single<T>(newV: any, oldV: any) : IterableIterator<[number, T]> {
+  if (oldV !== newV) {
+    if (oldV) yield [NO_POSITION, oldV];
+    if (newV) yield [0, newV];
+  }
+}
+
+function selectTraverseValueOrdered(type: Aspect.Type) {
+  if (Aspect.typeIsArrayValue(type)) return traverseValueOrdered_array;
+  else if (Aspect.typeIsSetValue(type)) return traverseValueOrdered_set;
+  else return traverseValueOrdered_single;
+}
+function selectTraverseValue(type: Aspect.Type) {
+  if (Aspect.typeIsArrayValue(type)) return traverseValue_array;
+  else if (Aspect.typeIsSetValue(type)) return traverseValue_set;
+  else return traverseValue_single;
+}
+function selectDiffValue(type: Aspect.Type) {
+  if (Aspect.typeIsArrayValue(type)) return diffValue_array;
+  else if (Aspect.typeIsSetValue(type)) return diffValue_set;
+  else return diffValue_single;
+}
+
 export interface Aspect {
   is: string;
   name: string;
@@ -46,6 +121,16 @@ export namespace Aspect {
     if (type.type === "set" || type.type === "array")
       return true;
     return type_is_or(type, typeIsMultValue);
+  }
+  export function typeIsArrayValue(type: Type) : boolean {
+    if (type.type === "array")
+      return true;
+    return type_is_or(type, typeIsArrayValue);
+  }
+  export function typeIsSetValue(type: Type) : boolean {
+    if (type.type === "set")
+      return true;
+    return type_is_or(type, typeIsArrayValue);
   }
 
   export function typeIsClass(type: Type) : boolean {
@@ -176,48 +261,6 @@ export namespace Aspect {
     };
   }
 
-  export function *traverse<T>(type: Aspect.Type, v: any) : IterableIterator<T> {
-    if (v) {
-      switch (type.type) {
-        case 'array':
-        case 'set':
-          for (let n of v)
-            yield n;
-          break;
-        case 'class':
-        case 'or':
-          yield v;
-          break;
-        default: throw new Error(`unsupported traverse type ${type.type}`);
-      }
-    }
-  }
-
-  export function diff<T>(type: Aspect.Type, newV: any, oldV: any) : { add: T[], del: T[] } {
-    let ret = { add: [] as T[], del: [] as T[] };
-    switch (type.type) {
-      case 'set':
-        if (newV) for (let n of newV)
-          if (!oldV || !oldV.has(n))
-            ret.add.push(n);
-        if (oldV) for (let o of oldV)
-          if (!newV || !newV.has(o))
-            ret.del.push(o);
-        break;
-      case 'primitive':
-      case 'class':
-      case 'or':
-        if (oldV !== newV) {
-          if (oldV !== undefined) ret.del.push(oldV);
-          if (newV !== undefined) ret.add.push(newV);
-        }
-        break;
-      default: throw new Error(`unsupported diff type ${type.type}`);
-    }
-
-    return ret;
-  }
-
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object' | 'boolean';
   export type TypeVoid       =  { is: 'type', type: 'void' };
   export type TypePrimitive  =  { is: 'type', type: 'primitive', name: PrimaryType };
@@ -272,13 +315,16 @@ export namespace Aspect {
     attribute: InstalledAttribute;
   };
   export interface InstalledAttribute {
-    name: string;
-    index: number;
-    type: Type;
-    validator: AttributeTypeValidator;
-    relation: Reference | undefined;
-    contains_vo: boolean;
-    is_sub_object: boolean;
+    readonly name: string;
+    readonly index: number;
+    readonly type: Type;
+    readonly validator: AttributeTypeValidator;
+    readonly relation: Reference | undefined;
+    readonly contains_vo: boolean;
+    readonly is_sub_object: boolean;
+    traverseValueOrdered<T>(value: any): IterableIterator<[number, T]>;
+    traverseValue<T>(value: any): IterableIterator<T>;
+    diffValue<T>(newV: any, oldV: any): IterableIterator<[number, T]>;
   };
   export class Installed {
     readonly classname: string;
@@ -308,6 +354,9 @@ export namespace Aspect {
         relation: undefined,
         contains_vo: false,
         is_sub_object: false,
+        traverseValueOrdered: traverseValueOrdered_single,
+        traverseValue: traverseValue_single,
+        diffValue: diffValue_single,
       },
       this.attributes = new Map(voAttributes);
       this.attributes_by_index = [Aspect.attribute_id, Aspect.attribute_version];
@@ -349,6 +398,9 @@ export namespace Aspect {
     relation: undefined,
     contains_vo: false,
     is_sub_object: false,
+    traverseValueOrdered: traverseValueOrdered_single,
+    traverseValue: traverseValue_single,
+    diffValue: diffValue_single,
   };
   export const attribute_version: Aspect.InstalledAttribute = {
     name: "_version",
@@ -358,6 +410,10 @@ export namespace Aspect {
     relation: undefined,
     contains_vo: false,
     is_sub_object: false,
+    traverseValueOrdered: traverseValueOrdered_single,
+    traverseValue: traverseValue_single,
+    diffValue: diffValue_single,
+
   };
 }
 
@@ -629,6 +685,9 @@ export class AspectConfiguration {
       relation: undefined,
       contains_vo: contains_types.length > 0,
       is_sub_object: attribute_definition.is_sub_object === true,
+      traverseValueOrdered: selectTraverseValueOrdered(attribute_definition.type),
+      traverseValue: selectTraverseValue(attribute_definition.type),
+      diffValue: selectDiffValue(attribute_definition.type),
     };
     for (let name of contains_types) {
       let sub_aspect_cstor = this._aspects.get(name);
@@ -666,7 +725,7 @@ export class AspectConfiguration {
       let relation_attribute = relation_aspect.attributes.get(relation);
       if (!relation_attribute)
         throw new Error(`attribute ${aspect.classname}.${attribute.name} contains a relation to an unknown attribute ${relation_aspect.classname}.${relation}`);
-      attribute.relation = { class: relation_aspect, attribute: relation_attribute };
+      (attribute.relation as Aspect.Reference) = { class: relation_aspect, attribute: relation_attribute };
     }
     for (let [aspect, attribute] of pending_relations) {
       let relation_aspect = attribute.relation!.class;

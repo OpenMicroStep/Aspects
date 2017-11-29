@@ -151,11 +151,12 @@ export class ObiDataSource extends DataSource {
           direct: true,
         };
 
-        let { add, del } = Aspect.diff<any>(a.type, nv, ov);
-        for (let ovv of del)
-          await remove(tr, table, oid as number, car._id!, a, ci, ovv);
-        for (let nvv of add)
-          await insert(tr, table, oid as number, car._id!, a, ci, nvv);
+        for (let [idx, vv] of a.diffValue<any>(nv, ov)) {
+          if (idx === -1)
+            await remove(tr, table, oid as number, car._id!, a, ci, vv);
+          else
+            await insert(tr, table, oid as number, car._id!, a, ci, vv);
+        }
       };
 
       if (isNew)

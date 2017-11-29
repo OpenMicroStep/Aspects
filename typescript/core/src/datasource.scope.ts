@@ -229,9 +229,9 @@ function _traverseScope(
     if (Aspect.typeIsClass(attribute.type)) {
       let s_path = `${n_path}${attribute.name}.`;
       let data = manager._attribute_data[attribute.index];
-      for (let value of Aspect.traverse<VersionedObject>(attribute.type, data.modified))
+      for (let value of attribute.traverseValue<VersionedObject>(data.modified))
         _traverseScope(scope, value, s_path, s_path, for_each);
-      for (let value of Aspect.traverse<VersionedObject>(attribute.type, data.saved))
+      for (let value of attribute.traverseValue<VersionedObject>(data.saved))
         _traverseScope(scope, value, s_path, s_path, for_each);
     }
   }

@@ -5,7 +5,6 @@ import {
 } from './core';
 import { Flux } from '@openmicrostep/async';
 import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsystem.shared';
-import traverse = Aspect.traverse;
 
 // 16bits for modified, 2bits for flags, 14bits for outdated
 const SAVED       = 0x00010000;
@@ -36,64 +35,6 @@ export type InternalAttributeData = {
   saved   : any,
   outdated: any,
 };
-
-export function *traverseOrdered<T>(type: Aspect.Type, v: any) : IterableIterator<[number, T]> {
-  if (v) {
-    switch (type.type) {
-      case 'array':
-        yield* v.entries();
-        break;
-      case 'set':
-        for (let n of v)
-          yield [ANY_POSITION, n];
-        break;
-      case 'class':
-      case 'or':
-        yield [0, v];
-        break;
-      default: throw new Error(`unsupported traverse type ${type.type}`);
-    }
-  }
-}
-
-function diffOrdered<T>(type: Aspect.Type, newV: any, oldV: any) {
-  let ret: [number | -1, T][] = [];
-  switch (type.type) {
-    case 'array':
-      if (oldV) {
-        for (let [idx, o] of (oldV as any[]).entries()) {
-          if (!newV || newV[idx] !== o)
-            ret.push([NO_POSITION, o]);
-        }
-      }
-      if (newV) {
-        for (let [idx, n] of (newV as any[]).entries()) {
-          if (!oldV || oldV[idx] !== n)
-            ret.push([idx, n]);
-        }
-      }
-      break;
-    case 'set':
-      if (oldV) for (let o of oldV)
-        if (!newV || !newV.has(o))
-          ret.push([NO_POSITION, o]);
-      if (newV) for (let n of newV)
-        if (!oldV || !oldV.has(n))
-          ret.push([ANY_POSITION, n]);
-      break;
-    case 'primitive':
-    case 'class':
-    case 'or':
-      if (oldV !== newV) {
-        if (oldV) ret.push([NO_POSITION, oldV]);
-        if (newV) ret.push([0, newV]);
-      }
-      break;
-    default: throw new Error(`unsupported diff type ${type.type}`);
-  }
-
-  return ret;
-}
 
 /** returns +1 if passed parameter is true, -1 otherwise */
 function bool2delta(positive: boolean) : -1 | 1 {
@@ -330,7 +271,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let data = this._attribute_data[attribute.index];
     if (_outdated_get(data.flags)) {
       if (attribute.is_sub_object) {
-        for (let sub_object of traverse<VersionedObject>(attribute.type, data.saved)) {
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
           sub_object.manager().resolveAllOutdatedAttributes();
         }
       }
@@ -456,7 +397,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         let merge_value = merge_data.value;
         attribute.validator.validate(reporter, path, merge_value, this);
         if (attribute.contains_vo) {
-          for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, merge_value)) {
+          for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
             let sub_object_manager = sub_object.manager();
             this._assert_same_cc(sub_object_manager);
             if (attribute.is_sub_object)
@@ -497,19 +438,19 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         delta++;
       if (attribute.is_sub_object) {
         // clear saved positions
-        for (let sub_object of traverse<VersionedObject>(attribute.type, data.saved)) {
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
           let pdata = sub_object.manager()._parent!;
           pdata.saved_position = NO_POSITION;
         }
         // set new saved positions
-        for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, merge_value)) {
+        for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
           let pdata = sub_object.manager()._parent!;
           pdata.saved_position = position;
           pdata.modified_position = position;
           delta++; // "del" object
         }
         // update modified positions
-        for (let [position, sub_object] of traverseOrdered<VersionedObject>(attribute.type, data.modified)) {
+        for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(data.modified)) {
           let sub_object_manager = sub_object.manager();
           let pdata = sub_object_manager._parent!;
           delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
@@ -577,7 +518,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       if (data.flags & SAVED) {
         this.setAttributeValueFast(attribute, data.saved);
         if (attribute.is_sub_object) {
-          for (let sub_object of traverse<VersionedObject>(attribute.type, data.saved)) {
+          for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
             sub_object.manager().clearAllModifiedAttributes();
           }
         }
@@ -624,7 +565,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   private _updateAttribute(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, delta: -1 | 0 | 1, value, oldValue, is_relation: boolean) {
     if (attribute.contains_vo && !is_relation) {
-      let diffs = diffOrdered<VersionedObject>(attribute.type, value, oldValue);
+      let diffs = attribute.diffValue<VersionedObject>(value, oldValue);
       for (let [position, sub_object] of diffs) {
         let sub_object_manager = sub_object.manager();
         let is_add = position !== NO_POSITION;
@@ -763,26 +704,6 @@ export namespace VersionedObjectManager {
   export type AttributeNames<T extends VersionedObject> = _.NonFunctionProps<T>;
   export type ROAttributes<T extends VersionedObject> = ImmutableMap<AttributeNames<T>, T[AttributeNames<T>]>;
 
-  function push(into: Set<VersionedObject>, o: Array<VersionedObject> | Set<VersionedObject> | VersionedObject) {
-    if (o instanceof VersionedObject)
-      into.add(o);
-    else {
-      for (let so of o)
-        into.add(so);
-    }
-  }
-  export function objectsInScope(objects: VersionedObject[], scope: string[]) : VersionedObject[] {
-    let s = new Set<VersionedObject>();
-    for (let o of objects) {
-      let m = o.manager();
-      s.add(o);
-      for (let attribute of scope) {
-        push(s, m.attributeValue(attribute));
-        push(s, m.savedAttributeValue(attribute));
-      }
-    }
-    return [...s];
-  }
   /** @internal */
   export function UnregisteredVersionedObjectManager<T extends VersionedObject>(this: any, manager: VersionedObjectManager<T>) {
     this._id = manager.id();
