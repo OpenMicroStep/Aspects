@@ -14,6 +14,7 @@ export type EncodedValue = null | string | number | boolean |
 const MODIFIED = 1;
 const SAVED = 2;
 const METADATA = 4;
+const PENDING_DELETION = 8;
 
 const IDX_FLAGS = 0;
 const IDX_MODIFIED = 1;
@@ -38,7 +39,8 @@ export class VersionedObjectCoder {
       this.encodedWithLocalId.set(id, vo);
       let m = vo.manager();
       let attributes = new Array(m.aspect().attributes_by_index.length);
-      attributes[0] = [MODIFIED | SAVED, this.decodedWithLocalId.get(vo) || id, id];
+      let pending_deletion = m.isPendingDeletion() ? PENDING_DELETION : 0;
+      attributes[0] = [MODIFIED | SAVED | pending_deletion, this.decodedWithLocalId.get(vo) || id, id];
       attributes[1] = [SAVED, NO_VALUE, m.version()];
 
       let r: EncodedVersionedObject = { is: m.classname(), v: attributes };
@@ -51,13 +53,13 @@ export class VersionedObjectCoder {
         let vm: any = NO_VALUE, vs: any = NO_VALUE;
         if (m.isAttributeModifiedFast(attribute)) {
           flags |= MODIFIED;
-          vm = m.attributeValueFast(attribute);
+          vm = this._encodeValue(m.attributeValueFast(attribute), attribute.is_sub_object);
         }
         if (m.isAttributeSavedFast(attribute)) {
           flags |= SAVED;
-          vs = m.savedAttributeValueFast(attribute);
+          vs = this._encodeValue(m.savedAttributeValueFast(attribute), attribute.is_sub_object);
         }
-        attributes[i] = flags > 0 ? [flags, this._encodeValue(vm, attribute.is_sub_object), this._encodeValue(vs, attribute.is_sub_object)] : NO_VALUE;
+        attributes[i] = flags > 0 ? [flags, vm, vs] : NO_VALUE;
       }
       if (this._encodedVersionedObjects)
         this._encodedVersionedObjects.push(r);
@@ -252,8 +254,9 @@ export class VersionedObjectCoder {
 
   private _decodePhase1(ccc: ControlCenterContext, data: EncodedVersionedObjects, allow_unknown_local_id: boolean) {
     for (let { is, v: values } of data) {
-      let real_id = values[0]![IDX_SAVED];
-      let local_id = values[0]![IDX_MODIFIED];
+      let v_0 = values[0]!
+      let real_id = v_0[IDX_SAVED];
+      let local_id = v_0[IDX_MODIFIED];
       let is_local = VersionedObjectManager.isLocalId(real_id);
       let l = this.encodedWithLocalId.get(local_id);
       if (!l && !is_local)
@@ -265,7 +268,7 @@ export class VersionedObjectCoder {
         else if (allow_unknown_local_id) {
           this.encodedWithLocalId.set(real_id, l);
           this.decodedWithLocalId.set(l, real_id);
-          values[0]![IDX_SAVED] = l.id();
+          v_0[IDX_SAVED] = l.id();
         }
         else
           throw new Error(`reference to locally defined object ${local_id}`);
@@ -274,8 +277,10 @@ export class VersionedObjectCoder {
         l.manager().setId(real_id);
       else {
         this.encodedWithLocalId.set(real_id, l);
-        values[0]![IDX_SAVED] = l.id();
+        v_0[IDX_SAVED] = l.id();
       }
+      if (v_0[IDX_FLAGS] & PENDING_DELETION)
+        l.manager().setPendingDeletion(true);
     }
   }
 }
