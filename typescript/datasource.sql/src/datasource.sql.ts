@@ -328,7 +328,7 @@ export class SqlDataSource extends DataSource {
       tr.versions.forEach((v, vo) => {
         let manager = vo.manager();
         manager.setId(v._id);
-        manager.setVersion(v._version);
+        manager.setSavedVersion(v._version);
       });
     }
     else {

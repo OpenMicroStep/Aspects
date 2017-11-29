@@ -49,6 +49,7 @@ function basics() {
   let cc = new ControlCenter(cfg);
   let ccc = cc.registerComponent({});
   let v1 = Resource.Aspects.test1.create(ccc);
+  let v1_aspect = v1.manager().aspect();
 
   assert.strictEqual(v1.manager().aspect(), cfg.aspectChecked("Resource"));
   assert.isTrue(v1.manager().isNew());
@@ -159,9 +160,12 @@ function basics() {
   v1.manager().setId(2);
   assert.equal(v1.id(), 2);
   assert.throw(() => { v1.manager().setId(3); }, `id can't be modified once assigned (not local)`);
-  assert.throw(() => { v1.name(); }, `attribute 'Resource._name' is unaccessible and never was`);
 
-  v1.manager().setVersion(2);
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 2);
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
   assert.equal(v1.version(), 2);
   assert.isFalse(v1.manager().isNew());
   assert.isFalse(v1.manager().isModified());
@@ -175,7 +179,6 @@ function basics() {
   assert.sameOrderedMembers([...v1.manager().modifiedAttributes()], []);
   assert.sameOrderedMembers([...v1.manager().outdatedAttributes()], []);
 
-  let v1_aspect = v1.manager().aspect();
   {
     let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
     snapshot.setAttributeValueFast(Aspect.attribute_version, 3);
@@ -484,15 +487,13 @@ function sub_object_single() {
   assert.strictEqual(r0._p1,  p0);
   assert.isTrue(r0.manager().isModified());
 
-  p0.manager().fillNewObjectMissingValues();
   p0.manager().setId("p0");
-  p0.manager().setVersion(0);
+  p0.manager().setSavedVersion(0);
   assert.isFalse(p0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  r0.manager().fillNewObjectMissingValues();
   r0.manager().setId("r0");
-  r0.manager().setVersion(0);
+  r0.manager().setSavedVersion(0);
   assert.isFalse(r0.manager().isModified());
   assert.isFalse(r0.manager().isAttributeModified("_p1"));
   assert.isTrue(r0.manager().isAttributeSaved("_p1"));
@@ -551,37 +552,32 @@ function sub_object_set() {
 
   s0._set = new Set([p0, p1, p2]);
 
-  p0.manager().fillNewObjectMissingValues();
   p0.manager().setId("p0");
-  p0.manager().setVersion(0);
+  p0.manager().setSavedVersion(0);
   assert.isFalse(p0.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p1.manager().fillNewObjectMissingValues();
   p1.manager().setId("p1");
-  p1.manager().setVersion(0);
+  p1.manager().setSavedVersion(0);
   assert.isFalse(p1.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p2.manager().fillNewObjectMissingValues();
   p2.manager().setId("p2");
-  p2.manager().setVersion(0);
+  p2.manager().setSavedVersion(0);
   assert.isFalse(p2.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().fillNewObjectMissingValues();
   s0.manager().setId("s0");
-  s0.manager().setVersion(0);
+  s0.manager().setSavedVersion(0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  r0.manager().fillNewObjectMissingValues();
   r0.manager().setId("r0");
-  r0.manager().setVersion(0);
+  r0.manager().setSavedVersion(0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
@@ -602,7 +598,7 @@ function sub_object_set() {
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().setVersion(0);
+  s0.manager().setSavedVersion(0);
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
 }
@@ -634,37 +630,32 @@ function sub_object_array() {
   assert.isTrue(r0.manager().isModified());
   assert.isTrue(s0.manager().isModified());
 
-  p0.manager().fillNewObjectMissingValues();
   p0.manager().setId("p0");
-  p0.manager().setVersion(0);
+  p0.manager().setSavedVersion(0);
   assert.isFalse(p0.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p1.manager().fillNewObjectMissingValues();
   p1.manager().setId("p1");
-  p1.manager().setVersion(0);
+  p1.manager().setSavedVersion(0);
   assert.isFalse(p1.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p2.manager().fillNewObjectMissingValues();
   p2.manager().setId("p2");
-  p2.manager().setVersion(0);
+  p2.manager().setSavedVersion(0);
   assert.isFalse(p2.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().fillNewObjectMissingValues();
   s0.manager().setId("s0");
-  s0.manager().setVersion(0);
+  s0.manager().setSavedVersion(0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  r0.manager().fillNewObjectMissingValues();
   r0.manager().setId("r0");
-  r0.manager().setVersion(0);
+  r0.manager().setSavedVersion(0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
@@ -681,7 +672,7 @@ function sub_object_array() {
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().setVersion(0);
+  s0.manager().setSavedVersion(0);
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
 

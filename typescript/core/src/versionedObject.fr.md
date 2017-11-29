@@ -34,8 +34,6 @@ Un attribut est considéré chargé si:
  - l'objet est _nouveau_
  - l'attribut est _sauvé_
 
-Une fois qu'un objet possède un identifiant réel, il n'est plus considéré comme _nouveau_.
-
 Un sous-objet ne peut-être supprimé, cette information étant porté par la présence ou non du sous-objet dans les valeurs de l'objet racine. Ainsi un sous-objet renverra toujours faux à la question `isPendingDeletion()`.
 
 La suppression d'un objet n'implique aucun effet immédiat, cette information étant appliquer au moment de l'enregistrement de l'objet, résultant en la suppréssion réel de l'objet.
@@ -87,6 +85,9 @@ Vrai si l'objet à un conflit.
 #### isPendingDeletion(): boolean
 Vrai si l'objet sera supprimé à la prochaine sauvegarde.
 
+#### isDeleted(): boolean
+Vrai si l'objet est supprimé.
+
 #### isAttributeSaved(attribute_name: string): boolean
 Vrai si l'attribut _attribute\_name_ est sauvé.
 
@@ -121,12 +122,14 @@ L'ancienne valeur sauvé avant l'introduction d'un conflit sur l'attribut _attri
 
 __!__: Lève une exception si l'attribut n'est pas chargé ou en conflit
 
-#### modifiedAttributes(): Iterable<{ attribute: Aspect.InstalledAttribute, modified: any }>
+#### attributes(): IterableIterator<Aspect.InstalledAttribute>
+Retourne un itérateur sur l'ensemble des attributs de l'aspect, __id_ et __version_ omits.
+
+#### modifiedAttributes(): IterableIterator<{ attribute: Aspect.InstalledAttribute, modified: any }>
 Retourne un itérateur sur l'ensemble des attributs modifiés et la valeur associée.
 
-#### outdatedAttributes(): Iterable<{ attribute: Aspect.InstalledAttribute, outdated: any }>
+#### outdatedAttributes(): IterableIterator<{ attribute: Aspect.InstalledAttribute, outdated: any }>
 Retourne un itérateur sur l'ensemble des attributs en conflits et l'ancienne valeur sauvé associée.
-
 
 ### Gestion
 
@@ -160,7 +163,9 @@ Décharge tous les attributs.
 #### setPendingDeletion(will_delete: boolean): void
 Marque ou démarque l'objet pour suppression. Un objet marqué pour suppression sera effectivement supprimé à la prochaine sauvegarde.
 
-__!__: Lève une exception si l'objet est un sous-objet
+__!__: Lève une exception:
+ - si l'objet est un sous-objet
+ - l'objet de ne possède pas d'identifiant réel ?
 
 #### setId(id: Identifier)
 Définit l'identifiant réel de l'objet.
@@ -169,12 +174,16 @@ __!__: Lève une exception si:
  - _id_ est un identifiant local
  - un identifiant à déjà été définit pour l'objet
 
-#### setVersion(version: number)
-Marque l'objet comme sauvé, l'ensemble des modifications sont placés sont considérés comme sauvé.
+#### setSavedVersion(version: number)
+Marque l'objet comme sauvé, l'ensemble des modifications sont considérés comme sauvés. 
+
+Si l'objet est _nouveau_, l'ensemble des attributs est considérés comme sauvés.
+Si la version est `VersionedObjectManager.DeletedVersion`, l'ensemble des attributs est déchargé.
 
 __!__: Lève une exception si:
- - l'objet est _nouveau_ (ne possède pas d'identifiant réel)
- - l'objet est en _conflit_
+ - l'objet est en _conflit_ ou _supprimé_
+ - l'objet ne possède pas un identifiant réel
+ - `!(version >= 0)`
 
 #### computeMissingAttributes(snapshot: VersionedObjectSnapshot): string[]
 Retourne la liste des attributs actuellement chargé qui ne sont pas présent dans l'instantané _snapshot_.
@@ -186,7 +195,14 @@ Fusionne l'instantané _snapshot_ en tant que valeur sauvé de l'objet et retour
  - `conflicts`: pour l'ensemble des attributs qui sont désormais en conflit,
  - `missings`: pour l'ensemble des attributs qui était chargé et qui ne le sont plus car non présents dans l'instantané.
 
-__!__: Lève une exception si les valeurs données posent un problème de cohérence vis à vis du modèle Aspects
+Si la version du _snapshot_ est `VersionedObjectManager.DeletedVersion`, l'ensemble des attributs est déchargé.
+
+__!__: Lève une exception si:
+ - les valeurs données posent un problème de cohérence vis à vis du modèle Aspects
+ - l'objet est en _conflit_ ou _supprimé_
+ - l'identifiant du _snapshot_ ne correspond pas à l'identifiant réel courant s'il existe ou n'est pas un identifiant réel.
+ - la version du _snapshot_ est inférieur à zero et s'il contient des valeurs autres que __id_ et __version_.
+
 
 ## class VersionedObjectSnapshot
 

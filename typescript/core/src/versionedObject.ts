@@ -83,6 +83,7 @@ export class VersionedObjectSnapshot {
 }
 
 export class VersionedObjectManager<T extends VersionedObject = VersionedObject> {
+  static DeletedVersion = Number.MAX_SAFE_INTEGER;
   static UndefinedVersion = -2;
   static NoVersion = -1;
   static SafeMode = true;
@@ -155,6 +156,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   isModified()   { return _modified_get(this._flags) > 0; }
   isInConflict() { return _outdated_get(this._flags) > 0; }
   isPendingDeletion() { return (this._flags & WILL_DELETE) > 0; }
+  isDeleted() { return this.version() === VersionedObjectManager.DeletedVersion; }
 
   isAttributeSaved(attribute_name: string)      { return this.isAttributeSavedFast(this._aspect.checkedAttribute(attribute_name)); }
   isAttributeModified(attribute_name: string)   { return this.isAttributeModifiedFast(this._aspect.checkedAttribute(attribute_name)); }
@@ -222,17 +224,21 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is not in conflict`);
   }
 
+  *attributes() {
+    for (let idx = 2; idx <  this._attribute_data.length; idx++)
+      yield this._aspect.attributes_by_index[idx];
+  }
+
   *modifiedAttributes() {
     for (let idx = 2; idx <  this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
-      if (_modified_get(data.flags)) {
+      if (_modified_get(data.flags))
         yield { attribute: this._aspect.attributes_by_index[idx], modified: data.modified };
-      }
     }
   }
 
   *outdatedAttributes() {
-    for (let idx = 2; idx <  this._attribute_data.length; idx++) {
+    for (let idx = 2; idx < this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
       if (_outdated_get(data.flags)) {
         yield { attribute: this._aspect.attributes_by_index[idx], outdated: data.outdated };
@@ -314,20 +320,25 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   unloadAttributeFast(attribute: Aspect.InstalledAttribute) {
     if (attribute.index >= 2) {
       let data = this._attribute_data[attribute.index];
-      this._unloadAttributeData(data);
+      this._unloadAttributeData(attribute, data);
     }
   }
 
   unloadAllAttributes() {
     for (let idx = 2; idx < this._attribute_data.length; idx++) {
+      let attribute = this._aspect.attributes_by_index[idx];
       let data = this._attribute_data[idx];
-      this._unloadAttributeData(data);
+      this._unloadAttributeData(attribute, data);
     }
   }
 
   setPendingDeletion(will_delete: boolean) {
+    if (VersionedObjectManager.isLocalId(this.id()))
+      throw new Error(`cannot set pending deletion on locally identified objects`);
     if (this.isSubObject())
-      throw new Error(`${this.classname()}{id=${this.id()}}.setPendingDeletion(): forbidden on subobject, change the parent attribute directly`);
+      throw new Error(`cannot set pending deletion on sub-objects, change the parent attribute directly`);
+    if (this.isDeleted())
+      throw new Error(`cannot set pending deletion on a deleted object`);
     if (will_delete)
       this._flags |= WILL_DELETE;
     else
@@ -346,24 +357,38 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._attribute_data[0].saved = id; // local -> real id (ie. object _id attribute got loaded)
     if (this._attribute_data[1].saved === VersionedObjectManager.NoVersion)
       this._attribute_data[1].saved = VersionedObjectManager.UndefinedVersion;
-    this._flags |= SAVED;
   }
 
-  setVersion(version: number) {
-    if (this.isNew())
-      throw new Error(`version can't be set on a locally identifier object`);
+  setSavedVersion(version: number) {
+    if (VersionedObjectManager.isLocalId(this.id()))
+      throw new Error(`version can't be set on a locallly identified object`);
     if (this.isInConflict())
       throw new Error(`version can't be set on a conflicted object`);
-    if (this.isModified()) {
-      for (let idx = 2; idx <  this._attribute_data.length; idx++) {
-        let data = this._attribute_data[idx];
-        if (_modified_get(data.flags)) {
-          let attribute = this._aspect.attributes_by_index[idx];
-          this._setAttributeSavedValue(attribute, data, data.modified);
+    if (this.isDeleted())
+      throw new Error(`version can't be set on a deleted object`);
+    if (version === VersionedObjectManager.DeletedVersion) {
+      this.unloadAllAttributes();
+    }
+    else if (version >= 0) {
+      let is_new = this.isNew();
+      if (this.isModified() || is_new) {
+        for (let idx = 2; idx <  this._attribute_data.length; idx++) {
+          let data = this._attribute_data[idx];
+          if (_modified_get(data.flags)) {
+            let attribute = this._aspect.attributes_by_index[idx];
+            this._setAttributeSavedValue(attribute, data, data.modified);
+          }
+          else if (is_new) {
+            let attribute = this._aspect.attributes_by_index[idx];
+            this._setAttributeSavedValue(attribute, data, this._missingValue(attribute));
+          }
         }
       }
     }
+    else
+      throw new Error(`version must be >= 0`);
     this._attribute_data[1].saved = version;
+    this._flags |= SAVED;
   }
 
   computeMissingAttributes(snapshot: VersionedObjectSnapshot): string[] {
@@ -383,51 +408,66 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   mergeSavedAttributes(snapshot: VersionedObjectSnapshot) {
     // _attributes_ can't be trusted, so we need to validate _attributes_ keys and types
+    this.setId(snapshot.id());
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
-    let reporter = new Reporter();
-    let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', '');
     let version = snapshot.version();
-    for (let idx = 2; idx <  this._attribute_data.length; idx++) {
-      let data = this._attribute_data[idx];
-      let attribute = this._aspect.attributes_by_index[idx];
-      let merge_data = snapshot._attributes[idx];
-      let data_is_saved = (data.flags & SAVED) > 0;
-      path.set(attribute.name);
-      if (merge_data) {
-        let merge_value = merge_data.value;
-        attribute.validator.validate(reporter, path, merge_value, this);
-        if (attribute.contains_vo) {
-          for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
-            let sub_object_manager = sub_object.manager();
-            this._assert_same_cc(sub_object_manager);
-            if (attribute.is_sub_object)
-              this._sub_object_init(sub_object_manager, attribute)
-          }
-        }
-
-        let data_saved_same = data_is_saved && areEquals(data.saved, merge_value);
-        if (!data_saved_same) {
-          if (data_is_saved && _modified_get(data.flags) && !areEquals(data.modified, merge_value) && !_outdated_get(data.flags)) {
-            ret.conflicts.push(attribute.name);
-            this._apply_attribute_outdated_delta(data, +1);
-            data.outdated = data.saved;
-          }
-          else if (_outdated_get(data.flags) && areEquals(data.outdated, merge_value) && !areEquals(data.saved, data.outdated)) {
-            if (this._apply_attribute_outdated_delta(data, -1) === 0)
-              data.outdated = undefined;
-          }
-          ret.changes.push(attribute.name);
-          this._setAttributeSavedValue(attribute, data, merge_value);
-        }
-      }
-      else if (data.flags && version !== this.version()) {
-        this._unloadAttributeData(data); // quite a big deal...
-        ret.missings.push(attribute.name);
-      }
+    if (version === VersionedObjectManager.DeletedVersion) {
+      this.unloadAllAttributes();
     }
-    this._attribute_data[1].saved = version;
-    if (reporter.failed)
-      throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
+    else if (version >= 0) {
+      let reporter = new Reporter();
+      let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', '');
+      for (let idx = 2; idx < this._attribute_data.length; idx++) {
+        let data = this._attribute_data[idx];
+        let attribute = this._aspect.attributes_by_index[idx];
+        let merge_data = snapshot._attributes[idx];
+        let data_is_saved = (data.flags & SAVED) > 0;
+        path.set(attribute.name);
+        if (merge_data) {
+          let merge_value = merge_data.value;
+          attribute.validator.validate(reporter, path, merge_value, this);
+          if (attribute.contains_vo) {
+            for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
+              let sub_object_manager = sub_object.manager();
+              this._assert_same_cc(sub_object_manager);
+              if (attribute.is_sub_object)
+                this._sub_object_init(sub_object_manager, attribute)
+            }
+          }
+
+          let data_saved_same = data_is_saved && areEquals(data.saved, merge_value);
+          if (!data_saved_same) {
+            if (data_is_saved && _modified_get(data.flags) && !areEquals(data.modified, merge_value) && !_outdated_get(data.flags)) {
+              ret.conflicts.push(attribute.name);
+              this._apply_attribute_outdated_delta(data, +1);
+              data.outdated = data.saved;
+            }
+            else if (_outdated_get(data.flags) && areEquals(data.outdated, merge_value) && !areEquals(data.saved, data.outdated)) {
+              if (this._apply_attribute_outdated_delta(data, -1) === 0)
+                data.outdated = undefined;
+            }
+            ret.changes.push(attribute.name);
+            this._setAttributeSavedValue(attribute, data, merge_value);
+          }
+        }
+        else if (data.flags && version !== this.version()) {
+          this._unloadAttributeData(attribute, data); // quite a big deal...
+          ret.missings.push(attribute.name);
+        }
+      }
+      if (reporter.failed)
+        throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
+    }
+    else {
+      for (let attribute of this.attributes())
+        if (snapshot.hasAttributeValueFast(attribute))
+          throw new Error(`snapshot.version() must be >= 0 or snapshot must be empty`);
+    }
+
+    if (version >= 0) {
+      this._attribute_data[1].saved = version;
+      this._flags |= SAVED;
+    }
     return ret;
   }
 
@@ -465,18 +505,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     data.flags |= SAVED;
   }
 
-  fillNewObjectMissingValues() {
-    if (this.isNew()) {
-      for (let idx = 2; idx <  this._attribute_data.length; idx++) {
-        let data = this._attribute_data[idx];
-        if (data.flags === 0) {
-          let attribute = this._aspect.attributes_by_index[idx];
-          this.setAttributeValueFast(attribute, this._missingValue(attribute));
-        }
-      }
-    }
-  }
-
   // Others
   filter_anonymize(attribute_name: string, value: any)  : void;
   filter_anonymize<K extends keyof T>(attribute_name: K, value: T[K]) : void;
@@ -490,7 +518,18 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       data.outdated = value;
   }
 
-  private _unloadAttributeData(data: InternalAttributeData) {
+  private _unloadAttributeData(attribute: Aspect.InstalledAttribute, data: InternalAttributeData) {
+    if (attribute.is_sub_object) {
+      if (_modified_get(data.flags))
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.modified))
+          this._sub_object_detach(sub_object.manager());
+      if (data.flags & SAVED)
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved))
+          this._sub_object_detach(sub_object.manager());
+      if (_outdated_get(data.flags))
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.outdated))
+          this._sub_object_detach(sub_object.manager());
+    }
     this._apply_attribute_modified_delta(data, -_modified_get(data.flags));
     this._apply_attribute_outdated_delta(data, -_outdated_get(data.flags));
     data.flags = 0;
@@ -615,6 +654,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     else if (sub_object_manager._parent.manager !== this || sub_object_manager._parent.attribute !== attribute)
       throw new Error(`a sub object is only assignable to one parent/attribute`);
     return sub_object_manager._parent;
+  }
+
+  private _sub_object_detach(sub_object_manager: VersionedObjectManager) {
+    let pdata = sub_object_manager._parent!
+    pdata.saved_position = NO_POSITION;
+    pdata.modified_position = NO_POSITION;
+    pdata.outdated_position = NO_POSITION;
   }
 
   private _apply_attribute_modified_delta(data: InternalAttributeData, delta: number) {

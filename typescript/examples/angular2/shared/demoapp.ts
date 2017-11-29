@@ -16,7 +16,7 @@ DemoApp.category('far', <DemoApp.ImplCategories.far<DemoApp>>{
     p0.manager().setId(0);
     p0._firstName = "Linus";
     p0._lastName = "git";
-    p0.manager().setVersion(0);
+    p0.manager().setSavedVersion(0);
     return p0;
   },
   arr_p0_1({ context: { ccc }}): Person[] {
@@ -24,7 +24,7 @@ DemoApp.category('far', <DemoApp.ImplCategories.far<DemoApp>>{
     p0.manager().setId(0);
     p0._firstName = "Linus";
     p0._lastName = "Torvalds";
-    p0.manager().setVersion(1);
+    p0.manager().setSavedVersion(1);
     return [p0];
   }
 });
