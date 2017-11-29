@@ -309,12 +309,13 @@ export class SqlDataSource extends DataSource {
     return { tr: tr, versions: new Map<VersionedObject, { _id: Identifier, _version: number }>() };
   }
 
-  async implSave({ context: { ccc } }, {tr, objects}: { tr: SqlDataSourceTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
+  async implSave({ context: { ccc } }, {tr, objects}: { tr: SqlDataSourceTransaction, objects: VersionedObject[] }) : Promise<Result<void>> {
     let reporter = new Reporter();
+    let objects_set = new Set(objects);
     for (let obj of objects) {
       try {
         if (!tr.versions.has(obj))
-          await this.save(tr, reporter, objects, obj);
+          await this.save(tr, reporter, objects_set, obj);
       } catch (e) {
         reporter.error(e || `unknown error`);
       }

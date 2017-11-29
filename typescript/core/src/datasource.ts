@@ -48,11 +48,16 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     return Result.fromResultWithNewValue(res, r);
   },
   async load({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObject[]>>  {
+    let reporter = new Reporter();
     let saved: VersionedObject[] = [];
     for (let vo of w.objects) {
-      if (vo.manager().isSaved())
+      if (vo.manager().isSubObject())
+        reporter.diagnostic({ is: "error", msg: `you cannot load sub-objects directly, you must load using root objects only` });
+      else if (vo.manager().isSaved())
         saved.push(vo);
     }
+    if (reporter.diagnostics.length > 0)
+      return Result.fromDiagnosticsAndValue(reporter.diagnostics, w.objects);
     if (saved.length > 0) {
       let res = await ccc.farPromise(this.distantLoad, { objects: saved, scope: w.scope });
       if (res.hasOneValue()) {
@@ -67,7 +72,9 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     let reporter = new Reporter();
     let coder = new VersionedObjectCoder();
     for (let vo of objects) {
-      if (vo.manager().isModified()) {
+      if (vo.manager().isSubObject())
+        reporter.diagnostic({ is: "error", msg: `you cannot save sub-objects directly, you must save the root object` });
+      else if (vo.manager().isModified()) {
         vo.validate(reporter);
         coder.encode(vo);
       }
@@ -142,7 +149,7 @@ export type SafePostLoadContext = {
 };
 export type SafePreSave = (reporter: Reporter, dataSource: DataSource.Categories.raw, tr: DataSourceTransaction) => SafePreSaveContext;
 export type SafePreSaveContext = {
-  for_each(vo: VersionedObject, set: ImmutableSet<VersionedObject> & { add(object: VersionedObject) }): void
+  for_each(vo: VersionedObject, push: (object: VersionedObject) => void): void
   finalize(): Promise<void>
 };
 export type SafePostSave = (reporter: Reporter, dataSource: DataSource.Categories.raw, tr: DataSourceTransaction) => SafePostSaveContext;
@@ -158,31 +165,18 @@ export type SafeValidator = {
 }
 export type SafeValidators = Map<string, SafeValidator>;
 
-function filterChangedObjectsAndPrepareNew<T extends VersionedObject>(objects: T[]) : Set<T> {
+function filterChangedObjects<T extends VersionedObject>(objects: T[]) : T[] {
   let changed = new Set<T>();
-  for (let o of objects)
-    add(o);
-  return changed;
-
-  function add(o: T) {
-    let manager = o.manager();
-    manager.fillNewObjectMissingValues();
-    if (manager.isModified()) {
+  let ordered: T[] = [];
+  for (let o of objects) {
+    if (o.manager().isModified()) {
+      let sz = changed.size;
       changed.add(o);
-      let attributes_by_index = manager.aspect().attributes_by_index;
-      for (let i = 2; i < attributes_by_index.length; i++) {
-        let attribute = attributes_by_index[i];
-        if (attribute.is_sub_object && manager.isAttributeModifiedFast(attribute)) {
-          for (let sub of attribute.traverseValue<VersionedObject>(manager.attributeValueFast(attribute)))
-            if (!changed.has(o))
-              add(o);
-          for (let sub of attribute.traverseValue<VersionedObject>(manager.savedAttributeValueFast(attribute)))
-            if (!changed.has(o))
-              add(o);
-        }
-      }
+      if (sz < changed.size)
+        ordered.push(o);
     }
   }
+  return ordered;
 }
 
 async function safeScope(
@@ -276,18 +270,20 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
   },
   async safeSave({ context: { ccc } }, objects: VersionedObject.Categories.validation[]) {
     // TODO: Do we want to force load attributes in case of failure or for unchanged objects ?
-    let changed = filterChangedObjectsAndPrepareNew(objects);
-    if (changed.size === 0)
+    // TODO: snapshot/restore object scope, until then, SafePreSave can leak data
+    let changed = filterChangedObjects(objects);
+    if (changed.length === 0)
       return Result.fromValue(objects); // safe, there is no way new attributes have been loaded
 
     let begin = await ccc.farPromise(this.implBeginTransaction, undefined);
-    if (!begin.hasOneValue())
+    if (!begin.hasOneValue() || begin.hasDiagnostics())
       return Result.fromResultWithNewValue(begin, objects); // safe, there is no way new attributes have been loaded
 
     let tr = begin.value();
     let reporter = new Reporter();
     try {
       {
+        let changed_push = changed.push.bind(this);
         let safe_pre_saves = new Map<SafePreSave, SafePreSaveContext>();
         for (let o of changed) {
           o.validate(reporter);
@@ -296,7 +292,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
             let f = safe_pre_saves.get(safe_pre_save);
             if (!f)
               safe_pre_saves.set(safe_pre_save, f = safe_pre_save(reporter, this, tr));
-            f.for_each(o, changed);
+            f.for_each(o, changed_push);
           }
         }
         if (safe_pre_saves.size > 0)
@@ -326,7 +322,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
       reporter.diagnostics.push(...end.diagnostics());
     }
 
-    return Result.fromReporterAndValue(reporter, objects); // TODO: clean object scope
+    return Result.fromReporterAndValue(reporter, objects);
   }
 });
 
@@ -347,15 +343,15 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
     return Result.fromResultWithNewValue(res, w.objects);
   },
   async rawSave({ context: { ccc } }, objects: VersionedObject[]) {
-    let changed = filterChangedObjectsAndPrepareNew(objects);
-    if (changed.size === 0)
+    let changed = filterChangedObjects(objects);
+    if (changed.length === 0)
       return Result.fromValue(objects);
     let begin = await ccc.farPromise(this.implBeginTransaction, undefined);
-    if (begin.hasOneValue()) {
+    if (begin.hasOneValue() && !begin.hasDiagnostics()) {
       let tr = begin.value();
       let save = await ccc.farPromise(this.implSave, { tr: tr, objects: changed });
       let end = await ccc.farPromise(this.implEndTransaction, { tr: tr, commit: !save.hasDiagnostics() });
-      return Result.fromDiagnosticsAndValue([...begin.diagnostics(), ...save.diagnostics(), ...end.diagnostics()], objects);
+      return Result.fromDiagnosticsAndValue([...save.diagnostics(), ...end.diagnostics()], objects);
     }
     return Result.fromResultWithNewValue(begin, objects);
   }

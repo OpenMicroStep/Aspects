@@ -129,8 +129,9 @@ export class InMemoryDataSource extends DataSource {
     return this.ds.beginTransaction();
   }
 
-  implSave({ context: { ccc } }, {tr, objects}: { tr: InMemoryDataSource.DataStoreTransaction, objects: Set<VersionedObject> }) : Promise<Result<void>> {
+  implSave({ context: { ccc } }, {tr, objects}: { tr: InMemoryDataSource.DataStoreTransaction, objects: VersionedObject[] }) : Promise<Result<void>> {
     let diags: Diagnostic[] = [];
+    let objects_set = new Set(objects);
 
     const save = (lObject: VersionedObject): InMemoryDataSource.DataStoreObject | undefined => {
       let dVersion = tr.versions.get(lObject);
@@ -187,8 +188,8 @@ export class InMemoryDataSource extends DataSource {
     };
 
     function create(vo) : InMemoryDataSource.DataStoreObject | undefined {
-      if (objects.has(vo))
-        return save(vo)!;
+      if (objects_set.has(vo))
+        return save(vo);
       diags.push({ is: "error", msg: `cannot save, the object ${vo.id()} is not is the save list` });
       return undefined;
     };

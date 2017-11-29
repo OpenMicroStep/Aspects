@@ -120,9 +120,9 @@ export class VersionedObjectCoder {
             let [name, id] = value.v;
             let vo = this.encodedWithLocalId.get(id) || ccc.find(id);
             if (!vo) {
-              vo = ccc.create(name);
               if (VersionedObjectManager.isLocalId(id))
                 throw new Error(`reference to an unknown locally defined object ${value.v}`);
+              vo = ccc.create(name);
               vo.manager().setId(id);
             }
             return vo;
@@ -173,7 +173,8 @@ export class VersionedObjectCoder {
         if (v && (v[IDX_FLAGS] & MODIFIED))
           m.setAttributeValueFast(attributes_by_index[i], this._decodeValue(ccc, v[IDX_MODIFIED]));
       }
-      ret.push(vo);
+      if (!m.isSubObject())
+        ret.push(vo);
     }
     return ret;
   }
@@ -211,7 +212,8 @@ export class VersionedObjectCoder {
       else {
         m.mergeSavedAttributes(snapshot);
       }
-      ret.push(vo);
+      if (!m.isSubObject())
+        ret.push(vo);
     }
     if (missings_grouped.size) {
       await dataSource.controlCenter().safe(async ccc => Promise.all([...missings_grouped.values()].map(async g => {

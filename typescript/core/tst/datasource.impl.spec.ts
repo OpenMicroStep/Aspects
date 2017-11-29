@@ -50,24 +50,35 @@ function save_c0(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   assert.equal(c0.version(), VersionedObjectManager.NoVersion);
   assert.equal(c0.manager().isModified(), true);
+  assert.equal(c0.manager().isSaved(), false);
   ccc.farPromise(db.rawSave, [c0]).then((envelop) => {
     assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0]);
     assert.equal(c0.version(), 0);
     assert.equal(c0.manager().isModified(), false);
+    assert.equal(c0.manager().isSaved(), true);
+    assert.strictEqual(c0.manager().savedAttributeValue("_name"), "Renault");
+    assert.strictEqual(c0.manager().savedAttributeValue("_model"), "Clio 3");
+    assert.sameMembers([...c0.manager().savedAttributeValue("_tags")], []);
     f.continue();
   });
 }
 function save_c0_new_name(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   assert.equal(c0.manager().isModified(), false);
+  assert.equal(c0.manager().isSaved(), true);
   c0._name = "ReNault";
   assert.equal(c0.manager().isModified(), true);
+  assert.equal(c0.manager().isSaved(), true);
   ccc.farPromise(db.rawSave, [c0]).then((envelop) => {
     assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0]);
     assert.equal(c0.version(), 1);
     assert.equal(c0.manager().isModified(), false);
+    assert.equal(c0.manager().isSaved(), true);
+    assert.strictEqual(c0.manager().savedAttributeValue("_name"), "ReNault");
+    assert.strictEqual(c0.manager().savedAttributeValue("_model"), "Clio 3");
+    assert.sameMembers([...c0.manager().savedAttributeValue("_tags")], []);
     f.continue();
   });
 }
@@ -82,6 +93,7 @@ function save_c0_c1_c2_modify_tags(f: Flux<Context>) {
   assert.equal(c1.manager().isModified(), true);
   assert.equal(c2.manager().isModified(), true);
   ccc.farPromise(db.rawSave, [c0,c1,c2]).then((envelop) => {
+    assert.deepEqual(envelop.diagnostics(), []);
     assert.sameMembers(envelop.value(), [c0,c1,c2]);
     assert.equal(c0.version(), 2);
     assert.equal(c0.manager().isModified(), false);

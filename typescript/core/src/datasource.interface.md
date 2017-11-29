@@ -94,7 +94,7 @@ Effectue une requête et retourne le résultat
 
 Charge les attributs de `objects` et retourne les objets.
 
-#### implSave(a: { tr: DataSourceTransaction, objects: <0, *, VersionedObject> }): void
+#### implSave(a: { tr: DataSourceTransaction, objects: [0, *, VersionedObject] }): void
 
 Enregistre la liste d'objets fournis et retourne la forme en base des objets.
 Tous les objets ont des modifications en attentes.
