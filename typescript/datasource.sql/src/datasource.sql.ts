@@ -26,7 +26,7 @@ export class SqlDataSource extends DataSource {
     aspects: DataSource.definition.aspects
   };
 
-  async save(tr: SqlDataSourceTransaction, reporter: Reporter, objects: Set<VersionedObject>, object: VersionedObject) : Promise<void> {
+  async save(tr: SqlDataSourceTransaction, reporter: Reporter, objects: Set<VersionedObject>, object: VersionedObject, force_deletion = false) : Promise<void> {
     let maker = this.maker;
     let manager = object.manager();
     let aspect = manager.aspect();
@@ -77,16 +77,22 @@ export class SqlDataSource extends DataSource {
       return ret;
     };
 
-    let map = (attribute: Aspect.InstalledAttribute, modified: any, saved: any | undefined) => {
-      let mapped_attribute = mapper.get(attribute.name);
-      if (!mapped_attribute)
-        throw new Error(`attribute ${attribute.name} is missing in mapper ${mapper.name}`);
-      if (!mapped_attribute.insert) // virtual attribute
-        return;
+    let map_value = (mapped_attribute: SqlMappedAttribute, value) => {
+      if (value instanceof VersionedObject && value.manager().isNew()) {
+        let id = tr.versions.get(value)!._id;
+        let name = value.manager().classname();
+        let mapper = this.mappers[name];
+        if (!mapper)
+          throw new Error(`cannot find mapper for ${name}`);
+        let idattr = mapper.get("_id")!;
+        return idattr.toDbKey(mapper.toDbKey(id));
+      }
+      return mapValue(this, mapper, mapped_attribute, value);
+    };
+
+    let map = (attribute: Aspect.InstalledAttribute, mapped_attribute: SqlMappedAttribute, modified: any, saved: any | undefined) => {
       let last = mapped_attribute.last();
       let is_single_value = Aspect.typeIsSingleValue(attribute.type);
-      let db_modified = mapValue(this, mapper, mapped_attribute, modified);
-      let db_saved = saved !== undefined ? mapValue(this, mapper, mapped_attribute, saved) : undefined;
       if (isNew && mapped_attribute.insert) { // insert syntax
         let insert = inserts.get(mapped_attribute.insert);
         if (!insert)
@@ -95,13 +101,13 @@ export class SqlDataSource extends DataSource {
           if (insert.length === 0)
             insert.push(new Map());
           if (insert.length === 1)
-            insert[0].set(last.value, db_modified);
+            insert[0].set(last.value, map_value(mapped_attribute, modified));
           else
             throw new Error(`insert ${mapped_attribute.insert.name} is used by both multi and single values`);
         } else {
-          for (let new_value_db_i of db_modified) {
+          for (let modified_i of modified) {
             let m = new Map<string, any>();
-            m.set(last.value, new_value_db_i);
+            m.set(last.value, map_value(mapped_attribute, modified_i));
             insert.push(m);
           }
         }
@@ -109,46 +115,53 @@ export class SqlDataSource extends DataSource {
       else { // update syntax
         let requests = requestsForAttribute(mapped_attribute);
         if (is_single_value) {
-          requests.update_sets.push(this.maker.set(last.value, db_modified));
+          requests.update_sets.push(this.maker.set(last.value, map_value(mapped_attribute, modified)));
           if (!isNew) // TODO: check this if
-            requests.update_checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, db_saved));
+            requests.update_checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, map_value(mapped_attribute, saved)));
         }
         else {
-          for (let [idx, value_db_i] of attribute.diffValue(db_modified, db_saved)) {
+          for (let [idx, value_i] of attribute.diffValue(modified, saved)) {
             if (idx !== -1) {
-              let insert = inserts.get(mapped_attribute.insert);
+              let insert = inserts.get(mapped_attribute.insert!);
               if (!insert)
-                inserts.set(mapped_attribute.insert, insert = []);
+                inserts.set(mapped_attribute.insert!, insert = []);
               let m = new Map<string, any>();
-              m.set(last.value, value_db_i);
+              m.set(last.value, map_value(mapped_attribute, value_i));
               insert.push(m);
             }
             else {
-              requests.delete.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, value_db_i));
+              requests.delete.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, map_value(mapped_attribute, value_i)));
             }
           }
         }
       }
     };
-    for (let { attribute, modified } of manager.modifiedAttributes()) {
-      if (modified instanceof VersionedObject && modified.manager().isNew()) {
-        if (!objects.has(modified)) {
-          reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
-          continue;
+    for (let attribute of manager.attributes()) {
+      if (!manager.isNew() && !manager.isAttributeModifiedFast(attribute))
+        continue;
+      let mapped_attribute = mapper.get(attribute.name);
+      if (!mapped_attribute)
+        throw new Error(`attribute ${attribute.name} is missing in mapper ${mapper.name}`);
+      if (!mapped_attribute.insert) // virtual attribute
+        continue;
+      let modified = manager.attributeValueFast(attribute);
+      let saved = manager.savedAttributeValueFast(attribute);
+
+      if (attribute.contains_vo) {
+        for (let [position, sub_object] of attribute.diffValue<VersionedObject>(modified, saved)) {
+          if (attribute.is_sub_object)
+            await this.save(tr, reporter, objects, sub_object, position === -1)
+          else if (position !== -1 && sub_object.manager().isNew()) {
+            if (!objects.has(sub_object))
+              reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
+            if (!tr.versions.has(modified))
+              await this.save(tr, reporter, objects, modified);
+          }
         }
-        if (!tr.versions.has(modified))
-          await this.save(tr, reporter, objects, modified);
-        let v = tr.versions.get(modified)!;
-        let name = modified.manager().classname();
-        let mapper = this.mappers[name];
-        if (!mapper)
-          throw new Error(`cannot find mapper for ${name}`);
-        let idattr = mapper.attribute_id();
-        modified = idattr.toDbKey(mapper.toDbKey(v._id));
       }
-      map(attribute, modified, isNew ? undefined : manager.savedAttributeValueFast(attribute));
+      map(attribute, mapped_attribute, modified, saved);
     }
-    map(Aspect.attribute_version, version + 1, version);
+    map(Aspect.attribute_version, mapper.get(Aspect.attribute_version.name)!, version + 1, version);
     version++;
     let inserted = new Set<SqlInsert>();
 

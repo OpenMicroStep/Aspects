@@ -109,6 +109,8 @@ export class ObiDataSource extends DataSource {
       }
       value = this.config.aspectValue_to_obiValue(value, attribute);
       await this.db.raw_delete(tr, table, oid, cid, value);
+      if (attribute.is_sub_object)
+        await this.db.raw_delete_obi(tr, reporter, value);
     };
 
     let manager = object.manager();
@@ -118,7 +120,7 @@ export class ObiDataSource extends DataSource {
 
     if (manager.isPendingDeletion()) {
       await this.db.raw_delete_obi(tr, reporter, oid as number);
-      versions.set(object, { _id: oid, _version: version });
+      versions.set(object, { _id: oid, _version: VersionedObjectManager.DeletedVersion });
     }
     else {
       let isNew = manager.isNew();
@@ -159,12 +161,19 @@ export class ObiDataSource extends DataSource {
         }
       };
 
-      if (isNew)
+      if (isNew) {
         await this.db.raw_insert(tr, "ID", oid as number, this.db.config.CarEntityId, obi._id);
-      await map(Aspect.attribute_version, version + 1, isNew ? undefined : version);
-      versions.set(object, { _id: oid, _version: version + 1 });
-      for (let { attribute, modified } of manager.modifiedAttributes())
-        await map(attribute, modified, isNew ? undefined : manager.savedAttributeValueFast(attribute));
+        await map(Aspect.attribute_version, 0, undefined);
+        for (let attribute of manager.attributes())
+          await map(attribute, manager.attributeValueFast(attribute), undefined);
+        versions.set(object, { _id: oid, _version: 0 });
+      }
+      else {
+        await map(Aspect.attribute_version, version + 1, isNew ? undefined : version);
+        for (let { attribute, modified } of manager.modifiedAttributes())
+          await map(attribute, modified, isNew ? undefined : manager.savedAttributeValueFast(attribute));
+        versions.set(object, { _id: oid, _version: version + 1 });
+      }
     }
   }
 

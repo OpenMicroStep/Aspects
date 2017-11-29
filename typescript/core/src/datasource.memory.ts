@@ -133,7 +133,7 @@ export class InMemoryDataSource extends DataSource {
     let diags: Diagnostic[] = [];
     let objects_set = new Set(objects);
 
-    const save = (lObject: VersionedObject): InMemoryDataSource.DataStoreObject | undefined => {
+    const save = (lObject: VersionedObject, force_deletion = false): InMemoryDataSource.DataStoreObject | undefined => {
       let dVersion = tr.versions.get(lObject);
       if (dVersion) {
         let dbId = this.ds.toDSId(dVersion._id);
@@ -141,10 +141,41 @@ export class InMemoryDataSource extends DataSource {
       }
 
       let lVersion = lObject.manager().version();
-      if (lObject.manager().isPendingDeletion()) {
+      if (lObject.manager().isPendingDeletion() || force_deletion) {
+        let pending_deletion_objects = new Set<InMemoryDataSource.DataStoreObject>();
+        const delete_tree = (dObject: InMemoryDataSource.DataStoreObject) => {
+          let aspect = lObject.manager().aspect();
+          for (let idx = 2; idx < aspect.attributes_by_index.length; idx++) {
+            let attribute = aspect.attributes_by_index[idx];
+            if (attribute.is_sub_object) {
+              for (let dValue of attribute.traverseValue(dObject.get(attribute))) {
+                delete_tree(dValue as InMemoryDataSource.DataStoreObject);
+              }
+            }
+          }
+          pending_deletion_objects.add(dObject);
+          tr.delete(dObject.get(Aspect.attribute_id));
+        };
         let dbId = this.ds.toDSId(lObject.id());
-        if (!tr.delete(dbId))
+        let dObject = tr.get(dbId);
+        if (!dObject)
           diags.push({ is: "error", msg: `cannot delete ${lObject.id()}: object not found` });
+        else {
+          tr.versions.set(lObject, { _id: lObject.id(), _version: VersionedObjectManager.DeletedVersion });
+          delete_tree(dObject);
+          for (let dObject of tr.objectsAsArray()) {
+            let aspect = lObject.controlCenter().aspectChecked(dObject.is);
+            for (let idx = 2; idx < aspect.attributes_by_index.length; idx++) {
+              let attribute = aspect.attributes_by_index[idx];
+              if (attribute.contains_vo) {
+                for (let dValue of attribute.traverseValue<InMemoryDataSource.DataStoreObject>(dObject.get(attribute))) {
+                  if (pending_deletion_objects.has(dValue))
+                    diags.push({ is: "error", msg: `cannot delete ${lObject.id()}: object is reference by '${dObject.get(Aspect.attribute_id)}.${attribute.name}'` });
+                }
+              }
+            }
+          }
+        }
         return undefined;
       }
       else if (lVersion !== VersionedObjectManager.NoVersion) { // Update
@@ -152,19 +183,26 @@ export class InMemoryDataSource extends DataSource {
         let dObject = tr.get(dbId);
         if (!dObject)
           diags.push({ is: "error", msg: `cannot update ${lObject.id()}: object not found` });
-        if (dObject) {
+        else {
           dObject = tr.willUpdate(dObject);
           dObject.set(Aspect.attribute_version, dObject.get(Aspect.attribute_version) + 1);
           tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.get(Aspect.attribute_id)), _version: dObject.get(Aspect.attribute_version) });
           let lManager = lObject.manager();
           let n = diags.length;
           for (let { attribute, modified } of lManager.modifiedAttributes()) {
+            let saved = lManager.savedAttributeValueFast(attribute);
             let dbv = dObject.get(attribute);
-            let exv = lManager.savedAttributeValueFast(attribute);
-            if (!areEquals(exv, dbv))
+            if (!areEquals(dbv, tr.toDSValue(saved)))
               diags.push({ is: "error", msg: `cannot update ${lObject.id()}: attribute ${attribute.name} mismatch` });
-            else
-              dObject.set(attribute, tr.toDSValue(modified, create));
+            else {
+              let dbm = tr.toDSValue(modified, create);
+              if (attribute.is_sub_object) {
+                for (let [position, sub_object] of attribute.diffValue<VersionedObject>(modified, saved)) {
+                  save(sub_object, position === -1);
+                }
+              }
+              dObject.set(attribute, dbm);
+            }
           }
           if (diags.length > n) {
             let snapshot = new VersionedObjectSnapshot(lManager.aspect(), lManager.id());
@@ -180,7 +218,13 @@ export class InMemoryDataSource extends DataSource {
         let dObject = InMemoryDataSource.DataStoreObject.create(lManager, this.ds.nextId(), 0);
         tr.versions.set(lObject, { _id: this.ds.fromDSId(dObject.get(Aspect.attribute_id)), _version: dObject.get(Aspect.attribute_version) });
         tr.add(dObject);
-        for (let { attribute, modified } of lManager.modifiedAttributes()) {
+        for (let attribute of lManager.attributes()) {
+          let modified = lManager.attributeValueFast(attribute);
+          if (attribute.is_sub_object) {
+            for (let sub_object of attribute.traverseValue<VersionedObject>(modified)) {
+              save(sub_object);
+            }
+          }
           dObject.set(attribute, tr.toDSValue(modified, create));
         }
         return dObject;

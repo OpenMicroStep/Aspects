@@ -136,13 +136,31 @@ export class OuiDB {
       [maker.column("TJ_VAL_ID", "VAL_INST")],
       maker.from("TJ_VAL_ID"), [],
       maker.or([
-        maker.op(this.maker.column("TJ_VAL_ID", "VAL")    , ConstraintType.Equal, oid),
-        maker.op(this.maker.column("TJ_VAL_ID", "VAL_CAR"), ConstraintType.Equal, oid),
+        maker.op(maker.column("TJ_VAL_ID", "VAL")    , ConstraintType.Equal, oid),
+        maker.op(maker.column("TJ_VAL_ID", "VAL_CAR"), ConstraintType.Equal, oid),
       ]));
     let rows = await tr.select(sql_select);
     for (let row of rows)
       reporter.diagnostic({ is: "error", msg: `cannot delete (${row["VAL_INST"]} is still linked to ${oid})` });
 
+    let CarTypeIDId = this.systemObiByName.get(this.config.CarTypeLib)!._id!;
+    let TypSIDId = this.systemObiByName.get(this.config.TypSIDLib)!._id!;
+    let sql_select_subs = maker.select(
+      [maker.column("SID", "VAL")],
+      maker.from("TJ_VAL_ID", "SID"), [
+        maker.join("inner", "TJ_VAL_ID", "CAR", maker.and([
+          maker.compare(maker.column("CAR", "VAL_INST"), ConstraintType.Equal, maker.column("SID", "VAL_CAR")),
+          maker.op(maker.column("CAR", "VAL_CAR"), ConstraintType.Equal, CarTypeIDId),
+          maker.op(maker.column("CAR", "VAL"), ConstraintType.Equal, TypSIDId),
+        ])),
+      ],
+      maker.and([
+        maker.op(maker.column("SID", "VAL_INST"), ConstraintType.Equal, oid),
+        maker.op(maker.column("SID", "VAL_CAR"), ConstraintType.NotEqual, this.config.CarEntityId),
+      ]));
+    let sub_rows = await tr.select(sql_select_subs);
+    for (let row of sub_rows)
+      await this.raw_delete_obi(tr, reporter, row["VAL"]);
     for (let table of this._valTables) {
       let sql_delete = maker.delete(table, maker.op(this.maker.column(table, "VAL_INST"), ConstraintType.Equal, oid));
       await tr.delete(sql_delete);
