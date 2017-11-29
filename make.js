@@ -126,11 +126,11 @@ module.exports =  {
         customHeader: `
           import {
             Aspect, ControlCenter, ControlCenterContext,
-            VersionedObject, VersionedObjectConstructor,
+            VersionedObject, VersionedObjectConstructor, VersionedObjectCoder,
             Result,
             DataSourceInternal, DataSourceQueries, DataSourceTransaction, DataSourceOptionalTransaction,
             ImmutableList, ImmutableSet, ImmutableObject,
-            SafeValidators, EncodedVersionedObjects
+            SafeValidators,
           } from '../typescript/core/src/core';
           import ObjectSet = DataSourceInternal.ObjectSet;
           import ResolvedScope = DataSourceInternal.ResolvedScope;

@@ -392,8 +392,12 @@ function parseBooleanOption(parser: Parser, option: string) : true | undefined {
   return undefined;
 }
 
+function isNameChar(ch: string): boolean {
+  return Parser.isWordChar(ch) || ch === '.';
+}
+
 function parseName(parser: Parser) {
-  return parser.ch === '`' ? parseQuotedString(parser, '`') : parser.while(Parser.isWordChar, 1);
+  return parser.ch === '`' ? parseQuotedString(parser, '`') : parser.while(isNameChar, 1);
 }
 
 function parseQuotedString(parser: Parser, quote = `"`) {

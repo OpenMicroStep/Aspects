@@ -1,7 +1,7 @@
 import {
   Identifier, VersionedObject, VersionedObjectManager, VersionedObjectCoder,
   ControlCenter, ControlCenterContext, Result,
-  DataSourceInternal, EncodedVersionedObjects,
+  DataSourceInternal,
   ImmutableSet, Aspect,
 } from './core';
 import {Reporter} from '@openmicrostep/msbuildsystem.shared';
@@ -86,7 +86,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
 });
 
 DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.raw & DataSource.Categories.implementation & DataSource.Categories.safe & ExtDataSource>>{
-  async distantQuery({ context: { ccc } }, request) : Promise<Result<{ e: EncodedVersionedObjects, results: { [s: string]: Identifier[] } }>> {
+  async distantQuery({ context: { ccc } }, request) : Promise<Result<{ e: VersionedObjectCoder.EncodedVersionedObjects, results: { [s: string]: Identifier[] } }>> {
     let creator = this._queries && this._queries.get(request.id);
     if (!creator)
       return new Result([{ is: "error", msg: `request ${request.id} doesn't exists` }]);
@@ -109,7 +109,7 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
       r[k] = v[k].map(vo => vo.id());
     return Result.fromResultWithNewValue(res, { e: coder.takeEncodedVersionedObjects(), results: r });
   },
-  async distantLoad({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<EncodedVersionedObjects>> {
+  async distantLoad({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObjectCoder.EncodedVersionedObjects>> {
     let all = new Set();
     let res = await safeLoad(ccc, this, all, w);
     if (!res.hasOneValue())
@@ -120,7 +120,7 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
       coder.encode(vo);
     return Result.fromResultWithNewValue(res, coder.takeEncodedVersionedObjects());
   },
-  async distantSave({ context: { ccc } }, data: EncodedVersionedObjects) : Promise<Result<EncodedVersionedObjects>> {
+  async distantSave({ context: { ccc } }, data: VersionedObjectCoder.EncodedVersionedObjects) : Promise<Result<VersionedObjectCoder.EncodedVersionedObjects>> {
     let coder = new VersionedObjectCoder();
     this.controlCenter().registerComponent(coder);
     let objects = coder.decodeEncodedVersionedObjectsWithModifiedValues(ccc, data);

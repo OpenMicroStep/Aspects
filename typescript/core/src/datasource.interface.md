@@ -31,11 +31,11 @@ Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes imp
 
 Partie accessible depuis l'exterieur de la DataSource
 
-#### distantQuery(q: { id: string, *: any }): { e: EncodedVersionedObjects, results: { * :[0, *, string | integer] } }
+#### distantQuery(q: { id: string, *: any }): { e: VersionedObjectCoder.EncodedVersionedObjects, results: { * :[0, *, string | integer] } }
 
-#### distantLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): EncodedVersionedObjects
+#### distantLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): VersionedObjectCoder.EncodedVersionedObjects
 
-#### distantSave(objects: EncodedVersionedObjects): EncodedVersionedObjects
+#### distantSave(objects: VersionedObjectCoder.EncodedVersionedObjects): VersionedObjectCoder.EncodedVersionedObjects
 
 ### farCategory safe
 

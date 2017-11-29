@@ -4,13 +4,6 @@ import {
   DataSource, Result
 } from './core';
 
-export type EncodedVersionedObjects = EncodedVersionedObject[];
-export type EncodedValue = null | string | number | boolean |
-  { is: "vo", v: [string, Identifier] } |
-  { is: "set", v?: EncodedValue[] } |
-  { is: "date", v: string } |
-  { is: "obj", v: { [s: string]: EncodedValue } } |
-  any[];
 const MODIFIED = 1;
 const SAVED = 2;
 const METADATA = 4;
@@ -23,13 +16,8 @@ const IDX_METADATA = 2;
 
 const NO_VALUE = 0;
 
-export type EncodedVersionedAttribute = [/** flags */ number, /** modified */ EncodedValue, /** saved */ EncodedValue, /** metadata */ EncodedValue];
-export type EncodedVersionedObject = {
-  is: string,
-  v: (EncodedVersionedAttribute | 0)[]
-};
 export class VersionedObjectCoder {
-  private _encodedVersionedObjects: EncodedVersionedObjects | undefined = [];
+  private _encodedVersionedObjects: VersionedObjectCoder.EncodedVersionedObjects | undefined = [];
   private encodedWithLocalId = new Map<Identifier, VersionedObject>();
   private decodedWithLocalId = new Map<VersionedObject, Identifier>();
 
@@ -43,7 +31,7 @@ export class VersionedObjectCoder {
       attributes[0] = [MODIFIED | SAVED | pending_deletion, this.decodedWithLocalId.get(vo) || id, id];
       attributes[1] = [SAVED, NO_VALUE, m.version()];
 
-      let r: EncodedVersionedObject = { is: m.classname(), v: attributes };
+      let r: VersionedObjectCoder.EncodedVersionedObject = { is: m.classname(), v: attributes };
 
       let attributes_by_index = m.aspect().attributes_by_index;
       let last_encoded_idx = 1;
@@ -68,7 +56,7 @@ export class VersionedObjectCoder {
     }
   }
 
-  private _encodeValue(value: any, is_sub_object: boolean): EncodedValue {
+  private _encodeValue(value: any, is_sub_object: boolean): VersionedObjectCoder.EncodedValue {
     if (value === undefined || value === null)
       return null;
     if (value instanceof VersionedObject) {
@@ -108,7 +96,7 @@ export class VersionedObjectCoder {
     return value; // primitive type
   }
 
-  takeEncodedVersionedObjects(): EncodedVersionedObjects {
+  takeEncodedVersionedObjects(): VersionedObjectCoder.EncodedVersionedObjects {
     let objects = this._encodedVersionedObjects;
     this._encodedVersionedObjects = undefined;
     if (objects)
@@ -116,7 +104,7 @@ export class VersionedObjectCoder {
     throw new Error(`you can't call takeEncodedVersionedObjects twice`);
   }
 
-  private _decodeValue(ccc: ControlCenterContext, value: EncodedValue): any {
+  private _decodeValue(ccc: ControlCenterContext, value: VersionedObjectCoder.EncodedValue): any {
     if (value === undefined || value === null)
       return undefined;
     if (typeof value === "object") {
@@ -164,7 +152,7 @@ export class VersionedObjectCoder {
 
   decodeEncodedVersionedObjectsWithModifiedValues(
     ccc: ControlCenterContext,
-    data: EncodedVersionedObjects,
+    data: VersionedObjectCoder.EncodedVersionedObjects,
   ): VersionedObject[] {
     let ret: VersionedObject[] = [];
     this._decodePhase1(ccc, data, true);
@@ -192,7 +180,7 @@ export class VersionedObjectCoder {
 
   async decodeEncodedVersionedObjectsClient(
     ccc: ControlCenterContext,
-    data: EncodedVersionedObjects,
+    data: VersionedObjectCoder.EncodedVersionedObjects,
     dataSource: DataSource.Categories.server
   ): Promise<VersionedObject[]> {
     let ret: VersionedObject[] = [];
@@ -252,7 +240,7 @@ export class VersionedObjectCoder {
     return ret;
   }
 
-  private _decodePhase1(ccc: ControlCenterContext, data: EncodedVersionedObjects, allow_unknown_local_id: boolean) {
+  private _decodePhase1(ccc: ControlCenterContext, data: VersionedObjectCoder.EncodedVersionedObjects, allow_unknown_local_id: boolean) {
     for (let { is, v: values } of data) {
       let v_0 = values[0]!
       let real_id = v_0[IDX_SAVED];
@@ -284,5 +272,20 @@ export class VersionedObjectCoder {
     }
   }
 }
-export type Mergeable = { vo: VersionedObject, snapshot: VersionedObjectSnapshot };
 
+export namespace VersionedObjectCoder {
+  export type EncodedValue = null | string | number | boolean |
+  { is: "vo", v: [string, Identifier] } |
+  { is: "set", v?: EncodedValue[] } |
+  { is: "date", v: string } |
+  { is: "obj", v: { [s: string]: EncodedValue } } |
+  any[];
+  export type EncodedVersionedAttribute = [/** flags */ number, /** modified */ EncodedValue, /** saved */ EncodedValue, /** metadata */ EncodedValue];
+  export type EncodedVersionedObject = {
+  is: string,
+  v: (EncodedVersionedAttribute | 0)[]
+  };
+  export type EncodedVersionedObjects = EncodedVersionedObject[];
+}
+
+type Mergeable = { vo: VersionedObject, snapshot: VersionedObjectSnapshot };
