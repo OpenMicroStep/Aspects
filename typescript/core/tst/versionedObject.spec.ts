@@ -1050,5 +1050,5 @@ export const tests = { name: 'VersionedObject', tests: [
   sub_object_single,
   sub_object_set,
   sub_object_array,
-  //tests_perfs
+  tests_perfs
 ]};
