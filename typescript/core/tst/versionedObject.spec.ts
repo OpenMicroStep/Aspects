@@ -1,6 +1,6 @@
 import {
   Aspect, AspectSelection, AspectConfiguration, ControlCenter,
-  VersionedObject, VersionedObjectManager, VersionedObjectSnapshot,
+  VersionedObject, VersionedObjectManager, VersionedObjectSnapshot, Identifier,
 } from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
@@ -547,6 +547,18 @@ function delete_unmodified_saved() {
   assert.throw(() => v1.manager().setPendingDeletion(true), `cannot set pending deletion on a deleted object`);
 }
 
+function dead() {
+  let cc = new ControlCenter(cfg);
+  let v1: Resource.Aspects.test1;
+  let v1_id: Identifier = "";
+  cc.safe(ccc => {
+    v1 = Resource.Aspects.test1.create(ccc);
+    v1_id = v1.id();
+  });
+  assert.throw(() => v1.id(), `this object (${v1_id}) was totally unregistered and thus is considered DEAD !`);
+  assert.throw(() => v1._name, `this object (${v1_id}) was totally unregistered and thus is considered DEAD !`);
+}
+
 function relation_1_n() {
   let cc = new ControlCenter(cfg);
   let ccc = cc.registerComponent({});
@@ -837,6 +849,7 @@ export const tests = { name: 'VersionedObject', tests: [
   basics,
   shared,
   delete_unmodified_saved,
+  dead,
   relation_1_n,
   relation_n_n,
   sub_object_single,
