@@ -553,15 +553,27 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   private _unloadAttributeData(attribute: Aspect.InstalledAttribute, data: InternalAttributeData) {
     if (attribute.is_sub_object) {
-      if (_modified_get(data.flags))
-        for (let sub_object of attribute.traverseValue<VersionedObject>(data.modified))
-          sub_object.manager()._parent!.modified_position = NO_POSITION;
-      if (data.flags & SAVED)
-        for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved))
-          sub_object.manager()._parent!.saved_position = NO_POSITION;
-      if (_outdated_get(data.flags))
-        for (let sub_object of attribute.traverseValue<VersionedObject>(data.outdated))
-          sub_object.manager()._parent!.outdated_position = NO_POSITION;
+      if (_modified_get(data.flags)) {
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.modified)) {
+          let manager = sub_object.manager();
+          manager._parent!.modified_position = NO_POSITION;
+          manager.unloadAllAttributes();
+        }
+      }
+      if (data.flags & SAVED) {
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
+          let manager = sub_object.manager();
+          manager._parent!.saved_position = NO_POSITION;
+          manager.unloadAllAttributes();
+        }
+      }
+      if (_outdated_get(data.flags)) {
+        for (let sub_object of attribute.traverseValue<VersionedObject>(data.outdated)) {
+          let manager = sub_object.manager();
+          manager._parent!.outdated_position = NO_POSITION;
+          manager.unloadAllAttributes();
+        }
+      }
     }
     this._apply_attribute_modified_delta(data, -_modified_get(data.flags));
     this._apply_attribute_outdated_delta(data, -_outdated_get(data.flags));
@@ -596,6 +608,11 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         }
       }
       else {
+        if (attribute.is_sub_object) {
+          for (let sub_object of attribute.traverseValue<VersionedObject>(data.modified)) {
+            sub_object.manager().clearAllModifiedAttributes();
+          }
+        }
         this._updateAttribute(attribute, data, -1, undefined, data.modified, false);
       }
     }
@@ -611,7 +628,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (!isSaved && !this.isNew())
       throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
     if (isSaved && areEquals(data.saved, value)) {
-      if (isModified) {
+      if (isModified && !areEquals(data.modified, value)) {
         oldValue = data.modified;
         delta = -1;
         hasChanged = true;

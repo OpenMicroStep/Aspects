@@ -842,6 +842,27 @@ function sub_object_single() {
   assert.strictEqual(r0._p1,  p0);
   assert.isTrue(r0.manager().isModified());
 
+  p0._altitute = 2000;
+  assert.strictEqual(p0.manager().attributeValue("_altitute"), 2000);
+  assert.isTrue(r0.manager().isModified());
+  assert.isTrue(p0.manager().isModified());
+  assert.isTrue(p0.manager().isAttributeModified("_altitute"));
+  assert.isTrue(r0.manager().isAttributeModified("_p1"));
+
+  r0.manager().clearModifiedAttribute("_p1");
+  assert.isFalse(r0.manager().isAttributeModified("_p1"));
+  assert.isFalse(p0.manager().isAttributeModified("_altitute"));
+  assert.isFalse(r0.manager().isModified());
+  assert.isFalse(p0.manager().isModified());
+
+  r0._p1 = p0;
+  assert.isTrue(r0.manager().isAttributeModified("_p1"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
+  assert.strictEqual(r0, p0.manager().rootObject());
+  assert.strictEqual(r0._p1,  p0);
+  assert.isTrue(r0.manager().isModified());
+
   p0.manager().setId("p0");
   p0.manager().setSavedVersion(0);
   assert.isFalse(p0.manager().isModified());
@@ -873,9 +894,39 @@ function sub_object_single() {
   assert.isFalse(r0.manager().isModified());
   assert.isFalse(p0.manager().isModified());
 
+  p0._altitute = 1000;
+  assert.strictEqual(p0.manager().attributeValue("_altitute"), 1000);
+  assert.strictEqual(p0.manager().savedAttributeValue("_altitute"), undefined);
+  assert.isTrue(r0.manager().isModified());
+  assert.isTrue(p0.manager().isModified());
+  assert.isTrue(p0.manager().isAttributeModified("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.isTrue(r0.manager().isAttributeModified("_p1"));
+  assert.isTrue(r0.manager().isAttributeSaved("_p1"));
+
+  r0.manager().clearModifiedAttribute("_p1");
+  assert.strictEqual(p0.manager().attributeValue("_altitute"), undefined);
+  assert.strictEqual(p0.manager().savedAttributeValue("_altitute"), undefined);
+  assert.isFalse(r0.manager().isModified());
+  assert.isFalse(p0.manager().isModified());
+  assert.isFalse(r0.manager().isAttributeModified("_p1"));
+  assert.isFalse(p0.manager().isAttributeModified("_altitute"));
+  assert.isTrue(r0.manager().isAttributeSaved("_p1"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+
   assert.strictEqual(r0._p2, undefined);
   assert.throw(() => r0._p2 = p0, "a sub object is only assignable to one parent/attribute");
   assert.strictEqual(r0._p2, undefined);
+
+  r0.manager().unloadAttribute("_p1");
+  assert.isFalse(r0.manager().isModified());
+  assert.isFalse(p0.manager().isModified());
+  assert.isTrue(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isFalse(r0.manager().hasAttributeValue("_p1"));
+  assert.isFalse(p0.manager().hasAttributeValue("_altitute"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isFalse(p0.manager().isAttributeSaved("_altitute"));
 }
 
 function sub_object_set() {
