@@ -155,6 +155,7 @@ function basics() {
 
   assert.equal(v1.name(), undefined);
   assert.throw(() => { v1.manager().setSavedVersion(1); }, `version can't be set on a locallly identified object`);
+  assert.throw(() => { v1.manager().setPendingDeletion(true); }, `cannot set pending deletion on locally identified objects`);
   {
     let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
     snapshot.setAttributeValueFast(Aspect.attribute_version, 0);
@@ -247,6 +248,7 @@ function basics() {
   assert.sameDeepOrderedMembers([...v1.manager().outdatedAttributes()], [
     { attribute: v1.manager().aspect().checkedAttribute("_name"), outdated: "test3" },
   ]);
+  assert.throw(() => v1.manager().setSavedVersion(5), `version can't be set on a conflicted object`);
 
   v1.manager().resolveOutdatedAttribute("_name");
   assert.strictEqual(v1.manager().attributeValue("_name"), "testM");
@@ -475,6 +477,76 @@ function shared() {
   });
 }
 
+function delete_unmodified_saved() {
+  let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
+  let v1 = Resource.Aspects.test1.create(ccc);
+  let v1_aspect = v1.manager().aspect();
+
+  assert.isTrue(v1.manager().isNew());
+  assert.isFalse(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.throw(() => { v1.manager().setPendingDeletion(true); }, `cannot set pending deletion on locally identified objects`);
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, "deleteme");
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 0);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "name");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.strictEqual(v1.manager().id(), "deleteme");
+  assert.strictEqual(v1.manager().version(), 0);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+
+  v1.manager().setPendingDeletion(true);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isTrue(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+
+  v1.manager().setPendingDeletion(false);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+
+  v1.manager().setPendingDeletion(true);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isTrue(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+
+  v1.manager().setSavedVersion(VersionedObjectManager.DeletedVersion);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isTrue(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().hasAttributeValue("_name"));
+
+  assert.throw(() => v1.manager().setSavedVersion(1), `version can't be set on a deleted object`);
+  assert.throw(() => v1.manager().setPendingDeletion(true), `cannot set pending deletion on a deleted object`);
+}
+
 function relation_1_n() {
   let cc = new ControlCenter(cfg);
   let ccc = cc.registerComponent({});
@@ -570,6 +642,7 @@ function sub_object_single() {
   p0.manager().setSavedVersion(0);
   assert.isFalse(p0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
+  assert.throw(() => { p0.manager().setPendingDeletion(true); }, `cannot set pending deletion on sub-objects, change the parent attribute directly`);
 
   r0.manager().setId("r0");
   r0.manager().setSavedVersion(0);
@@ -763,6 +836,7 @@ export const tests = { name: 'VersionedObject', tests: [
   snapshot,
   basics,
   shared,
+  delete_unmodified_saved,
   relation_1_n,
   relation_n_n,
   sub_object_single,

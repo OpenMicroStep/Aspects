@@ -8,7 +8,7 @@ import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsyste
 
 // 16bits for modified, 2bits for flags, 14bits for outdated
 const SAVED       = 0x00010000;
-const WILL_DELETE = 0x00020000;
+const PENDING_DELETION = 0x00020000;
 const FLAGS_MASK  = 0x00030000;
 
 function _modified_get(flags: number): number {
@@ -155,7 +155,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   isNew()        { return (this._flags & FLAGS_MASK) === 0; }
   isModified()   { return _modified_get(this._flags) > 0; }
   isInConflict() { return _outdated_get(this._flags) > 0; }
-  isPendingDeletion() { return (this._flags & WILL_DELETE) > 0; }
+  isPendingDeletion() { return (this._flags & PENDING_DELETION) > 0; }
   isDeleted() { return this.version() === VersionedObjectManager.DeletedVersion; }
 
   isAttributeSaved(attribute_name: string)      { return this.isAttributeSavedFast(this._aspect.checkedAttribute(attribute_name)); }
@@ -338,9 +338,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (this.isDeleted())
       throw new Error(`cannot set pending deletion on a deleted object`);
     if (will_delete)
-      this._flags |= WILL_DELETE;
+      this._flags |= PENDING_DELETION;
     else
-      this._flags &= ~WILL_DELETE;
+      this._flags &= ~PENDING_DELETION;
   }
 
   setId(id: Identifier) {
@@ -365,7 +365,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (this.isDeleted())
       throw new Error(`version can't be set on a deleted object`);
     if (version === VersionedObjectManager.DeletedVersion) {
-      this.unloadAllAttributes();
+      this._setDeleted();
     }
     else if (version >= 0) {
       let is_new = this.isNew();
@@ -410,7 +410,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     let version = snapshot.version();
     if (version === VersionedObjectManager.DeletedVersion) {
-      this.unloadAllAttributes();
+      this._setDeleted();
     }
     else if (version >= 0) {
       let reporter = new Reporter();
@@ -465,6 +465,11 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       this._flags |= SAVED;
     }
     return ret;
+  }
+
+  private _setDeleted() {
+    this.unloadAllAttributes();
+    this._flags &= ~PENDING_DELETION;
   }
 
   private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, merge_value: any) {
