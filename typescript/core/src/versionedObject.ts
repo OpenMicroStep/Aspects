@@ -191,8 +191,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return data.saved;
     if (this.isNew())
       return this._missingValue(attribute);
-    if (_outdated_get(data.flags))
-      throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible due to version change`);
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
   }
 
@@ -346,11 +344,11 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   }
 
   setId(id: Identifier) {
+    if (VersionedObjectManager.isLocalId(id))
+      throw new Error(`cannot change identifier to a local identifier`);
     let current_id = this.id();
     if (current_id === id)
       return;
-    if (VersionedObjectManager.isLocalId(id))
-      throw new Error(`cannot change identifier to a local identifier`);
     if (!VersionedObjectManager.isLocalId(current_id))
       throw new Error(`id can't be modified once assigned (not local)`);
     this._controlCenter._changeObjectId(this._object, current_id, id);
@@ -459,9 +457,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
     }
     else {
-      for (let attribute of this.attributes())
-        if (snapshot.hasAttributeValueFast(attribute))
-          throw new Error(`snapshot.version() must be >= 0 or snapshot must be empty`);
+      throw new Error(`snapshot.version() must be >= 0`);
     }
 
     if (version >= 0) {

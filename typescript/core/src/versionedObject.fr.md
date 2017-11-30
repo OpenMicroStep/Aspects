@@ -201,7 +201,7 @@ __!__: Lève une exception si:
  - les valeurs données posent un problème de cohérence vis à vis du modèle Aspects
  - l'objet est en _conflit_ ou _supprimé_
  - l'identifiant du _snapshot_ ne correspond pas à l'identifiant réel courant s'il existe ou n'est pas un identifiant réel.
- - la version du _snapshot_ est inférieur à zero et s'il contient des valeurs autres que __id_ et __version_.
+ - la version du _snapshot_ est inférieur à zero
 
 
 ## class VersionedObjectSnapshot

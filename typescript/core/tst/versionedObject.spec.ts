@@ -154,12 +154,25 @@ function basics() {
   assert.equal(v2.version(), v2.version());
 
   assert.equal(v1.name(), undefined);
-  assert.doesNotThrow(() => { v1.manager().setId(v1.id()); });
+  assert.throw(() => { v1.manager().setSavedVersion(1); }, `version can't be set on a locallly identified object`);
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 0);
+    assert.throw(() => v1.manager().mergeSavedAttributes(snapshot), `cannot change identifier to a local identifier`);
+  }
+  assert.throw(() => { v1.manager().setId(v1.id()); }, `cannot change identifier to a local identifier`);
   assert.throw(() => { v1.manager().setId(v2.id()); }, `cannot change identifier to a local identifier`);
 
   v1.manager().setId(2);
+  assert.throw(() => { v1.manager().setSavedVersion(-1); }, `version must be >= 0`);
   assert.equal(v1.id(), 2);
   assert.throw(() => { v1.manager().setId(3); }, `id can't be modified once assigned (not local)`);
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, -1);
+    assert.throw(() => v1.manager().mergeSavedAttributes(snapshot), `snapshot.version() must be >= 0`);
+  }
 
   {
     let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
@@ -387,6 +400,71 @@ function basics() {
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
   assert.isFalse(v1.manager().isPendingDeletion());
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 9);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test9");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 9);
+  assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test9");
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "test6");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.sameDeepOrderedMembers([...v1.manager().modifiedAttributes()], [
+    { attribute: v1.manager().aspect().checkedAttribute("_name"), modified: "test5" },
+  ]);
+  assert.sameDeepOrderedMembers([...v1.manager().outdatedAttributes()], [
+    { attribute: v1.manager().aspect().checkedAttribute("_name"), outdated: "test6" },
+  ]);
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 10);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "test10");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.equal(v1.version(), 10);
+  assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test10");
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "test6");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.sameDeepOrderedMembers([...v1.manager().modifiedAttributes()], [
+    { attribute: v1.manager().aspect().checkedAttribute("_name"), modified: "test5" },
+  ]);
+  assert.sameDeepOrderedMembers([...v1.manager().outdatedAttributes()], [
+    { attribute: v1.manager().aspect().checkedAttribute("_name"), outdated: "test6" },
+  ]);
+
+  v1.manager().resolveAllOutdatedAttributes();
+  assert.strictEqual(v1.manager().attributeValue("_name"), "test5");
+  assert.strictEqual(v1.manager().savedAttributeValue("_name"), "test10");
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeSaved("_name"));
+  assert.isTrue(v1.manager().isAttributeModified("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
 }
 
 function shared() {
@@ -464,6 +542,7 @@ function sub_object_single() {
   assert.isFalse(r0.manager().isAttributeModified("_p1"));
   assert.isFalse(r0.manager().isAttributeSaved("_p1"));
   assert.isFalse(r0.manager().isAttributeInConflict("_p1"));
+  assert.throw(() => p0.manager().rootObject(), "cannot find root object of sub object, the sub object is not linked to any parent object");
 
   r0._p1 = p0;
   assert.isTrue(r0.manager().isAttributeModified("_p1"));

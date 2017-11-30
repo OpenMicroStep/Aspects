@@ -161,13 +161,16 @@ export class VersionedObjectCoder {
       let m = vo.manager();
       let aspect = m.aspect();
       let attributes_by_index = aspect.attributes_by_index;
-      let snapshot = new VersionedObjectSnapshot(aspect, m.id());
-      for (let attribute of attributes_by_index) {
-        let v = values[attribute.index];
-        if (v && (v[IDX_FLAGS] & SAVED))
-          snapshot.setAttributeValueFast(attribute, this._decodeValue(ccc, v[IDX_SAVED]));
+      let id = m.id();
+      if (!VersionedObjectManager.isLocalId(id)) {
+        let snapshot = new VersionedObjectSnapshot(aspect, id);
+        for (let attribute of attributes_by_index) {
+          let v = values[attribute.index];
+          if (v && (v[IDX_FLAGS] & SAVED))
+            snapshot.setAttributeValueFast(attribute, this._decodeValue(ccc, v[IDX_SAVED]));
+        }
+        m.mergeSavedAttributes(snapshot);
       }
-      m.mergeSavedAttributes(snapshot);
       for (let i = 2; i < attributes_by_index.length; i++) {
         let v = values[i];
         if (v && (v[IDX_FLAGS] & MODIFIED))
@@ -191,26 +194,29 @@ export class VersionedObjectCoder {
     for (let { v: values } of data) {
       let vo = ccc.findChecked(values[0]![IDX_SAVED]);
       let m = vo.manager();
-      let aspect = m.aspect();
-      let attributes_by_index = aspect.attributes_by_index;
-      let snapshot = new VersionedObjectSnapshot(aspect, m.id());
-      for (let attribute of attributes_by_index) {
-        let v = values[attribute.index];
-        if (v && (v[IDX_FLAGS] & SAVED))
-          snapshot.setAttributeValueFast(attribute, this._decodeValue(ccc, v[IDX_SAVED]));
-      }
-      let missings = m.computeMissingAttributes(snapshot);
-      if (missings.length) {
-        let k = m.classname() + ':' + missings.sort().join(',');
-        let g = missings_grouped.get(k);
-        let mergeable = { vo, snapshot };
-        if (!g)
-          missings_grouped.set(k, g = { aspect: m.classname(), objects: [], attributes: missings });
-        g.objects.push(vo);
-        missings_by_vo.set(vo, mergeable);
-      }
-      else {
-        m.mergeSavedAttributes(snapshot);
+      let id = m.id();
+      if (!VersionedObjectManager.isLocalId(id)) {
+        let aspect = m.aspect();
+        let attributes_by_index = aspect.attributes_by_index;
+        let snapshot = new VersionedObjectSnapshot(aspect, id);
+        for (let attribute of attributes_by_index) {
+          let v = values[attribute.index];
+          if (v && (v[IDX_FLAGS] & SAVED))
+            snapshot.setAttributeValueFast(attribute, this._decodeValue(ccc, v[IDX_SAVED]));
+        }
+        let missings = m.computeMissingAttributes(snapshot);
+        if (missings.length) {
+          let k = m.classname() + ':' + missings.sort().join(',');
+          let g = missings_grouped.get(k);
+          let mergeable = { vo, snapshot };
+          if (!g)
+            missings_grouped.set(k, g = { aspect: m.classname(), objects: [], attributes: missings });
+          g.objects.push(vo);
+          missings_by_vo.set(vo, mergeable);
+        }
+        else {
+          m.mergeSavedAttributes(snapshot);
+        }
       }
       if (!m.isSubObject())
         ret.push(vo);

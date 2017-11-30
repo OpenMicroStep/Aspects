@@ -64,7 +64,7 @@ function property_access_warm() { // around 100ms
   let ccc = cc.registerComponent({});
   let v = People.Aspects.test1.create(ccc);
   let v2 = People.Aspects.test1.create(ccc);
-  let snapshot = new VersionedObjectSnapshot(v2.manager().aspect(), v2.id());
+  let snapshot = new VersionedObjectSnapshot(v2.manager().aspect(), "warm");
   snapshot.setAttributeValueFast(Aspect.attribute_version, 2);
   v2.manager().mergeSavedAttributes(snapshot);
   for (let i = 0; i < 50; i++)
