@@ -765,14 +765,6 @@ export namespace VersionedObjectManager {
   }
 }
 export class VersionedObject {
-  static extends<T extends VersionedObjectConstructor<VersionedObject>>(cstor: VersionedObjectConstructor<VersionedObject>, definition: any): T {
-    return <any>class VersionedObjectExtended extends cstor {
-      static parent = cstor;
-      static definition = definition;
-      static displayName = `base ${definition.name}`;
-    };
-  }
-
   static parent: VersionedObjectConstructor | undefined = undefined;
 
   static definition: Aspect.Definition = {
