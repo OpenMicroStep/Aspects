@@ -36,7 +36,15 @@ Un attribut est considéré chargé si:
 
 Un sous-objet ne peut-être supprimé, cette information étant porté par la présence ou non du sous-objet dans les valeurs de l'objet racine. Ainsi un sous-objet renverra toujours faux à la question `isPendingDeletion()`.
 
-La suppression d'un objet n'implique aucun effet immédiat, cette information étant appliquer au moment de l'enregistrement de l'objet, résultant en la suppréssion réel de l'objet.
+La mise en attente de suppression d'un objet n'implique aucun effet immédiat, cette information étant appliquée au moment de l'enregistrement de l'objet, résultant en la suppréssion réel de l'objet.
+
+Le marquage de l'object comme supprimé implique:
+
+ - la levé de toute mise en attente de suppression puisque celle-ci est effective
+ - tous les conflits existant sont conservé, l'objet étant toujours en conflit
+ - l'ajout de conflits pour tout attribut modifié, si l'attribut est déjà en conflit, la valeur associé est tout de même mise à jour à la valeur modifié
+
+Les conflits contiennent alors la dernière version des attributs considéré localement comme bon.
 
 ### Environnement
 #### id(): Identifier
@@ -199,7 +207,7 @@ Si la version du _snapshot_ est `VersionedObjectManager.DeletedVersion`, l'ensem
 
 __!__: Lève une exception si:
  - les valeurs données posent un problème de cohérence vis à vis du modèle Aspects
- - l'objet est en _conflit_ ou _supprimé_
+ - l'objet est _supprimé_ et la version du _snapshot_ n'est pas `VersionedObjectManager.DeletedVersion`
  - l'identifiant du _snapshot_ ne correspond pas à l'identifiant réel courant s'il existe ou n'est pas un identifiant réel.
  - la version du _snapshot_ est inférieur à zero
 

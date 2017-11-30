@@ -535,6 +535,7 @@ function delete_unmodified_saved() {
   assert.isTrue(v1.manager().hasAttributeValue("_name"));
 
   v1.manager().setSavedVersion(VersionedObjectManager.DeletedVersion);
+  assert.strictEqual(v1.manager().version(), VersionedObjectManager.DeletedVersion);
   assert.isFalse(v1.manager().isNew());
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isModified());
@@ -545,6 +546,174 @@ function delete_unmodified_saved() {
 
   assert.throw(() => v1.manager().setSavedVersion(1), `version can't be set on a deleted object`);
   assert.throw(() => v1.manager().setPendingDeletion(true), `cannot set pending deletion on a deleted object`);
+}
+
+function delete_modified_saved() {
+  let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
+  let v1 = Resource.Aspects.test1.create(ccc);
+  let v1_aspect = v1.manager().aspect();
+
+  assert.isTrue(v1.manager().isNew());
+  assert.isFalse(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.throw(() => { v1.manager().setPendingDeletion(true); }, `cannot set pending deletion on locally identified objects`);
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, "deleteme");
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 0);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "name");
+    v1.manager().mergeSavedAttributes(snapshot);
+    v1._name = "test";
+  }
+  assert.strictEqual(v1.manager().id(), "deleteme");
+  assert.strictEqual(v1.manager().version(), 0);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+
+  v1.manager().setPendingDeletion(true);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isTrue(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+
+  v1.manager().setSavedVersion(VersionedObjectManager.DeletedVersion);
+  assert.strictEqual(v1.manager().version(), VersionedObjectManager.DeletedVersion);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isTrue(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "test");
+}
+
+function delete_merge() {
+  let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
+  let v1 = Resource.Aspects.test1.create(ccc);
+  let v1_aspect = v1.manager().aspect();
+
+  assert.isTrue(v1.manager().isNew());
+  assert.isFalse(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, "deleteme");
+    snapshot.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.DeletedVersion);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "name");
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.strictEqual(v1.manager().id(), "deleteme");
+  assert.strictEqual(v1.manager().version(), VersionedObjectManager.DeletedVersion);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isTrue(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().hasAttributeValue("_name"));
+}
+
+function delete_modified_merge() {
+  let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
+  let v1 = Car.Aspects.test1.create(ccc);
+  let v1_aspect = v1.manager().aspect();
+
+  assert.isTrue(v1.manager().isNew());
+  assert.isFalse(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.throw(() => { v1.manager().setPendingDeletion(true); }, `cannot set pending deletion on locally identified objects`);
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, "deleteme");
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 0);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "name0");
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_model"), "model0");
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_tags"), new Set(["0", "1", "s"]));
+    v1.manager().mergeSavedAttributes(snapshot);
+    v1._name = "nameM";
+    v1._tags = new Set(["m0", "m1", "s"]);
+  }
+  assert.strictEqual(v1.manager().id(), "deleteme");
+  assert.strictEqual(v1.manager().version(), 0);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isModified());
+  assert.isFalse(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_name"));
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, "deleteme");
+    snapshot.setAttributeValueFast(Aspect.attribute_version, 1);
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_name"), "name1");
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_model"), "model1");
+    snapshot.setAttributeValueFast(v1_aspect.checkedAttribute("_tags"), new Set(["0", "2", "s"]));
+    v1.manager().mergeSavedAttributes(snapshot);
+    v1._model = "modelM";
+  }
+  assert.strictEqual(v1.manager().id(), "deleteme");
+  assert.strictEqual(v1.manager().version(), 1);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isTrue(v1.manager().isModified());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isFalse(v1.manager().isDeleted());
+  assert.isTrue(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "name0");
+  assert.isTrue(v1.manager().hasAttributeValue("_model"));
+  assert.isFalse(v1.manager().isAttributeInConflict("_model"));
+  assert.isTrue(v1.manager().hasAttributeValue("_tags"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_tags"));
+  assert.sameMembers([...v1.manager().outdatedAttributeValue("_tags")], ["0", "1", "s"]);
+
+  {
+    let snapshot = new VersionedObjectSnapshot(v1_aspect, "deleteme");
+    snapshot.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.DeletedVersion);
+    v1.manager().mergeSavedAttributes(snapshot);
+  }
+  assert.strictEqual(v1.manager().id(), "deleteme");
+  assert.strictEqual(v1.manager().version(), VersionedObjectManager.DeletedVersion);
+  assert.isFalse(v1.manager().isNew());
+  assert.isTrue(v1.manager().isSaved());
+  assert.isFalse(v1.manager().isModified());
+  assert.isTrue(v1.manager().isInConflict());
+  assert.isFalse(v1.manager().isPendingDeletion());
+  assert.isTrue(v1.manager().isDeleted());
+  assert.isFalse(v1.manager().hasAttributeValue("_name"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_name"));
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_name"), "nameM");
+  assert.isFalse(v1.manager().hasAttributeValue("_model"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_model"));
+  assert.strictEqual(v1.manager().outdatedAttributeValue("_model"), "modelM");
+  assert.isFalse(v1.manager().hasAttributeValue("_tags"));
+  assert.isTrue(v1.manager().isAttributeInConflict("_tags"));
+  assert.sameMembers([...v1.manager().outdatedAttributeValue("_tags")], ["m0", "m1", "s"]);
 }
 
 function dead() {
@@ -849,11 +1018,14 @@ export const tests = { name: 'VersionedObject', tests: [
   basics,
   shared,
   delete_unmodified_saved,
+  delete_modified_saved,
+  delete_merge,
+  delete_modified_merge,
   dead,
   relation_1_n,
   relation_n_n,
   sub_object_single,
   sub_object_set,
   sub_object_array,
-  tests_perfs
+  //tests_perfs
 ]};
