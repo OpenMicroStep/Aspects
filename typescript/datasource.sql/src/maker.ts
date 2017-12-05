@@ -281,10 +281,104 @@ export abstract class SqlMaker {
     b.bind.unshift(...sql_columnLeft.bind);
     return b;
   }
+
+  protected abstract admin_create_table_column_type(type: SqlMaker.ColumnType,): string;
+
+  protected admin_create_table_primary_key(table: SqlMaker.Table): string {
+    if (table.primary_key.length)
+      return `PRIMARY KEY (${table.primary_key.map(c => this.quote(c))})`;
+    return "";
+  }
+
+  protected admin_create_table_foreign_keys(table: SqlMaker.Table): string {
+    let defs: string[] = [];
+    for (let foreign_key of table.foreign_keys || []) {
+      let s = `FOREIGN KEY (${foreign_key.columns.map(column => this.quote(column)).join(', ')}) `;
+      s += `REFERENCES ${this.quote(foreign_key.foreign_table)} (${foreign_key.foreign_columns.map(column => this.quote(column)).join(', ')})`;
+      s += `\n    ON UPDATE ${foreign_key.on_update.toUpperCase()}`;
+      s += `\n    ON DELETE ${foreign_key.on_delete.toUpperCase()}`;
+      defs.push(s);
+    }
+    return defs.join(',\n  ');
+  }
+
+  protected admin_create_table_unique_indexes(table: SqlMaker.Table): string {
+    let defs: string[] = [];
+    for (let unique_index of table.unique_indexes || []) {
+      defs.push(`UNIQUE (${unique_index.columns.map(c =>
+        `${this.quote(c.name)} ${c.asc ? 'ASC' : 'DESC'}`
+      )})`);
+    }
+    return defs.join(',\n  ');
+  }
+
+  admin_create_table(table: SqlMaker.Table) : SqlBinding[] {
+    let ret: SqlBinding[] = [];
+    let defs: string[] = [];
+    for (let column of table.columns)
+      defs.push(`${this.quote(column.name)} ${this.admin_create_table_column_type(column.type)}`);
+    defs.push(this.admin_create_table_primary_key(table));
+    defs.push(this.admin_create_table_foreign_keys(table));
+    defs.push(this.admin_create_table_unique_indexes(table));
+
+    let sql = `CREATE TABLE ${this.quote(table.name)} (\n  ${defs.filter(s => !!s).join(',\n  ')}\n)`;
+    ret.push({ sql: sql, bind: [] });
+    for (let [i, index] of (table.indexes || []).entries())
+      ret.push({ sql:
+        `CREATE INDEX ${this.quote(`${table.name}_${i}`)} ON ${this.quote(table.name)} (${index.columns.map(c =>
+          `${this.quote(c.name)} ${c.asc ? 'ASC' : 'DESC'}`
+        )})`, bind: []
+      });
+    return ret;
+  }
+
+  admin_drop_table(table: SqlMaker.Table) : SqlBinding[] {
+    return [{ sql: `DROP TABLE ${this.quote(table.name)}`, bind: [] }];
+  }
+
+  abstract select_table_list() : SqlBinding;
+  abstract select_index_list() : SqlBinding;
 }
 export namespace SqlMaker {
   export type JoinType = "left" | "inner" | "right" | "cross" | "";
   export type NullType = 'integer' | 'decimal' | 'date' | 'string' | 'boolean' | undefined;
+  export type Table = {
+    name: string,
+    columns: Column[],
+    primary_key: string[],
+    foreign_keys?: ForeignKey[],
+    unique_indexes?: Index[],
+    indexes?: Index[],
+  };
+  export type ColumnType =
+    { is: "string", max_bytes: number } |
+    { is: "text", max_bytes: number } |
+    { is: "autoincrement", bytes: 4 | 8  } |
+    { is: "integer", bytes: 2 | 4 | 8  } |
+    { is: "binary", max_bytes: number } |
+    { is: "float" } |
+    { is: "double" } |
+    { is: "boolean" } |
+    { is: "decimal", precision: number, scale: number };
+  export type Index = {
+    columns: IndexedColumn[],
+  };
+  export type IndexedColumn = {
+    name: string,
+    asc: boolean,
+  };
+  export type Column = {
+    name: string,
+    type: ColumnType,
+    allow_null?: boolean,
+  };
+  export type ForeignKey = {
+    columns: string[],
+    foreign_table: string,
+    foreign_columns: string[],
+    on_delete: "set null" | "restrict" | "cascade" | "no action",
+    on_update: "set null" | "restrict" | "cascade" | "no action",
+  };
 }
 
 SqlMaker.prototype.select_with_recursive = function select_with_recursive(sql_columns: string[], u_0: SqlBinding, u_n: string, u_np1: SqlBinding) : SqlBinding {

@@ -31,6 +31,34 @@ class PostgresSqlMaker extends SqlMaker {
       bind: this.join_bindings(sql_values)
     };
   }
+
+  admin_create_table_column_type(type: SqlMaker.ColumnType) {
+    switch (type.is) {
+      case 'integer':
+        switch (type.bytes) {
+          case 2: return 'SMALLINT';
+          case 4: return 'INTEGER';
+          case 8: return 'BIGINT';
+        }
+        return 'INTEGER';
+      case 'autoincrement': return type.bytes === 4 ? 'SERIAL' : 'BIGSERIAL';
+      case 'string': return `VARCHAR(${type.max_bytes})`;
+      case 'text': return `TEXT`;
+      case 'decimal': return `NUMERIC(${type.precision}, ${type.scale})`;
+      case 'binary': return 'BLOB';
+      case 'double': return 'DOUBLE PRECISION';
+      case 'float': return 'REAL';
+      case 'boolean': return 'BOOLEAN';
+    }
+  }
+
+  select_table_list() : SqlBinding {
+    return { sql: `SELECT schemaname || '.' || tablename table_name FROM pg_catalog.pg_tables`, bind: [] };
+  }
+
+  select_index_list() : SqlBinding {
+    return { sql: `SELECT schemaname || '.' || indexname index_name, schemaname || '.' || tablename table_name FROM pg_catalog.pg_indexes`, bind: [] };
+  }
 }
 export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { new(o: object): any } }, {
   host: string, port?: number, ssl?: boolean,

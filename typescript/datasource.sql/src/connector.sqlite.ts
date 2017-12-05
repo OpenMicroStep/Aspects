@@ -1,4 +1,5 @@
 import {DBConnector, SqlBinding, SqlMaker} from './index';
+import {areEquals} from '@openmicrostep/aspects';
 
 class SqliteMaker extends SqlMaker {
   union(sql_select: SqlBinding[]) : SqlBinding {
@@ -11,6 +12,40 @@ class SqliteMaker extends SqlMaker {
     if (sql_select.length === 1) return sql_select[0];
     let sql = `SELECT * FROM (${this.join_sqls(sql_select, ' INTERSECT ')})`;
     return { sql: sql, bind: this.join_bindings(sql_select) };
+  }
+
+  admin_create_table_column_type(type: SqlMaker.ColumnType) {
+    switch (type.is) {
+      case 'autoincrement': return 'INTEGER PRIMARY KEY AUTOINCREMENT';
+      case 'integer': return 'INTEGER';
+      case 'string': return 'TEXT';
+      case 'text': return 'TEXT';
+      case 'decimal': return 'NUMERIC';
+      case 'binary': return 'BLOB';
+      case 'double': return 'REAL';
+      case 'float': return 'REAL';
+      case 'boolean': return 'INTEGER';
+    }
+  }
+
+  protected admin_create_table_primary_key(table: SqlMaker.Table): string {
+    let autoinc = table.columns.filter(c => c.type.is === "autoincrement");
+    if (autoinc.length > 1)
+      throw new Error(`sqlite only allow one autoincrement column`);
+    if (autoinc.length === 1) {
+      if (!areEquals(table.primary_key, [autoinc[0].name]))
+        throw new Error(`sqlite only autoincrement column must be the primary key`);
+      return "";
+    }
+    return super.admin_create_table_primary_key(table);
+  }
+
+  select_table_list() : SqlBinding {
+    return { sql: `SELECT name table_name FROM sqlite_master WHERE type = 'table'`, bind: [] };
+  }
+
+  select_index_list() : SqlBinding {
+    return { sql: `SELECT name index_name, tbl_name table_name FROM sqlite_master WHERE type = 'index'`, bind: [] };
   }
 }
 export const SqliteDBConnectorFactory = DBConnector.createSimple<{

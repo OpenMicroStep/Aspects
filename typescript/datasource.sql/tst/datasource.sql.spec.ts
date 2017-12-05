@@ -2,6 +2,7 @@ import {ControlCenter, AspectConfiguration, AspectSelection} from '@openmicroste
 import {
   SqlDataSource, loadSqlMappers,
   SqliteDBConnectorFactory, MySQLDBConnectorFactory, PostgresDBConnectorFactory, MSSQLDBConnectorFactory, OracleDBConnectorFactory,
+  SqlMaker, SqlBinding, DBConnector,
 } from '@openmicrostep/aspects.sql';
 import {createTests} from '../../core/tst/datasource.impl.spec';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -16,12 +17,15 @@ function createSqlControlCenter(flux) {
       is: "sql-mapped-object",
       fromDbKey: (id) => `${id}:People`,
       toDbKey: toDBKey,
-      inserts: [
-        { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
-                                                                    { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
-        { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
-                                                                    { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id" }] },
-        { is: "sql-insert", name: "P", table: "People"  , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id" }] },
+      "V=": { is: "sql-insert", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement"                        },
+                                                            { is: "sql-value", name: "type"     , type: "value"            , value: "Resource" }] },
+      "R=": { is: "sql-insert", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement"                        },
+                                                            { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id"       }] },
+      "P=": { is: "sql-insert", table: "People"  , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id"       }] },
+      inserts: ["=V", "=R", "=P"],
+      delete_cascade: [
+        { is: "sql-path", table: "People" , key: "id", value: "idVersion" },
+        { is: "sql-path", table: "Version", key: "id", where: { type: "Resource" }, value: "id" }
       ],
       attributes: [
           { is: "sql-mapped-attribute", name: "_id"        , insert: "=P", path: [{ is: "sql-path", table: "People"  , key: "id"    , value: "id"        }] },
@@ -45,13 +49,17 @@ function createSqlControlCenter(flux) {
       is: "sql-mapped-object",
       fromDbKey: (id) => `${id}:Car`,
       toDbKey: toDBKey,
-      "T=": { is: "sql-insert"       , table: "Tags"    , values: [{ is: "sql-value", name: "car"      , type: "ref", insert: "=C", value: "id" }] },
-      inserts: [
-        { is: "sql-insert", name: "V", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
-                                                                    { is: "sql-value", name: "type"     , type: "value", value: "Resource" }] },
-        { is: "sql-insert", name: "R", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement" },
-                                                                    { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id" }] },
-        { is: "sql-insert", name: "C", table: "Car"     , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id" }] },
+      "T=": { is: "sql-insert", table: "Tags"    , values: [{ is: "sql-value", name: "car"      , type: "ref", insert: "=C", value: "id"       }] },
+      "V=": { is: "sql-insert", table: "Version" , values: [{ is: "sql-value", name: "id"       , type: "autoincrement"                        },
+                                                            { is: "sql-value", name: "type"     , type: "value"            , value: "Resource" }] },
+      "R=": { is: "sql-insert", table: "Resource", values: [{ is: "sql-value", name: "id"       , type: "autoincrement"                        },
+                                                            { is: "sql-value", name: "idVersion", type: "ref", insert: "=V", value: "id"       }] },
+      "C=": { is: "sql-insert", table: "Car"     , values: [{ is: "sql-value", name: "id"       , type: "ref", insert: "=R", value: "id"       }] },
+      inserts: ["=V", "=R", "=C"],
+      delete_cascade: [
+        { is: "sql-path", table: "Car"     , key: "id", value: "id" },
+        { is: "sql-path", table: "Resource", key: "id", value: "idVersion" },
+        { is: "sql-path", table: "Version" , key: "id", where: { type: "Resource" }, value: "id" }
       ],
       attributes: [
           { is: "sql-mapped-attribute", name: "_id"        , insert: "=C", path: [{ is: "sql-path", table: "Car"     , key: "id"    , value: "id"        }] },
@@ -92,29 +100,116 @@ export const tests: {
 }[] = [];
 
 function trace(sql) {
-  //if (process.env.TRACE_SQL)
+  if (process.env.TRACE_SQL)
     console.info(sql);
+}
+
+const tables: SqlMaker.Table[] = [
+  {
+    name: "Version",
+    columns: [
+      { name: "id"     , type: { is: "autoincrement", bytes: 8 } },
+      { name: "type"   , type: { is: "string", max_bytes: 255 } },
+      { name: "version", type: { is: "integer", bytes: 8 } },
+    ],
+    primary_key: ["id"],
+  },
+  {
+    name: "Resource",
+    columns: [
+      { name: "id"       , type: { is: "autoincrement", bytes: 8 } },
+      { name: "idVersion", type: { is: "integer", bytes: 8 } },
+      { name: "name"     , type: { is: "string", max_bytes: 255 } },
+    ],
+    primary_key: ["id"],
+    foreign_keys: [
+      { columns: ["idVersion"], foreign_table: "Version", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
+  },
+  {
+    name: "People",
+    columns: [
+      { name: "id"       , type: { is: "integer", bytes: 8 } },
+      { name: "firstname", type: { is: "string", max_bytes: 255 } },
+      { name: "lastname" , type: { is: "string", max_bytes: 255 } },
+      { name: "birthDate", type: { is: "integer", bytes: 8 } },
+      { name: "father", type: { is: "integer", bytes: 8 }, allow_null: true },
+      { name: "mother", type: { is: "integer", bytes: 8 }, allow_null: true },
+    ],
+    primary_key: ["id"],
+    foreign_keys: [
+      { columns: ["id"], foreign_table: "Resource", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["father"], foreign_table: "People", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["mother"], foreign_table: "People", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
+  },
+  {
+    name: "Car",
+    columns: [
+      { name: "id"       , type: { is: "integer", bytes: 8 } },
+      { name: "model"    , type: { is: "string", max_bytes: 255 } },
+      { name: "owner"    , type: { is: "integer", bytes: 8 }, allow_null: true },
+    ],
+    primary_key: ["id"],
+    foreign_keys: [
+      { columns: ["id"], foreign_table: "Resource", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["owner"], foreign_table: "People", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
+  },
+  {
+    name: "Tags",
+    columns: [
+      { name: "car"      , type: { is: "integer", bytes: 8 } },
+      { name: "tag"      , type: { is: "string", max_bytes: 255 } },
+    ],
+    primary_key: [],
+    indexes: [
+      { columns: [{ name: "car", asc: true }] }
+    ],
+    foreign_keys: [
+      { columns: ["car"], foreign_table: "Car", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
+  }
+];
+
+function do_once(once: any, work: () => Promise<void>) {
+  let promise: Promise<void> = once.promise;
+  if (!promise)
+    promise = once.promise = work();
+  return promise;
+}
+
+async function create_tables(connector: DBConnector.Init) {
+  const maker = connector.maker;
+  for (let table of tables)
+    await connector.admin(maker.admin_create_table(table));
+}
+
+async function drop_tables(connector: DBConnector.Init) {
+  const maker = connector.maker;
+  for (let table of tables.reverse()) {
+    try {
+      await connector.admin(maker.admin_drop_table(table));
+    } catch (e) {
+      console.info(e);
+    }
+  }
 }
 
 const sqlite = { name: "sqlite (npm sqlite3)", tests: createTests(async function sqliteCC(flux) {
     const sqlite3 = require('sqlite3').verbose();
+    const once = {};
     const connector = SqliteDBConnectorFactory(sqlite3, {
       filename: 'test.sqlite',
       trace: trace,
-      init: async (db) => {
-        await db.unsafeRun({ sql: `PRAGMA foreign_keys = ON`, bind: [] });
+      init: async (connector) => {
+        await do_once(once, async () => {
+          await drop_tables(connector);
+          await create_tables(connector);
+        });
+        await connector.unsafeRun({ sql: `PRAGMA foreign_keys = ON`, bind: [] });
       },
-    }, { max: 1 });
-    await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Version` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `People` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` DATETIME, `father` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `mother` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Car` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `model` VARCHAR(255), `owner` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Tags` (`car` INTEGER REFERENCES `Car` (`id`), `tag` VARCHAR(255))', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `Tags`', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `Car`', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `People`', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `Resource`', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `Version`', bind: [] });
+    });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
@@ -123,21 +218,22 @@ tests.push(sqlite);
 
 const mysql = { name: "mysql (npm mysql2)", tests: createTests(async function mysqlCC(flux) {
     const mysql2 = require('mysql2');
+    const once = {};
     const connector = MySQLDBConnectorFactory(mysql2, {
       host: process.env.MYSQL_HOST || process.env.MYSQL_PORT_3306_TCP_ADDR  || 'localhost',
       port: +(process.env.MYSQL_PORT || '3306'),
       user: process.env.MYSQL_USER,
       password: process.env.MYSQL_PASSWORD,
-      database: ""
-    }, { max: 1 });
-    await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
-    await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE `Version` (`id` INTEGER PRIMARY KEY AUTO_INCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE `Resource` (`id` INTEGER PRIMARY KEY AUTO_INCREMENT, `idVersion` INTEGER, `name` VARCHAR(255), FOREIGN KEY (idVersion) REFERENCES Version(id))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE `People` (`id` INTEGER PRIMARY KEY, `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` BIGINT, `father` INTEGER, `mother` INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (father) REFERENCES People(id), FOREIGN KEY (mother) REFERENCES People(id))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE `Car` (`id` INTEGER PRIMARY KEY, `model` VARCHAR(255), `owner` INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (owner) REFERENCES People(id))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE `Tags` (`car` INTEGER , `tag` VARCHAR(255))', bind: [] });
+      database: "",
+      init: async (connector) => {
+        await do_once(once, async () => {
+          await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
+          await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
+          await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
+          await create_tables(connector);
+        });
+      },
+    });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
@@ -155,12 +251,13 @@ const postgres = { name: "postgres (npm pg)", tests: createTests(async function 
     await init.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
     await init.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
     init.close();
-    const connector = PostgresDBConnectorFactory(pg, { host: host, port: port, user: user, password: password, database: "aspects" }, { max: 1 });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" SERIAL PRIMARY KEY, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" SERIAL PRIMARY KEY, "idVersion" INTEGER REFERENCES "Version" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "name" VARCHAR(255))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" BIGINT, "father" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT, "mother" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY REFERENCES "Resource" ("id"), "model" VARCHAR(255), "owner" INTEGER REFERENCES "People" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Tags" ("car" INTEGER REFERENCES "Car" ("id"), "tag" VARCHAR(255))', bind: [] });
+    const once = {};
+    const connector = PostgresDBConnectorFactory(pg, {
+      host: host, port: port, user: user, password: password, database: "aspects",
+      init: async (connector) => {
+        await do_once(once, () => create_tables(connector));
+      },
+    });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
@@ -172,20 +269,21 @@ const mssql = { name: "mssql (npm tedious)", tests: createTests(async function m
     const host = process.env.MSSQL_HOST || 'localhost';
     const port = +(process.env.MSSQL_PORT || '1433');
     const tedious = require('tedious');
+    const once = {};
     const connector = MSSQLDBConnectorFactory(tedious, {
       server: host,
       options: { port: port },
       userName: process.env.MSSQL_USER,
       password: process.env.MSSQL_PASSWORD,
-    }, { max: 1 });
-    await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
-    await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" INTEGER IDENTITY PRIMARY KEY, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" INTEGER IDENTITY PRIMARY KEY, "idVersion" INTEGER, "name" VARCHAR(255), FOREIGN KEY (idVersion) REFERENCES Version(id))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY, "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" BIGINT, "father" INTEGER, "mother" INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (father) REFERENCES People(id), FOREIGN KEY (mother) REFERENCES People(id))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY, "model" VARCHAR(255), "owner" INTEGER, FOREIGN KEY (id) REFERENCES Resource(id), FOREIGN KEY (owner) REFERENCES People(id))', bind: [] });
-    await connector.unsafeRun({ sql: 'CREATE TABLE "Tags" ("car" INTEGER, "tag" VARCHAR(255))', bind: [] });
+      init: async (connector) => {
+        await do_once(once, async () => {
+          await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
+          await connector.unsafeRun({ sql: 'CREATE DATABASE aspects', bind: [] });
+          await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
+          await create_tables(connector);
+        });
+      },
+    });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();
@@ -195,28 +293,21 @@ if (process.env.MSSQL_USER)
 
 const oracle = { name: "oracle (npm oracledb)", tests: createTests(async function oracleCC(flux) {
   const oracledb = require('oracledb');
+  const once = {};
   const connector = OracleDBConnectorFactory(oracledb, {
     connectString: `(DESCRIPTION = (ADDRESS_LIST = (ADDRESS = (PROTOCOL = TCP)
       (HOST = ${process.env.ORACLE_HOST || 'localhost'})
       (PORT = ${process.env.ORACLE_PORT || '1521'})
     ))(CONNECT_DATA = (SERVICE_NAME = XE)))`,
     user: process.env.ORACLE_USER,
-    password: process.env.ORACLE_PASSWORD
-  }, { max: 1 });
-  await connector.unsafeRun({ sql: 'DROP TABLE "People" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-  await connector.unsafeRun({ sql: 'DROP TABLE "Car" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-  await connector.unsafeRun({ sql: 'DROP TABLE "Version" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-  await connector.unsafeRun({ sql: 'DROP TABLE "Resource" CASCADE CONSTRAINTS', bind: [] }).catch(err => { console.info(err); });
-  await connector.unsafeRun({ sql: 'DROP SEQUENCE VersionSeq', bind: [] }).catch(err => { console.info(err); });
-  await connector.unsafeRun({ sql: 'DROP SEQUENCE ResourceSeq', bind: [] }).catch(err => { console.info(err); });
-  await connector.unsafeRun({ sql: 'CREATE TABLE "Version" ("id" INTEGER PRIMARY KEY NOT NULL, "type" VARCHAR(255), "version" INTEGER)', bind: [] });
-  await connector.unsafeRun({ sql: 'CREATE SEQUENCE VersionSeq START WITH 1', bind: [] });
-  await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER VersionAID BEFORE INSERT ON "Version"\nFOR EACH ROW\nBEGIN\nSELECT VersionSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
-  await connector.unsafeRun({ sql: 'CREATE TABLE "Resource" ("id" INTEGER PRIMARY KEY NOT NULL, "idVersion" INTEGER, "name" VARCHAR(255), FOREIGN KEY ("idVersion") REFERENCES "Version"("id"))', bind: [] });
-  await connector.unsafeRun({ sql: 'CREATE SEQUENCE ResourceSeq START WITH 1', bind: [] });
-  await connector.unsafeRun({ sql: 'CREATE OR REPLACE TRIGGER ResourceAID BEFORE INSERT ON "Resource"\nFOR EACH ROW\nBEGIN\nSELECT ResourceSeq.NEXTVAL INTO :new."id" FROM dual;\nEND;', bind: [] });
-  await connector.unsafeRun({ sql: 'CREATE TABLE "People" ("id" INTEGER PRIMARY KEY, "firstname" VARCHAR(255), "lastname" VARCHAR(255), "birthDate" NUMBER(19, 0), FOREIGN KEY ("id") REFERENCES "Resource"("id"))', bind: [] });
-  await connector.unsafeRun({ sql: 'CREATE TABLE "Car" ("id" INTEGER PRIMARY KEY, "model" VARCHAR(255), "owner" INTEGER, FOREIGN KEY ("id") REFERENCES "Resource"("id"), FOREIGN KEY ("owner") REFERENCES "People"("id"))', bind: [] });
+    password: process.env.ORACLE_PASSWORD,
+    init: async (connector) => {
+      await do_once(once, async () => {
+        await drop_tables(connector);
+        await create_tables(connector);
+      });
+    },
+  });
   flux.context.connector = connector;
   flux.setFirstElements([createSqlControlCenter]);
   flux.continue();

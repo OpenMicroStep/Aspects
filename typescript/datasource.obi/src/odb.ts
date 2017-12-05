@@ -1,7 +1,7 @@
 import {Parser, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import {ObiParseContext, ObiDefinition, SysObiDefinition, parseObis, getOne, add_to, del_from} from './index.priv';
 import {DataSourceInternal, Aspect} from '@openmicrostep/aspects';
-import {SqlMaker, DBConnectorTransaction, DBConnector} from '@openmicrostep/aspects.sql';
+import {SqlMaker, DBConnector} from '@openmicrostep/aspects.sql';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
 function mk_obi(id: number | undefined, system_name: string | undefined): ObiDefinition {
@@ -108,7 +108,7 @@ export class OuiDB {
     return { byId: byId, byName: byName, ids: ids };
   }
 
-  async raw_insert(tr: DBConnectorTransaction, table: string, oid: number, cid: number, v)  {
+  async raw_insert(tr: DBConnector.Transaction, table: string, oid: number, cid: number, v)  {
     table = "TJ_VAL_" + table;
     let sql_insert = this.maker.insert(table, [
       "VAL_INST",
@@ -118,7 +118,7 @@ export class OuiDB {
     await tr.insert(sql_insert, []);
   }
 
-  async raw_delete(tr: DBConnectorTransaction, table: string, oid: number, cid: number, v)  {
+  async raw_delete(tr: DBConnector.Transaction, table: string, oid: number, cid: number, v)  {
     table = "TJ_VAL_" + table;
     let sql_delete = this.maker.delete(table, this.maker.and([
       this.maker.op(this.maker.column(table, "VAL_INST"), ConstraintType.Equal, oid),
@@ -130,7 +130,7 @@ export class OuiDB {
     return Promise.resolve();
   }
 
-  async raw_delete_obi(tr: DBConnectorTransaction, reporter: Reporter, oid: number)  {
+  async raw_delete_obi(tr: DBConnector.Transaction, reporter: Reporter, oid: number)  {
     let maker = this.maker;
     let sql_select = maker.select(
       [maker.column("TJ_VAL_ID", "VAL_INST")],
@@ -345,7 +345,7 @@ export class OuiDB {
     await this._loadObis(this.connector, ids, this.systemObiById);
   }
 
-  async loadObis(ids: number[], cache: Map<number, ObiDefinition> = this.systemObiById, db: DBConnectorTransaction | DBConnector = this.connector) {
+  async loadObis(ids: number[], cache: Map<number, ObiDefinition> = this.systemObiById, db: DBConnector.CRUD = this.connector) {
     let ret = new Map<number, ObiDefinition>();
     for (let id of ids) {
       let obi: ObiDefinition = cache.get(id) || mk_obi(id, undefined);
@@ -365,7 +365,7 @@ export class OuiDB {
       throw new Error(`conflict while loading obi ${obi._id}`);
   }
 
-  private async _loadObis(db: DBConnectorTransaction | DBConnector, ids: number[], into: Map<number, ObiDefinition>, unresolved = new Map<number, ObiDefinition>()) {
+  private async _loadObis(db: DBConnector.CRUD, ids: number[], into: Map<number, ObiDefinition>, unresolved = new Map<number, ObiDefinition>()) {
     let unresolved_ids: number[] = [];
     for (let table of this._valTables) {
       let sql_car = this.maker.select([
@@ -409,7 +409,7 @@ export class OuiDB {
       await this._loadObis(db, unresolved_ids, into, unresolved);
   }
 
-  async nextObiId(tr: DBConnectorTransaction) : Promise<number> {
+  async nextObiId(tr: DBConnector.Transaction) : Promise<number> {
     if (this._next_oid_pos >= this._next_oid_end) {
       // reserve a new oid block
       let database = this.systemObiByName.get(this.config.DatabaseSystemName);

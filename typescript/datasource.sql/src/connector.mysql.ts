@@ -1,6 +1,33 @@
 import {DBConnector, SqlBinding, SqlMaker} from './index';
 
 class MySqlMaker extends SqlMaker {
+  admin_create_table_column_type(type: SqlMaker.ColumnType) {
+    switch (type.is) {
+      case 'integer':
+        switch (type.bytes) {
+          case 2: return 'SMALLINT';
+          case 4: return 'INTEGER';
+          case 8: return 'BIGINT';
+        }
+        return 'INTEGER';
+      case 'autoincrement': return type.bytes === 4 ? 'INTEGER AUTO_INCREMENT' : 'BIGINT AUTO_INCREMENT';
+      case 'string': return `VARCHAR(${type.max_bytes})`;
+      case 'text': return `TEXT`;
+      case 'decimal': return `NUMERIC(${type.precision}, ${type.scale})`;
+      case 'binary': return 'BLOB';
+      case 'double': return 'DOUBLE';
+      case 'float': return 'FLOAT';
+      case 'boolean': return 'BOOLEAN';
+    }
+  }
+
+  select_table_list() : SqlBinding {
+    return { sql: `SELECT TABLE_SCHEMA || '.' || TABLE_NAME table_name FROM INFORMATION_SCHEMA.TABLES`, bind: [] };
+  }
+
+  select_index_list() : SqlBinding {
+    return { sql: `SELECT TABLE_SCHEMA || '.' || INDEX_NAME index_name, TABLE_SCHEMA || '.' || TABLE_NAME table_name FROM INFORMATION_SCHEMA.STATISTICS`, bind: [] };
+  }
 }
 MySqlMaker.prototype.select_with_recursive = undefined;
 

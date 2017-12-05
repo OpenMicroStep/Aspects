@@ -3,7 +3,7 @@ import {Reporter} from '@openmicrostep/msbuildsystem.shared';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {OuiDB, ObiQuery, ObiDefinition, getOne, ObiSharedContext} from './index.priv';
-import {DBConnectorTransaction, DBConnectorCRUD } from '@openmicrostep/aspects.sql';
+import {DBConnector } from '@openmicrostep/aspects.sql';
 
 export namespace ObiDataSource {
   export interface Config {
@@ -17,7 +17,7 @@ export namespace ObiDataSource {
 
 function pass(a) { return a; }
 
-export type ObiDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
+export type ObiDataSourceTransaction = { tr: DBConnector.Transaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
 export class ObiDataSource extends DataSource {
   constructor(cc: ControlCenter,
     public db: OuiDB,
@@ -44,7 +44,7 @@ export class ObiDataSource extends DataSource {
 
   config: ObiDataSource.Config;
 
-  _ctx(db: DBConnectorCRUD, ccc: ControlCenterContext) : ObiSharedContext {
+  _ctx(db: DBConnector.CRUD, ccc: ControlCenterContext) : ObiSharedContext {
     return {
       db: db,
       ccc: ccc,
@@ -62,13 +62,13 @@ export class ObiDataSource extends DataSource {
     };
   }
 
-  execute(db: DBConnectorCRUD, set: ObjectSet, ccc: ControlCenterContext): Promise<VersionedObject[]> {
+  execute(db: DBConnector.CRUD, set: ObjectSet, ccc: ControlCenterContext): Promise<VersionedObject[]> {
     let ctx = this._ctx(db, ccc);
     return ObiQuery.execute(ctx, set);
   }
 
-  async save(ccc: ControlCenterContext, tr: DBConnectorTransaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
-    const insert = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
+  async save(ccc: ControlCenterContext, tr: DBConnector.Transaction, reporter: Reporter, objects: Set<VersionedObject>, versions: Map<VersionedObject, { _id: Identifier, _version: number }>, object: VersionedObject) : Promise<void> {
+    const insert = async (tr: DBConnector.Transaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
       if (value instanceof VersionedObject) {
         if (value.manager().isNew()) {
           let v = versions.get(value);
@@ -97,7 +97,7 @@ export class ObiDataSource extends DataSource {
       value = this.config.aspectValue_to_obiValue(value, attribute);
       await this.db.raw_insert(tr, table, oid, cid, value);
     };
-    const remove = async (tr: DBConnectorTransaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
+    const remove = async (tr: DBConnector.Transaction, table: string, oid: number, cid: number, attribute: Aspect.InstalledAttribute, car_info: ObiQuery.CarInfo, value) => {
       if (value instanceof VersionedObject) {
         if (value.manager().isNew()) {
           reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved` });

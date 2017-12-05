@@ -14,6 +14,50 @@ class OracleSqlMaker extends SqlMaker {
       bind: this.join_bindings(sql_values)
     };
   }
+
+  admin_create_table_column_type(type: SqlMaker.ColumnType) {
+    switch (type.is) {
+      case 'integer':
+        switch (type.bytes) {
+          case 2: return 'NUMBER( 5,0)';
+          case 4: return 'NUMBER(10,0)';
+          case 8: return 'NUMBER(19,0)';
+        }
+        return 'NUMBER(10,0)';
+      case 'autoincrement': return type.bytes === 4 ? 'NUMBER(10,0)' : 'NUMBER(19,0)';
+      case 'string': return `NVARCHAR2(${type.max_bytes})`;
+      case 'text': return `NCLOB`;
+      case 'decimal': return `NUMBER(${type.precision}, ${type.scale})`;
+      case 'binary': return 'BLOB';
+      case 'double': return 'BINARY_DOUBLE';
+      case 'float': return 'BINARY_FLOAT';
+      case 'boolean': return 'NUMBER(1)';
+    }
+  }
+
+  admin_create_table(table: SqlMaker.Table) : SqlBinding[] {
+    let ret = super.admin_create_table(table);
+    for (let column of table.columns) {
+      if (column.type.is === "autoincrement") {
+        ret.push({ sql: `CREATE SEQUENCE ${this.quote(`${table.name}_${column.name}_seq`)} START WITH 1`, bind: [] });
+        ret.push({ sql: `CREATE OR REPLACE TRIGGER ${this.quote(`${table.name}_${column.name}_autoincrement`)}
+BEFORE INSERT ON ${this.quote(table.name)}
+FOR EACH ROW
+BEGIN
+  SELECT ${this.quote(`${table.name}_${column.name}_seq`)}.NEXTVAL INTO :new."id" FROM dual;
+END;`, bind: [] });
+      }
+    }
+    return ret;
+  }
+
+  select_table_list() : SqlBinding {
+    return { sql: `SELECT OWNER || "." || TABLE_NAME table_name FROM ALL_TABLES`, bind: [] };
+  }
+
+  select_index_list() : SqlBinding {
+    return { sql: `SELECT OWNER || "." || INDEX_NAME index_name, OWNER || "." || TABLE_NAME table_name FROM ALL_INDEXES`, bind: [] };
+  }
 }
 export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   connectString: string,

@@ -62,13 +62,6 @@ export class SqlMappedAttribute extends Element {
   last(): SqlPath {
     return this.path[this.path.length - 1];
   }
-
-  pathref_uniqid() {
-    let key = "";
-    for (let i = 0, ilast = this.path.length - 1; i <= ilast; i++)
-      key += this.path[i].uniqid(i !== ilast);
-    return key;
-  }
 }
 
 elementFactories.registerSimple('sql-mapped-object', (reporter, name, definition, attrPath, parent: Element) => {
@@ -76,6 +69,7 @@ elementFactories.registerSimple('sql-mapped-object', (reporter, name, definition
 });
 export class SqlMappedObject extends Element {
   inserts: SqlInsert[] = [];
+  delete_cascade: SqlPath[] = [];
   fromDbKey: (value) => any = pass;
   toDbKey: (value) => any = pass;
   attributes: SqlMappedAttribute[] = [];

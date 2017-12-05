@@ -2,24 +2,27 @@ import {DataSourceInternal, Pool} from '@openmicrostep/aspects';
 import { SqlMaker, SqlBinding} from './index';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
-export interface DBConnectorCRUD {
-  select(sql_select: SqlBinding) : Promise<object[]>;
-  insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
-  update(sql_update: SqlBinding) : Promise<number>;
-  delete(sql_update: SqlBinding) : Promise<number>;
-}
-export interface DBConnector extends DBConnectorCRUD {
-  maker: SqlMaker;
-  transaction(): Promise<DBConnectorTransaction>;
-  unsafeRun(sql: SqlBinding) : Promise<void>;
+export interface DBConnector extends DBConnector.Init {
+  transaction(): Promise<DBConnector.Transaction>;
   close(): void;
 }
-export interface DBConnectorTransaction extends DBConnectorCRUD {
-  commit() : Promise<void>;
-  rollback() : Promise<void>;
-}
-
 export namespace DBConnector {
+  export interface CRUD {
+    select(sql_select: SqlBinding) : Promise<object[]>;
+    insert(sql_insert: SqlBinding, output_columns: string[]) : Promise<any[]>;
+    update(sql_update: SqlBinding) : Promise<number>;
+    delete(sql_update: SqlBinding) : Promise<number>;
+  }
+  export interface Init extends CRUD {
+    maker: SqlMaker;
+    unsafeRun(sql: SqlBinding) : Promise<void>;
+    admin(sql: SqlBinding[]) : Promise<void>;
+  }
+  export interface Transaction extends CRUD {
+    commit() : Promise<void>;
+    rollback() : Promise<void>;
+  }
+
   export interface Definition<LIB, OPTIONS, DB> {
     maker: SqlMaker,
     create(lib: LIB, options: OPTIONS): Promise<DB>,
@@ -40,7 +43,7 @@ export namespace DBConnector {
     return { sql: sql.sql.replace(/\?/g, () => replacer(idx++)), bind: sql.bind };
   }
   export function createSimple<LIB, OPTIONS, DB>(definition: Definition<LIB, OPTIONS, DB>) {
-    class GenericConnectorTransaction implements DBConnectorTransaction {
+    class GenericConnectorTransaction implements Transaction {
       lib: LIB;
       db: DB | undefined;
       pool: Pool<DB> | undefined;
@@ -73,24 +76,48 @@ export namespace DBConnector {
       constructor(private lib: LIB, private pool: Pool<DB>, private _t: (sql: SqlBinding) => SqlBinding) {}
       maker = definition.maker;
 
-      async transaction(): Promise<DBConnectorTransaction> {
+      async transaction(): Promise<Transaction> {
         let db = await this.pool.acquire();
         this._t({ sql: "BEGIN TRANSACTION", bind: [] });
         await definition.beginTransaction(this.lib, db);
         return new GenericConnectorTransaction(this.lib, db, this.pool, this._t);
       }
-      unsafeRun(sql: SqlBinding) : Promise<void>         { return this.pool.scoped(db => definition.run(this.lib, db, definition.transform(this._t(sql))));           }
-      select(sql_select: SqlBinding) : Promise<object[]> { return this.pool.scoped(db => definition.select(this.lib, db, definition.transform(this._t(sql_select)))); }
-      insert(sql_insert: SqlBinding, out: string[])      { return this.pool.scoped(db => definition.insert(this.lib, db, definition.transform(this._t(sql_insert)), out)); }
-      update(sql_update: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.update(this.lib, db, definition.transform(this._t(sql_update)))); }
-      delete(sql_delete: SqlBinding) : Promise<number>   { return this.pool.scoped(db => definition.delete(this.lib, db, definition.transform(this._t(sql_delete)))); }
+      async scoped<P>(task: (db: DB) => Promise<P>) : Promise<P> {
+        return this.pool.scoped(task);
+      }
+      admin(sql_admins: SqlBinding[]) : Promise<void>    { return this.scoped(async db => {
+        for (let sql of sql_admins) {
+          await definition.run(this.lib, db, definition.transform(this._t(sql)))
+        }
+      }) }
+      unsafeRun(sql: SqlBinding) : Promise<void>         { return this.scoped(db => definition.run   (this.lib, db, definition.transform(this._t(sql))));           }
+      select(sql_select: SqlBinding) : Promise<object[]> { return this.scoped(db => definition.select(this.lib, db, definition.transform(this._t(sql_select)))); }
+      insert(sql_insert: SqlBinding, out: string[])      { return this.scoped(db => definition.insert(this.lib, db, definition.transform(this._t(sql_insert)), out)); }
+      update(sql_update: SqlBinding) : Promise<number>   { return this.scoped(db => definition.update(this.lib, db, definition.transform(this._t(sql_update)))); }
+      delete(sql_delete: SqlBinding) : Promise<number>   { return this.scoped(db => definition.delete(this.lib, db, definition.transform(this._t(sql_delete)))); }
 
       close() {
         this.pool.close();
       }
     }
 
-    return function createPool(lib: LIB, options: OPTIONS & { trace?: (sql: SqlBinding)=> void, init?: (db: { unsafeRun(sql: SqlBinding) : Promise<void> }) => Promise<void> }, config?: Partial<Pool.Config>) : DBConnector {
+    class InitConnector implements Init {
+      constructor(private lib: LIB, private db: DB, private _t: (sql: SqlBinding) => SqlBinding) {}
+      maker = definition.maker;
+
+      async admin(sql_admins: SqlBinding[]) : Promise<void> {
+        for (let sql of sql_admins) {
+          await definition.run(this.lib, this.db, definition.transform(this._t(sql)))
+        }
+      }
+      unsafeRun(sql: SqlBinding) : Promise<void>         { return definition.run(this.lib, this.db, definition.transform(this._t(sql)));           }
+      select(sql_select: SqlBinding) : Promise<object[]> { return definition.select(this.lib, this.db, definition.transform(this._t(sql_select))); }
+      insert(sql_insert: SqlBinding, out: string[])      { return definition.insert(this.lib, this.db, definition.transform(this._t(sql_insert)), out); }
+      update(sql_update: SqlBinding) : Promise<number>   { return definition.update(this.lib, this.db, definition.transform(this._t(sql_update))); }
+      delete(sql_delete: SqlBinding) : Promise<number>   { return definition.delete(this.lib, this.db, definition.transform(this._t(sql_delete))); }
+    }
+
+    return function createPool(lib: LIB, options: OPTIONS & { trace?: (sql: SqlBinding)=> void, init?: (connector: Init) => Promise<void> }, config?: Partial<Pool.Config>) : DBConnector {
       function trace(sql: SqlBinding) {
         if (options.trace)
           options.trace(sql);
@@ -101,9 +128,7 @@ export namespace DBConnector {
           let db = await definition.create(lib, options);
           if (options.init) {
             try {
-              await options.init({
-                unsafeRun(sql: SqlBinding) : Promise<void> { return definition.run(lib, db, definition.transform(trace(sql))); }
-              });
+              await options.init(new InitConnector(lib, db, trace));
             }
             catch (e) {
               await definition.destroy(lib, db);

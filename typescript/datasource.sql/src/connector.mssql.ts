@@ -16,6 +16,38 @@ class MSSQLMaker extends SqlMaker {
       bind: this.join_bindings(sql_values)
     };
   }
+
+  admin_create_table_column_type(type: SqlMaker.ColumnType) {
+    switch (type.is) {
+      case 'integer':
+        switch (type.bytes) {
+          case 2: return 'SMALLINT';
+          case 4: return 'INTEGER';
+          case 8: return 'BIGINT';
+        }
+        return 'INTEGER';
+      case 'autoincrement': return type.bytes === 4 ? 'INTEGER AUTO_INCREMENT' : 'BIGINT AUTO_INCREMENT';
+      case 'string': return `NVARCHAR(${type.max_bytes})`;
+      case 'text': return `NVARCHAR(${type.max_bytes})`;
+      case 'decimal': return `NUMERIC(${type.precision}, ${type.scale})`;
+      case 'binary': return `VARBINARY(${type.max_bytes})`;
+      case 'double': return 'REAL';
+      case 'float': return 'FLOAT';
+      case 'boolean': return 'BIT';
+    }
+  }
+
+  select_table_list() : SqlBinding {
+    return { sql: `SELECT TABLE_SCHEMA || '.' || TABLE_NAME table_name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_TYPE='BASE TABLE'`, bind: [] };
+  }
+
+  select_index_list() : SqlBinding {
+    return { sql: `SELECT sc.name || '.' || i.name index_name, sc.name || '.' || o.name table_name
+FROM sys.indexes i
+INNER JOIN sys.objects o ON i.object_id = o.object_id
+INNER JOIN sys.schemas sc ON o.schema_id = sc.schema_id
+WHERE i.name IS NOT NULL AND o.type = 'U'`, bind: [] };
+  }
 }
 MSSQLMaker.prototype.select_with_recursive = undefined; // TODO: CTE must be top level (current usage embed it inside a subquery)
 

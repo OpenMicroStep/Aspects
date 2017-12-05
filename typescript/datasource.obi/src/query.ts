@@ -1,7 +1,7 @@
 import {Aspect, VersionedObject, VersionedObjectSnapshot, Identifier, DataSourceInternal, ControlCenterContext} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
-import {SqlBinding, SqlQuery, SqlQuerySharedContext, DBConnectorCRUD} from '@openmicrostep/aspects.sql';
+import {SqlBinding, SqlQuery, SqlQuerySharedContext, DBConnector} from '@openmicrostep/aspects.sql';
 import {ObiDefinition, SysObiDefinition, getOne, ObiDataSource} from './index.priv';
 import ConstraintValue = DataSourceInternal.ConstraintValue;
 import scope_at_type_path = DataSourceInternal.ResolvedScope.scope_at_type_path;
@@ -14,7 +14,7 @@ export function mapValue(def: ObiDefinition, ctx: ObiSharedContext, value, isId:
 }
 
 export interface ObiSharedContext extends SqlQuerySharedContext<ObiSharedContext, ObiQuery> {
-  db: DBConnectorCRUD;
+  db: DBConnector.CRUD;
   config: ObiDataSource.Config;
   systemObiByName: Map<string, SysObiDefinition>;
   systemObiById: Map<number, SysObiDefinition>;

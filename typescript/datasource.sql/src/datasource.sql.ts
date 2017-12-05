@@ -5,9 +5,9 @@ import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlMappedObject, SqlMappedAttribute} from './mapper';
 export * from './mapper';
 import {SqlQuery, SqlMappedQuery, SqlMappedSharedContext, mapValue} from './query';
-import {SqlMaker, DBConnectorTransaction, SqlBinding, SqlPath, SqlInsert, DBConnector, DBConnectorCRUD} from './index';
+import {SqlMaker, SqlBinding, SqlPath, SqlInsert, DBConnector} from './index';
 
-export type SqlDataSourceTransaction = { tr: DBConnectorTransaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
+export type SqlDataSourceTransaction = { tr: DBConnector.Transaction, versions: Map<VersionedObject, { _id: Identifier, _version: number }> };
 export class SqlDataSource extends DataSource {
   constructor(cc: ControlCenter,
     public mappers: { [s: string]: SqlMappedObject },
@@ -49,29 +49,31 @@ export class SqlDataSource extends DataSource {
 
     //////////////////////////////////////////
     //
-    let requestsForAttribute = (attribute: SqlMappedAttribute) => {
-      let iddb = attribute.toDbKey(db_key);
-      let key = attribute.pathref_uniqid();
+    let requestsForPath = (path: SqlPath[], iddb) => {
+      let key = "";
+      for (let i = 0, ilast = path.length - 1; i <= ilast; i++)
+        key += path[i].uniqid(i !== ilast);
       let ret = requestsByPath.get(key);
-      let last = attribute.last();
+      let i_last = path.length - 1;
+      let last = path[i_last];
       if (!ret) {
         requestsByPath.set(key, ret = { table: last.table, delete: [], update_sets: [], update_checks: [], where: { sql: "", bind: [] } });
-        if (attribute.path.length > 1) {
+        if (path.length > 1) {
           let p: SqlPath;
-          let l: SqlPath = attribute.path[0];
-          let i = 1, len = attribute.path.length - 1;
+          let l: SqlPath = path[0];
+          let i = 1;
           let from = this.maker.from(l.table, `U0`);
           let joins: SqlBinding[] = [];
           let where = this.maker.op(this.maker.column(`U0`, l.key), ConstraintType.Equal, iddb);
-          for (; i < len; i++) {
-            p = attribute.path[i];
+          for (; i < i_last; i++) {
+            p = path[i];
             joins.push(this.maker.join('inner',
               p.table, `U${i}`,
               this.maker.compare(this.maker.column(`U${i - 1}`, l.value), ConstraintType.Equal, this.maker.column(`U${i}`, p.key))
             ));
             l = p;
           }
-          let select = this.maker.sub(this.maker.select([this.maker.column(`U0`, l.value)], from, joins, where));
+          let select = this.maker.sub(this.maker.select([this.maker.column(`U${i_last - 1}`, l.value)], from, joins, where));
           ret.where = this.maker.compare_bind({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
         }
         else {
@@ -117,7 +119,7 @@ export class SqlDataSource extends DataSource {
         }
       }
       else { // update syntax
-        let requests = requestsForAttribute(mapped_attribute);
+        let requests = requestsForPath(mapped_attribute.path, mapped_attribute.toDbKey(db_key));
         if (is_single_value) {
           requests.update_sets.push(this.maker.set(last.value, map_value(mapped_attribute, modified)));
           if (!isNew) // TODO: check this if
@@ -198,7 +200,7 @@ export class SqlDataSource extends DataSource {
 
     if (manager.isPendingDeletion()) {
       // sql database requires foreign key and cascade constraints
-      let requests = requestsForAttribute(idAttr);
+      let requests = requestsForPath(mapper.delete_cascade, idAttr.toDbKey(db_key));
       let sql_delete = this.maker.delete(requests.table, requests.where);
       let changes = await tr.tr.delete(sql_delete);
       if (changes <= 0)
@@ -268,7 +270,7 @@ export class SqlDataSource extends DataSource {
     }
   }
 
-  execute(db: DBConnectorCRUD, set: ObjectSet, ccc: ControlCenterContext): Promise<VersionedObject[]> {
+  execute(db: DBConnector.CRUD, set: ObjectSet, ccc: ControlCenterContext): Promise<VersionedObject[]> {
     let ctx: SqlMappedSharedContext = {
       cstor: SqlMappedQuery,
       db: db,
