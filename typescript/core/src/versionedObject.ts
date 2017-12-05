@@ -209,7 +209,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return data.saved;
     if (this.isNew())
       return this._missingValue(attribute);
-    throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
+    throw new Error(`attribute '${this.classname()}.${attribute.name}' is not loaded`);
   }
 
   savedAttributeValue(attribute_name: string) : any;
@@ -224,7 +224,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       return data.saved;
     if (this.isNew())
       return this._missingValue(attribute);
-    throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
+    throw new Error(`attribute '${this.classname()}.${attribute.name}' is not loaded`);
   }
 
   outdatedAttributeValue(attribute_name: string) : any;
@@ -618,7 +618,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let isSaved = (data.flags & SAVED) === SAVED;
     let isModified = (data.flags & MODIFIED_DIRECT) > 0;
     if (!isSaved && !this.isNew())
-      throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
+      throw new Error(`attribute '${this.classname()}.${attribute.name}' is not loaded`);
     if (isSaved && areEquals(data.saved, value)) {
       if ((data.flags & MODIFIED_DIRECT)) {
         oldValue = data.modified;
