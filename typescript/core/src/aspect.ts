@@ -26,7 +26,7 @@ function *traverseValueOrdered_set<T>(v: T[]) : IterableIterator<[number, T]> {
       yield [ANY_POSITION, n];
 }
 function *traverseValueOrdered_single<T>(v: T) : IterableIterator<[number, T]> {
-  if (v)
+  if (v !== undefined)
     yield [0, v];
 }
 function *traverseValue_array<T>(v: T[]) : IterableIterator<T> {
@@ -39,7 +39,7 @@ function *traverseValue_set<T>(v: T[]) : IterableIterator<T> {
       yield n;
 }
 function *traverseValue_single<T>(v: T) : IterableIterator<T> {
-  if (v)
+  if (v !== undefined)
     yield v;
 }
 
@@ -67,8 +67,8 @@ function *diffValue_set<T>(newV: any, oldV: any) : IterableIterator<[number, T]>
 }
 function *diffValue_single<T>(newV: any, oldV: any) : IterableIterator<[number, T]> {
   if (oldV !== newV) {
-    if (oldV) yield [NO_POSITION, oldV];
-    if (newV) yield [0, newV];
+    if (oldV !== undefined) yield [NO_POSITION, oldV];
+    if (newV !== undefined) yield [0, newV];
   }
 }
 
