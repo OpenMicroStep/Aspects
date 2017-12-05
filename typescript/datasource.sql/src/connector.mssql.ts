@@ -17,6 +17,10 @@ class MSSQLMaker extends SqlMaker {
     };
   }
 
+  admin_create_table_foreign_key_on(on: "set null" | "restrict" | "cascade"): string {
+    return on === "restrict" ? "NO ACTION" : on.toUpperCase();
+  }
+
   admin_create_table_column_type(type: SqlMaker.ColumnType) {
     switch (type.is) {
       case 'integer':
@@ -26,7 +30,7 @@ class MSSQLMaker extends SqlMaker {
           case 8: return 'BIGINT';
         }
         return 'INTEGER';
-      case 'autoincrement': return type.bytes === 4 ? 'INTEGER AUTO_INCREMENT' : 'BIGINT AUTO_INCREMENT';
+      case 'autoincrement': return type.bytes === 4 ? 'INTEGER IDENTITY(1,1)' : 'BIGINT IDENTITY(1,1)';
       case 'string': return `NVARCHAR(${type.max_bytes})`;
       case 'text': return `NVARCHAR(${type.max_bytes})`;
       case 'decimal': return `NUMERIC(${type.precision}, ${type.scale})`;

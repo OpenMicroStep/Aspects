@@ -295,11 +295,15 @@ export abstract class SqlMaker {
     for (let foreign_key of table.foreign_keys || []) {
       let s = `FOREIGN KEY (${foreign_key.columns.map(column => this.quote(column)).join(', ')}) `;
       s += `REFERENCES ${this.quote(foreign_key.foreign_table)} (${foreign_key.foreign_columns.map(column => this.quote(column)).join(', ')})`;
-      s += `\n    ON UPDATE ${foreign_key.on_update.toUpperCase()}`;
-      s += `\n    ON DELETE ${foreign_key.on_delete.toUpperCase()}`;
+      s += `\n    ON UPDATE ${this.admin_create_table_foreign_key_on(foreign_key.on_update)}`;
+      s += `\n    ON DELETE ${this.admin_create_table_foreign_key_on(foreign_key.on_delete)}`;
       defs.push(s);
     }
     return defs.join(',\n  ');
+  }
+
+  protected admin_create_table_foreign_key_on(on: "set null" | "restrict" | "cascade"): string {
+    return on.toUpperCase();
   }
 
   protected admin_create_table_unique_indexes(table: SqlMaker.Table): string {
@@ -376,8 +380,8 @@ export namespace SqlMaker {
     columns: string[],
     foreign_table: string,
     foreign_columns: string[],
-    on_delete: "set null" | "restrict" | "cascade" | "no action",
-    on_update: "set null" | "restrict" | "cascade" | "no action",
+    on_delete: "set null" | "restrict" | "cascade",
+    on_update: "set null" | "restrict" | "cascade",
   };
 }
 

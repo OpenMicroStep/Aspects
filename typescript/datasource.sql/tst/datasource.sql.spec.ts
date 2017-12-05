@@ -139,8 +139,8 @@ const tables: SqlMaker.Table[] = [
     primary_key: ["id"],
     foreign_keys: [
       { columns: ["id"], foreign_table: "Resource", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-      { columns: ["father"], foreign_table: "People", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-      { columns: ["mother"], foreign_table: "People", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["father"], foreign_table: "People", foreign_columns: ["id"], on_delete: "restrict", on_update: "restrict" },
+      { columns: ["mother"], foreign_table: "People", foreign_columns: ["id"], on_delete: "restrict", on_update: "restrict" },
     ],
   },
   {
@@ -153,7 +153,7 @@ const tables: SqlMaker.Table[] = [
     primary_key: ["id"],
     foreign_keys: [
       { columns: ["id"], foreign_table: "Resource", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-      { columns: ["owner"], foreign_table: "People", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["owner"], foreign_table: "People", foreign_columns: ["id"], on_delete: "restrict", on_update: "restrict" },
     ],
   },
   {
@@ -181,8 +181,13 @@ function do_once(once: any, work: () => Promise<void>) {
 
 async function create_tables(connector: DBConnector.Init) {
   const maker = connector.maker;
-  for (let table of tables)
-    await connector.admin(maker.admin_create_table(table));
+  for (let table of tables) {
+    try {
+      await connector.admin(maker.admin_create_table(table));
+    } catch (e) {
+      console.info(e);
+    }
+  }
 }
 
 async function drop_tables(connector: DBConnector.Init) {
@@ -224,6 +229,7 @@ const mysql = { name: "mysql (npm mysql2)", tests: createTests(async function my
       port: +(process.env.MYSQL_PORT || '3306'),
       user: process.env.MYSQL_USER,
       password: process.env.MYSQL_PASSWORD,
+      trace: trace,
       database: "",
       init: async (connector) => {
         await do_once(once, async () => {
@@ -232,6 +238,7 @@ const mysql = { name: "mysql (npm mysql2)", tests: createTests(async function my
           await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
           await create_tables(connector);
         });
+        await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
       },
     });
     flux.context.connector = connector;
@@ -254,6 +261,7 @@ const postgres = { name: "postgres (npm pg)", tests: createTests(async function 
     const once = {};
     const connector = PostgresDBConnectorFactory(pg, {
       host: host, port: port, user: user, password: password, database: "aspects",
+      trace: trace,
       init: async (connector) => {
         await do_once(once, () => create_tables(connector));
       },
@@ -275,6 +283,7 @@ const mssql = { name: "mssql (npm tedious)", tests: createTests(async function m
       options: { port: port },
       userName: process.env.MSSQL_USER,
       password: process.env.MSSQL_PASSWORD,
+      trace: trace,
       init: async (connector) => {
         await do_once(once, async () => {
           await connector.unsafeRun({ sql: 'DROP DATABASE IF EXISTS aspects', bind: [] });
@@ -282,6 +291,7 @@ const mssql = { name: "mssql (npm tedious)", tests: createTests(async function m
           await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
           await create_tables(connector);
         });
+        await connector.unsafeRun({ sql: 'USE aspects', bind: [] });
       },
     });
     flux.context.connector = connector;
@@ -301,6 +311,7 @@ const oracle = { name: "oracle (npm oracledb)", tests: createTests(async functio
     ))(CONNECT_DATA = (SERVICE_NAME = XE)))`,
     user: process.env.ORACLE_USER,
     password: process.env.ORACLE_PASSWORD,
+    trace: trace,
     init: async (connector) => {
       await do_once(once, async () => {
         await drop_tables(connector);
