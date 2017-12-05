@@ -1,5 +1,5 @@
 import {
-  ControlCenterContext,
+  ControlCenterContext, Aspect,
   Identifier, VersionedObject, VersionedObjectManager, VersionedObjectSnapshot,
   DataSource, Result
 } from './core';
@@ -123,7 +123,9 @@ export class VersionedObjectCoder {
               if (VersionedObjectManager.isLocalId(id))
                 throw new Error(`reference to an unknown locally defined object ${value.v}`);
               vo = ccc.create(name);
-              vo.manager().setId(id);
+              let snapshot = new VersionedObjectSnapshot(vo.manager().aspect(), id);
+              snapshot.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.UndefinedVersion);
+              vo.manager().mergeSavedAttributes(snapshot);
             }
             return vo;
           }

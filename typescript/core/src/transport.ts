@@ -1,4 +1,4 @@
-import {ControlCenterContext, Identifier, VersionedObject, VersionedObjectManager} from './core';
+import {ControlCenterContext, Identifier, VersionedObject, VersionedObjectManager, VersionedObjectSnapshot, Aspect} from './core';
 
 export namespace Transport {
 
@@ -89,7 +89,9 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[] = [
       let vo = d.ccc.find(id);
       if (!vo) {
         vo = d.ccc.create(s.is);
-        vo.manager().setId(s.id);
+        let snapshot = new VersionedObjectSnapshot(vo.manager().aspect(), s.id);
+        snapshot.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.UndefinedVersion);
+        vo.manager().mergeSavedAttributes(snapshot);
         if (d.ccAllowed)
           d.ccAllowed.add(vo);
       }

@@ -102,7 +102,7 @@ export class VersionedObjectSnapshot {
 
 export class VersionedObjectManager<T extends VersionedObject = VersionedObject> {
   static DeletedVersion = Number.MAX_SAFE_INTEGER;
-  static UndefinedVersion = -2;
+  static UndefinedVersion = Number.MAX_SAFE_INTEGER - 1;
   static NoVersion = -1;
   static SafeMode = true;
   static LocalIdCounter = 0;
