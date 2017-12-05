@@ -6,32 +6,50 @@ import {
 import { Flux } from '@openmicrostep/async';
 import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsystem.shared';
 
-// 16bits for modified, 2bits for flags, 14bits for outdated
-const SAVED = 0x00010000;
+/*
+{
+  modified_sub_count: 15 // [0, 32768[
+  is_modified: 1
+  is_saved: 1
+  is_pending_deletion: 1
+  is_outdated: 1
+  outdated_sub_count: 13 // [0, 8192[
+}
+ */
+const SAVED            = 0x00010000;
 const PENDING_DELETION = 0x00020000;
-const FLAGS_MASK = 0x00030000;
-const HAS_VALUE = 0x0003FFFF;
+const FLAGS_MASK       = 0x00030000;
+const MODIFIED_DIRECT  = 0x00008000;
+const OUTDATED_DIRECT  = 0x00040000;
+const HAS_VALUE        = 0x0003FFFF;
+const MODIFIED_MASK    = 0x0000FFFF;
+const OUTDATED_MASK    = 0xFFFC0000;
 
-function _modified_get(flags: number): number {
-  return flags & 0x0000FFFF; // 16bits
+function _set_delta(flags: number, delta: number, flag: number) {
+  if (delta > 0)
+    return flags | flag;
+  if (delta < 0)
+    return flags & ~flag;
+  return flags;
 }
-function _outdated_get(flags: number): number {
-  return flags >>> 18; // 14bits
+function _modified_sub_count(flags: number): number {
+  return flags & 0x00007FFF;
 }
-function _modified_set(flags: number, count: number) {
-  // assert 0 <= count < 32768;
-  return (flags & 0xFFFF0000) | count;
+function _modified_sub_delta(flags: number, delta: number) {
+  return flags + delta;
 }
-function _outdated_set(flags: number, count: number) {
-  // assert 0 <= count < 32768
-  return (flags & 0x0003FFFF) | (count << 18);
+function _outdated_sub_count(flags: number): number {
+  return flags >> 19;
+}
+function _outdated_sub_delta(flags: number, count: number) {
+  return (flags & 0x0007FFFF) + (count << 19);
 }
 
 const NO_POSITION = -1;
 const ANY_POSITION = 0;
 
 export type InternalAttributeData = {
-  flags   : number, // 16bits for modified, 2bits for flags, 14bits for outdated
+  flags   : number,
   modified: any,
   saved   : any,
   outdated: any,
@@ -47,7 +65,6 @@ type ParentObject = {
   attribute: Aspect.InstalledAttribute,
   saved_position: number, // -1/0 for set, -1/idx for array
   modified_position: number, // -1/0 for set, -1/idx for array
-  outdated_position: number, // -1/0 for set, -1/idx for array
 }
 
 export class VersionedObjectSnapshot {
@@ -99,7 +116,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   /** @internal */ _parent: ParentObject | undefined;
   /** @internal */ _components: Set<object>;
 
-  /** @internal */ _flags: number; // 16bits for modified, 2bits for flags, 14bits for outdated
+  /** @internal */ _flags: number;
   /** @internal */ _attribute_data: InternalAttributeData[];
 
   constructor(controlCenter: ControlCenter, object: T) {
@@ -154,8 +171,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   // State
   isSaved()      { return (this._flags & SAVED) > 0; }
   isNew()        { return (this._flags & FLAGS_MASK) === 0; }
-  isModified()   { return _modified_get(this._flags) > 0; }
-  isInConflict() { return _outdated_get(this._flags) > 0; }
+  isModified()   { return (this._flags & MODIFIED_MASK) > 0; }
+  isInConflict() { return (this._flags & OUTDATED_MASK) > 0; }
   isPendingDeletion() { return (this._flags & PENDING_DELETION) > 0; }
   isDeleted() { return this.version() === VersionedObjectManager.DeletedVersion; }
 
@@ -164,8 +181,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   isAttributeInConflict(attribute_name: string) { return this.isAttributeInConflictFast(this._aspect.checkedAttribute(attribute_name)); }
 
   isAttributeSavedFast(attribute: Aspect.InstalledAttribute)      { return (this._attribute_data[attribute.index].flags & SAVED) > 0; }
-  isAttributeModifiedFast(attribute: Aspect.InstalledAttribute)   { return _modified_get(this._attribute_data[attribute.index].flags) > 0; }
-  isAttributeInConflictFast(attribute: Aspect.InstalledAttribute) { return _outdated_get(this._attribute_data[attribute.index].flags) > 0; }
+  isAttributeModifiedFast(attribute: Aspect.InstalledAttribute)   { return (this._attribute_data[attribute.index].flags & MODIFIED_MASK) > 0; }
+  isAttributeInConflictFast(attribute: Aspect.InstalledAttribute) { return (this._attribute_data[attribute.index].flags & OUTDATED_MASK) > 0; }
 
   hasAttributeValue(attribute_name: string ): boolean;
   hasAttributeValue(attribute_name: VersionedObjectManager.AttributeNames<T>): boolean;
@@ -186,7 +203,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   attributeValueFast(attribute: Aspect.InstalledAttribute): any {
     let data = this._attribute_data[attribute.index];
-    if (_modified_get(data.flags))
+    if (data.flags & MODIFIED_MASK)
       return data.modified;
     if (data.flags & SAVED)
       return data.saved;
@@ -218,7 +235,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   outdatedAttributeValueFast(attribute: Aspect.InstalledAttribute) : any {
     let data = this._attribute_data[attribute.index];
-    if (_outdated_get(data.flags))
+    if (data.flags & OUTDATED_MASK)
       return data.outdated;
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is not in conflict`);
   }
@@ -231,7 +248,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   *modifiedAttributes() {
     for (let idx = 2; idx <  this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
-      if (_modified_get(data.flags))
+      if (data.flags & MODIFIED_MASK)
         yield { attribute: this._aspect.attributes_by_index[idx], modified: data.modified };
     }
   }
@@ -239,7 +256,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   *outdatedAttributes() {
     for (let idx = 2; idx < this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
-      if (_outdated_get(data.flags)) {
+      if (data.flags & OUTDATED_MASK) {
         yield { attribute: this._aspect.attributes_by_index[idx], outdated: data.outdated };
       }
     }
@@ -274,13 +291,14 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   resolveOutdatedAttributeFast(attribute: Aspect.InstalledAttribute) {
     let data = this._attribute_data[attribute.index];
-    if (_outdated_get(data.flags)) {
+    if (data.flags & OUTDATED_MASK) {
       if (attribute.is_sub_object) {
         for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
           sub_object.manager().resolveAllOutdatedAttributes();
         }
       }
-      this._apply_attribute_outdated_delta(data, -1);
+      if (data.flags & OUTDATED_DIRECT)
+        this._apply_attribute_outdated_delta(data, -1, 0, false, undefined);
     }
   }
 
@@ -373,7 +391,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       if (this.isModified() || is_new) {
         for (let idx = 2; idx <  this._attribute_data.length; idx++) {
           let data = this._attribute_data[idx];
-          if (_modified_get(data.flags)) {
+          if (data.flags & MODIFIED_MASK) {
             let attribute = this._aspect.attributes_by_index[idx];
             this._setAttributeSavedValue(attribute, data, data.modified);
           }
@@ -436,14 +454,12 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
           let data_saved_same = data_is_saved && areEquals(data.saved, merge_value);
           if (!data_saved_same) {
-            if (data_is_saved && _modified_get(data.flags) && !areEquals(data.modified, merge_value) && !_outdated_get(data.flags)) {
+            if (data_is_saved && (data.flags & MODIFIED_DIRECT) && !areEquals(data.modified, merge_value) && !(data.flags & OUTDATED_DIRECT)) {
               ret.conflicts.push(attribute.name);
-              this._apply_attribute_outdated_delta(data, +1);
-              data.outdated = data.saved;
+              this._apply_attribute_outdated_delta(data, +1, 0, true, data.saved);
             }
-            else if (_outdated_get(data.flags) && areEquals(data.outdated, merge_value) && !areEquals(data.saved, data.outdated)) {
-              if (this._apply_attribute_outdated_delta(data, -1) === 0)
-                data.outdated = undefined;
+            else if ((data.flags & OUTDATED_DIRECT) && areEquals(data.outdated, merge_value)) {
+              this._apply_attribute_outdated_delta(data, -1, 0, false, undefined);
             }
             ret.changes.push(attribute.name);
             this._setAttributeSavedValue(attribute, data, merge_value);
@@ -468,47 +484,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return ret;
   }
 
-  private _setDeleted() {
-    for (let idx = 2; idx < this._attribute_data.length; idx++) {
-      let attribute = this._aspect.attributes_by_index[idx];
-      let data = this._attribute_data[idx];
-      if (attribute.is_sub_object) {
-        if (data.flags & SAVED) {
-          for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
-            sub_object.manager()._parent!.saved_position = NO_POSITION;
-          }
-        }
-        if (_modified_get(data.flags)) {
-          if (_outdated_get(data.flags)) {
-            for (let sub_object of attribute.traverseValue<VersionedObject>(data.outdated)) {
-              sub_object.manager()._parent!.outdated_position = NO_POSITION;
-            }
-          }
-          for (let sub_object of attribute.traverseValue<VersionedObject>(data.modified)) {
-            let pdata = sub_object.manager()._parent!;
-            pdata.outdated_position = pdata.modified_position;
-            pdata.modified_position = NO_POSITION;
-          }
-        }
-      }
-      if (_modified_get(data.flags)) {
-        if (!_outdated_get(data.flags))
-          this._apply_attribute_outdated_delta(data, +1);
-        data.outdated = data.modified;
-      }
-      this._apply_attribute_modified_delta(data, -_modified_get(data.flags));
-      data.flags &= ~ FLAGS_MASK;
-      data.modified = undefined;
-      data.saved = undefined;
-    }
-    this._flags &= ~PENDING_DELETION;
-  }
-
   private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, merge_value: any) {
-    let delta = -_modified_get(data.flags);
+    let delta = -_modified_sub_count(data.flags);
     if (delta) {
-      if (!areEquals(data.modified, merge_value))
-        delta++;
       if (attribute.is_sub_object) {
         // clear saved positions
         for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
@@ -530,10 +508,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           pdata.modified_position = position;
         }
       }
-      if (this._apply_attribute_modified_delta(data, delta) === 0)
-        data.modified = undefined;
     }
-
+    this._apply_attribute_modified_delta(data, areEquals(data.modified, merge_value) ? -1 : 0, delta, false, undefined);
     data.saved = merge_value;
     data.flags |= SAVED;
   }
@@ -542,45 +518,60 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   filter_anonymize(attribute_name: string, value: any)  : void;
   filter_anonymize<K extends keyof T>(attribute_name: K, value: T[K]) : void;
   filter_anonymize<K extends keyof T>(attribute_name: K, value: T[K]) {
-    let data = this._attribute_data[this._aspect.checkedAttribute(attribute_name).index];
-    if (_modified_get(data.flags))
+    let attribute = this._aspect.checkedAttribute(attribute_name);
+    let data = this._attribute_data[attribute.index];
+    if (this.isAttributeModifiedFast(attribute))
       data.modified = value;
-    if (data.flags & SAVED)
+    if (this.isAttributeSavedFast(attribute))
       data.saved = value;
-    if (_outdated_get(data.flags))
+    if (this.isAttributeInConflictFast(attribute))
       data.outdated = value;
+  }
+
+  private *_sub_objects(attribute: Aspect.InstalledAttribute, data: InternalAttributeData) {
+    if (data.flags & MODIFIED_DIRECT)
+      yield* attribute.traverseValue<VersionedObject>(data.modified);
+    if (data.flags & SAVED)
+      yield* attribute.traverseValue<VersionedObject>(data.saved);
+    if (data.flags & OUTDATED_MASK)
+      yield* attribute.traverseValue<VersionedObject>(data.outdated);
+  }
+
+  private _setDeleted() {
+    for (let idx = 2; idx < this._attribute_data.length; idx++) {
+      let attribute = this._aspect.attributes_by_index[idx];
+      let data = this._attribute_data[idx];
+      if (attribute.is_sub_object) {
+        for (let sub_object of this._sub_objects(attribute, data)) {
+          let manager = sub_object.manager();
+          manager._setDeleted();
+          manager._parent!.modified_position = NO_POSITION;
+          manager._parent!.saved_position = NO_POSITION;
+        }
+      }
+      if (data.flags & MODIFIED_MASK) {
+        this._apply_attribute_outdated_delta(data, +1, 0, true, data.modified);
+        this._apply_attribute_modified_delta(data, -1, -_modified_sub_count(data.flags), false, undefined);
+      }
+      data.flags &= ~SAVED;
+      data.saved = undefined;
+    }
+    this._flags &= ~PENDING_DELETION;
   }
 
   private _unloadAttributeData(attribute: Aspect.InstalledAttribute, data: InternalAttributeData) {
     if (attribute.is_sub_object) {
-      if (_modified_get(data.flags)) {
-        for (let sub_object of attribute.traverseValue<VersionedObject>(data.modified)) {
-          let manager = sub_object.manager();
-          manager._parent!.modified_position = NO_POSITION;
-          manager.unloadAllAttributes();
-        }
-      }
-      if (data.flags & SAVED) {
-        for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
-          let manager = sub_object.manager();
-          manager._parent!.saved_position = NO_POSITION;
-          manager.unloadAllAttributes();
-        }
-      }
-      if (_outdated_get(data.flags)) {
-        for (let sub_object of attribute.traverseValue<VersionedObject>(data.outdated)) {
-          let manager = sub_object.manager();
-          manager._parent!.outdated_position = NO_POSITION;
-          manager.unloadAllAttributes();
-        }
+      for (let sub_object of this._sub_objects(attribute, data)) {
+        let manager = sub_object.manager();
+        manager._parent!.modified_position = NO_POSITION;
+        manager._parent!.saved_position = NO_POSITION;
+        manager.unloadAllAttributes();
       }
     }
-    this._apply_attribute_modified_delta(data, -_modified_get(data.flags));
-    this._apply_attribute_outdated_delta(data, -_outdated_get(data.flags));
-    data.flags = 0;
-    data.modified = undefined;
+    this._apply_attribute_modified_delta(data, -1, -_modified_sub_count(data.flags), false, undefined);
+    this._apply_attribute_outdated_delta(data, -1, -_outdated_sub_count(data.flags), false, undefined);
+    data.flags &= ~SAVED;
     data.saved = undefined;
-    data.outdated = undefined;
   }
 
   private _missingValue(attribute: Aspect.InstalledAttribute) {
@@ -597,10 +588,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   }
 
   private _clearModifiedAttribute(attribute: Aspect.InstalledAttribute, data: InternalAttributeData) {
-    let modified = _modified_get(data.flags);
-    if (modified) {
+    if (data.flags & MODIFIED_MASK) {
       if (data.flags & SAVED) {
-        this.setAttributeValueFast(attribute, data.saved);
+        if (data.flags & MODIFIED_DIRECT)
+          this.setAttributeValueFast(attribute, data.saved);
         if (attribute.is_sub_object) {
           for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
             sub_object.manager().clearAllModifiedAttributes();
@@ -613,7 +604,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
             sub_object.manager().clearAllModifiedAttributes();
           }
         }
-        this._updateAttribute(attribute, data, -1, undefined, data.modified, false);
+        if (data.flags & MODIFIED_DIRECT)
+          this._updateAttribute(attribute, data, -1, undefined, data.modified, false);
       }
     }
   }
@@ -624,11 +616,11 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let oldValue;
     let data = this._attribute_data[attribute.index];
     let isSaved = (data.flags & SAVED) === SAVED;
-    let isModified = _modified_get(data.flags) > 0;
+    let isModified = (data.flags & MODIFIED_DIRECT) > 0;
     if (!isSaved && !this.isNew())
       throw new Error(`attribute '${this.classname()}.${attribute.name}' is unaccessible and never was`);
     if (isSaved && areEquals(data.saved, value)) {
-      if (isModified && !areEquals(data.modified, value)) {
+      if ((data.flags & MODIFIED_DIRECT)) {
         oldValue = data.modified;
         delta = -1;
         hasChanged = true;
@@ -646,13 +638,14 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
     if (hasChanged) {
       this._updateAttribute(attribute, data, delta, value, oldValue, is_relation);
-      if (_outdated_get(data.flags) && areEquals(value, data.outdated))
-        if (this._apply_attribute_outdated_delta(data, -1) === 0)
-          data.outdated = undefined;
+      if ((data.flags & OUTDATED_DIRECT) && areEquals(value, data.outdated)) {
+        this._apply_attribute_outdated_delta(data, -1, 0, false, undefined);
+      }
     }
   }
 
   private _updateAttribute(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, delta: -1 | 0 | 1, value, oldValue, is_relation: boolean) {
+    let sub_delta = 0;
     if (attribute.contains_vo && !is_relation) {
       let diffs = attribute.diffValue<VersionedObject>(value, oldValue);
       for (let [position, sub_object] of diffs) {
@@ -664,10 +657,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           if (is_add) {
             if (pdata.modified_position !== NO_POSITION)
               throw new Error(`a sub object is only assignable to one parent/attribute (duplication detected in the same attribute)`);
-            delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
+            sub_delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
           }
           else {
-            delta += -sub_object_manager.isModified() - bool2delta(pdata.modified_position !== pdata.saved_position);
+            sub_delta += -sub_object_manager.isModified() - bool2delta(pdata.modified_position !== pdata.saved_position);
           }
           pdata.modified_position = position;
         }
@@ -685,10 +678,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         }
       }
     }
-    if (this._apply_attribute_modified_delta(data, delta) === 0)
-      data.modified = undefined;
-    else
-      data.modified = value;
+    this._apply_attribute_modified_delta(data, delta, sub_delta, true, value);
   }
 
   private _sub_object_init(sub_object_manager: VersionedObjectManager, attribute: Aspect.InstalledAttribute) {
@@ -698,7 +688,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         attribute: attribute,
         saved_position: NO_POSITION,
         modified_position: NO_POSITION,
-        outdated_position: NO_POSITION,
       };
     }
     else if (sub_object_manager._parent.manager !== this || sub_object_manager._parent.attribute !== attribute)
@@ -706,55 +695,51 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return sub_object_manager._parent;
   }
 
-  private _apply_attribute_modified_delta(data: InternalAttributeData, delta: number) {
-    let previous_value = _modified_get(data.flags);
-    let new_value = previous_value + delta;
-    data.flags = _modified_set(data.flags, new_value);
-    if ((previous_value === 0) !== (new_value === 0))
-      this._apply_object_modified_delta(bool2delta(new_value > 0));
-    return new_value;
+  private _apply_attribute_modified_delta(data: InternalAttributeData, is_modified: number, delta: number, has_value: boolean, value) {
+    let prev_modified = (data.flags & MODIFIED_MASK) > 0;
+    data.flags = _modified_sub_delta(_set_delta(data.flags, is_modified, MODIFIED_DIRECT), delta);
+    let next_modified = (data.flags & MODIFIED_MASK) > 0;
+    if (!next_modified)
+      data.modified = undefined;
+    else if (has_value)
+      data.modified = value;
+    if (prev_modified !== next_modified)
+      this._apply_object_modified_delta(bool2delta(next_modified));
   }
 
   private _apply_object_modified_delta(delta: number) {
-    let previous_value = _modified_get(this._flags);
-    let new_value = previous_value + delta;
-    this._flags = _modified_set(this._flags, new_value);
-    if (this._parent && (previous_value === 0) !== (new_value === 0)) {
-      let pm = this._parent.manager;
-      let pa = this._parent.attribute;
-      let pdata = pm._attribute_data[pa.index];
-      let pprevious_value = _modified_get(pdata.flags);
-      let pnew_value = pm._apply_attribute_modified_delta(pdata, delta);
-      if (pnew_value === 0)
-        pdata.modified = undefined;
-      else if (pprevious_value === 0) // assert (pdata.flags & saved) > 0
-        pdata.modified = pdata.saved;
+    let prev_modified = (this._flags & MODIFIED_MASK) > 0;
+    this._flags = _modified_sub_delta(this._flags, delta);
+    let next_modified = (this._flags & MODIFIED_MASK) > 0;
+    let parent = this._parent;
+    if (parent && parent.modified_position !== NO_POSITION && prev_modified !== next_modified) {
+      let pdata = parent.manager._attribute_data[parent.attribute.index];
+      let pvalue = parent.manager.attributeValueFast(parent.attribute);
+      parent.manager._apply_attribute_modified_delta(pdata, 0, bool2delta(next_modified), true, pvalue);
     }
   }
 
-  private _apply_attribute_outdated_delta(data: InternalAttributeData, delta: number) {
-    let previous_value = _outdated_get(data.flags);
-    let new_value = previous_value + delta;
-    data.flags = _outdated_set(data.flags, new_value);
-    if ((previous_value === 0) !== (new_value === 0))
-      this._apply_object_outdated_delta(bool2delta(new_value > 0));
-    return new_value;
+  private _apply_attribute_outdated_delta(data: InternalAttributeData, is_outdated: number, delta: number, has_value: boolean, value: any) {
+    let prev_outdated = (data.flags & OUTDATED_MASK) > 0;
+    data.flags = _outdated_sub_delta(_set_delta(data.flags, is_outdated, OUTDATED_DIRECT), delta);
+    let next_outdated = (data.flags & OUTDATED_MASK) > 0;
+    if (!next_outdated)
+      data.outdated = undefined;
+    else if (has_value)
+      data.outdated = value;
+    if (prev_outdated !== next_outdated)
+      this._apply_object_outdated_delta(bool2delta(next_outdated));
   }
 
   private _apply_object_outdated_delta(delta: number) {
-    let previous_value = _outdated_get(this._flags);
-    let new_value = previous_value + delta;
-    this._flags = _outdated_set(this._flags, new_value);
-    if (this._parent && (previous_value === 0) !== (new_value === 0)) {
-      let pm = this._parent.manager;
-      let pa = this._parent.attribute;
-      let pdata = pm._attribute_data[pa.index];
-      let pprevious_value = _outdated_get(pdata.flags);
-      let pnew_value = pm._apply_attribute_outdated_delta(pdata, delta);
-      if (pnew_value === 0)
-        pdata.outdated = undefined;
-      else if (pprevious_value === 0) // assert (pdata.flags & saved) > 0
-        pdata.outdated = pdata.saved;
+    let prev_outdated = (this._flags & OUTDATED_MASK) > 0;
+    this._flags = _outdated_sub_delta(this._flags, delta);
+    let next_outdated = (this._flags & OUTDATED_MASK) > 0;
+    let parent = this._parent;
+    if (parent && parent.modified_position !== NO_POSITION && prev_outdated !== next_outdated) {
+      let pdata = parent.manager._attribute_data[parent.attribute.index];
+      let pvalue = parent.manager.attributeValueFast(parent.attribute);
+      parent.manager._apply_attribute_outdated_delta(pdata, 0, bool2delta(next_outdated), true, pvalue);
     }
   }
 }

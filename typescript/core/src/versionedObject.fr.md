@@ -238,17 +238,28 @@ Les attributs _utilisateur_ commencent donc à l'indice `2`.
 A chaque attribut dans `VersionedObjectManager` est associé les données suivantes:
 
  - l'attribut est t'il sauvé ou non (`flags & SAVED`)
- - le nombre de modifications et s'il y a modification la valeur modifiée
- - le nombre de conflict et s'il y a conflit l'ancienne valeur
+ - le nombre de modifications
+ - est-ce que la modification est hérité des sous-objects
+ - s'il y a modification la valeur modifiée
+ - le nombre de conflict
+ - est-ce que le conflit est hérité des sous-objects
+ - s'il y a conflit l'ancienne valeur
 
 Ces données sont stockées dans un objet qui à la forme: 
 
 ```ts
 type InternalAttributeData = {
-  flags   : number, // 16 bits pour le nombre de modification, 2 bits pour les flags, 14 bits pour le nombre de conflits
-  modified: any,    // accessible si le nombre de modification > 0
-  saved   : any,    // accessible si flags & SAVED
-  outdated: any,    // accessible si le nombre de conflits > 0
+  flags: number {
+    modified_sub_count: 15 // [0, 32768[ le nombre de modifications (locales & héritées)
+    is_modified: 1         // 1 si l'attribut à une modification local
+    is_saved: 1            // 1 si l'attribut/object est sauvé
+    is_pending_deletion: 1 // 1 si l'objet est en attente de suppression
+    is_outdated: 1         // 1 si l'attribut à un conflit local
+    outdated_sub_count: 13 // [0, 8192[ le nombre de conflits dans les sous-objets
+  },
+  modified: any,    // accessible si flags.is_modified || flags.modified_sub_count > 0
+  saved   : any,    // accessible si flags.is_saved
+  outdated: any,    // accessible si flags.is_outdated || flags.outdated_sub_count > 0
 }
 ```
 
@@ -256,7 +267,7 @@ type InternalAttributeData = {
 
 Le comptage du nombre de modifications est présent pour gérer correctement les sous-objets. Un attribut étant modifié si lui-même ou l'un de ses sous-objets est modifiés.
 
-Si l'attribut est modifié par un changement de valeur (en ignorant les valeurs contenues dans les sous-objets), ce nombre est incrémenté de `1`. Ainsi pour les attributs sans sous-objet ce nombre vaut `0` ou `1`.
+Si l'attribut est modifié par un changement de valeur (en ignorant les valeurs contenues dans les sous-objets), `flags.is_saved` vaut `1`. Ainsi pour les attributs sans sous-objet `flags.is_saved` vaut `0` ou `1`.
 
 Si l'attribut peut contenir des sous-objets alors les différences sont générées et le compteur est incrémenté selon les règles non exclusives suivantes:
 
@@ -271,7 +282,9 @@ Par exemple, dans un tableau de sous-objets ordonés, le déplacement d'une vale
 
 Le comptage du nombre de conflits est présent pour gérer correctement les sous-objets. Un attribut étant en conflit si lui-même ou l'un de ses sous-objets est en conflit.
 
-Il correspond simplement au nombre de sous-objet en conflits plus un si la valeur de l'attribut est lui-même la source d'un conflit.
+Il correspond simplement au nombre de sous-objet en conflits.
+
+Si l'attribut est en conflit par un changement de valeur (en ignorant les valeurs contenues dans les sous-objets), `flags.is_outdated` vaut `1`. Ainsi pour les attributs sans sous-objet `flags.is_outdated` vaut `0` ou `1`.
 
 Ainsi lorsqu'un sous-objet lève tous ses conflits, le compteur de l'attribut contenant le sous-objet est décrémenté.
 Levé un conflit sur un attribut contenant des sous objects impliques la levé de tous les conflits possibles sur ces sous-objets

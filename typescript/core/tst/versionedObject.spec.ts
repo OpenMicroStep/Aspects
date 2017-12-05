@@ -929,6 +929,141 @@ function sub_object_single() {
   assert.isFalse(p0.manager().isAttributeSaved("_altitute"));
 }
 
+function sub_object_single_delete() {
+  let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
+
+  let r0 = RootObject.Aspects.test1.create(ccc);
+  let p0 = Point.Aspects.test1.create(ccc);
+  let r0_aspect = r0.manager().aspect();
+  let p0_aspect = p0.manager().aspect();
+
+  {
+    let snapshot_p0 = new VersionedObjectSnapshot(p0_aspect, "p0");
+    snapshot_p0.setAttributeValueFast(Aspect.attribute_version, 1);
+    snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_altitute"), 1000);
+    snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_latitude"), 1133);
+    snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_longitude"), 1133);
+    p0.manager().mergeSavedAttributes(snapshot_p0);
+    p0._altitute = 2000;
+    p0._longitude = 2133;
+  }
+  {
+    let snapshot_r0 = new VersionedObjectSnapshot(r0_aspect, "r0");
+    snapshot_r0.setAttributeValueFast(Aspect.attribute_version, 1);
+    snapshot_r0.setAttributeValueFast(r0_aspect.checkedAttribute("_p1"), p0);
+    r0._p1 = p0;
+    r0.manager().mergeSavedAttributes(snapshot_r0);
+  }
+  assert.isTrue(r0.manager().isModified());
+  assert.isTrue(p0.manager().isModified());
+  assert.isTrue(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isFalse(r0.manager().isDeleted());
+  assert.isFalse(p0.manager().isDeleted());
+  assert.isTrue(r0.manager().hasAttributeValue("_p1"));
+  assert.isTrue(p0.manager().hasAttributeValue("_altitute"));
+  assert.isTrue(p0.manager().hasAttributeValue("_latitude"));
+  assert.isTrue(p0.manager().hasAttributeValue("_longitude"));
+  assert.isTrue(r0.manager().isAttributeSaved("_p1"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_latitude"));
+  assert.isTrue(p0.manager().isAttributeSaved("_longitude"));
+
+  {
+    let snapshot_r0 = new VersionedObjectSnapshot(r0_aspect, "r0");
+    snapshot_r0.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.DeletedVersion);
+    r0.manager().mergeSavedAttributes(snapshot_r0);
+  }
+  {
+    let snapshot_p0 = new VersionedObjectSnapshot(p0_aspect, "p0");
+    snapshot_p0.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.DeletedVersion);
+    p0.manager().mergeSavedAttributes(snapshot_p0);
+  }
+  assert.isFalse(r0.manager().isModified());
+  assert.isFalse(p0.manager().isModified());
+  assert.isTrue(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isTrue(r0.manager().isDeleted());
+  assert.isTrue(p0.manager().isDeleted());
+  assert.isFalse(r0.manager().hasAttributeValue("_p1"));
+  assert.isFalse(p0.manager().hasAttributeValue("_altitute"));
+  assert.isFalse(p0.manager().hasAttributeValue("_latitude"));
+  assert.isFalse(p0.manager().hasAttributeValue("_longitude"));
+  assert.isTrue(r0.manager().isAttributeInConflict("_p1"));
+  assert.isTrue(p0.manager().isAttributeInConflict("_altitute"));
+  assert.isFalse(p0.manager().isAttributeInConflict("_latitude"));
+  assert.isTrue(p0.manager().isAttributeInConflict("_longitude"));
+}
+
+function sub_object_single_modified_delete() {
+  let cc = new ControlCenter(cfg);
+  let ccc = cc.registerComponent({});
+
+  let r0 = RootObject.Aspects.test1.create(ccc);
+  let p0 = Point.Aspects.test1.create(ccc);
+  let p1 = Point.Aspects.test1.create(ccc);
+  let r0_aspect = r0.manager().aspect();
+  let p0_aspect = p0.manager().aspect();
+
+  {
+    let snapshot_p0 = new VersionedObjectSnapshot(p0_aspect, "p0");
+    snapshot_p0.setAttributeValueFast(Aspect.attribute_version, 1);
+    snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_altitute"), 1000);
+    snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_latitude"), 1133);
+    snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_longitude"), 1133);
+    p0.manager().mergeSavedAttributes(snapshot_p0);
+    p0._altitute = 2000;
+    p0._longitude = 2133;
+  }
+  {
+    let snapshot_r0 = new VersionedObjectSnapshot(r0_aspect, "r0");
+    snapshot_r0.setAttributeValueFast(Aspect.attribute_version, 1);
+    snapshot_r0.setAttributeValueFast(r0_aspect.checkedAttribute("_p1"), p0);
+    r0.manager().mergeSavedAttributes(snapshot_r0);
+    r0._p1 = p1;
+  }
+  assert.isTrue(r0.manager().isModified());
+  assert.isTrue(p0.manager().isModified());
+  assert.isTrue(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isFalse(r0.manager().isDeleted());
+  assert.isFalse(p0.manager().isDeleted());
+  assert.isTrue(r0.manager().hasAttributeValue("_p1"));
+  assert.isTrue(p0.manager().hasAttributeValue("_altitute"));
+  assert.isTrue(p0.manager().hasAttributeValue("_latitude"));
+  assert.isTrue(p0.manager().hasAttributeValue("_longitude"));
+  assert.isTrue(r0.manager().isAttributeSaved("_p1"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_latitude"));
+  assert.isTrue(p0.manager().isAttributeSaved("_longitude"));
+
+  {
+    let snapshot_p0 = new VersionedObjectSnapshot(p0_aspect, "p0");
+    snapshot_p0.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.DeletedVersion);
+    p0.manager().mergeSavedAttributes(snapshot_p0);
+  }
+  {
+    let snapshot_r0 = new VersionedObjectSnapshot(r0_aspect, "r0");
+    snapshot_r0.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.DeletedVersion);
+    r0.manager().mergeSavedAttributes(snapshot_r0);
+  }
+  assert.isFalse(r0.manager().isModified());
+  assert.isFalse(p0.manager().isModified());
+  assert.isTrue(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isTrue(r0.manager().isDeleted());
+  assert.isTrue(p0.manager().isDeleted());
+  assert.isFalse(r0.manager().hasAttributeValue("_p1"));
+  assert.isFalse(p0.manager().hasAttributeValue("_altitute"));
+  assert.isFalse(p0.manager().hasAttributeValue("_latitude"));
+  assert.isFalse(p0.manager().hasAttributeValue("_longitude"));
+  assert.isTrue(r0.manager().isAttributeInConflict("_p1"));
+  assert.isTrue(p0.manager().isAttributeInConflict("_altitute"));
+  assert.isFalse(p0.manager().isAttributeInConflict("_latitude"));
+  assert.isTrue(p0.manager().isAttributeInConflict("_longitude"));
+}
+
 function sub_object_set() {
   let cc = new ControlCenter(cfg);
   let ccc = cc.registerComponent({});
@@ -1099,6 +1234,8 @@ export const tests = { name: 'VersionedObject', tests: [
   relation_1_n,
   relation_n_n,
   sub_object_single,
+  sub_object_single_delete,
+  sub_object_single_modified_delete,
   sub_object_set,
   sub_object_array,
   tests_perfs
