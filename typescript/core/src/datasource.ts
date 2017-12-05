@@ -74,7 +74,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     for (let vo of objects) {
       if (vo.manager().isSubObject())
         reporter.diagnostic({ is: "error", msg: `you cannot save sub-objects directly, you must save the root object` });
-      else if (vo.manager().isModified()) {
+      else if (vo.manager().isModified() || vo.manager().isPendingDeletion()) {
         vo.validate(reporter);
         coder.encode(vo);
       }
