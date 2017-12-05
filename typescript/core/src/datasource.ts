@@ -169,7 +169,7 @@ function filterChangedObjects<T extends VersionedObject>(objects: T[]) : T[] {
   let changed = new Set<T>();
   let ordered: T[] = [];
   for (let o of objects) {
-    if (o.manager().isModified()) {
+    if (o.manager().isModified() || o.manager().isPendingDeletion()) {
       let sz = changed.size;
       changed.add(o);
       if (sz < changed.size)

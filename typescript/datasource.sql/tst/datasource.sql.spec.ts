@@ -91,19 +91,30 @@ export const tests: {
   tests: any[];
 }[] = [];
 
+function trace(sql) {
+  //if (process.env.TRACE_SQL)
+    console.info(sql);
+}
+
 const sqlite = { name: "sqlite (npm sqlite3)", tests: createTests(async function sqliteCC(flux) {
     const sqlite3 = require('sqlite3').verbose();
-    const connector = SqliteDBConnectorFactory(sqlite3, { filename: 'test.sqlite' }, { max: 1 });
+    const connector = SqliteDBConnectorFactory(sqlite3, {
+      filename: 'test.sqlite',
+      trace: trace,
+      init: async (db) => {
+        await db.unsafeRun({ sql: `PRAGMA foreign_keys = ON`, bind: [] });
+      },
+    }, { max: 1 });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Version` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `type` VARCHAR(255), `version` INTEGER)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Resource` (`id` INTEGER PRIMARY KEY AUTOINCREMENT, `idVersion` INTEGER REFERENCES `Version` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `name` VARCHAR(255))', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `People` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `firstname` VARCHAR(255), `lastname` VARCHAR(255), `birthDate` DATETIME, `father` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT, `mother` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Car` (`id` INTEGER PRIMARY KEY REFERENCES `Resource` (`id`), `model` VARCHAR(255), `owner` INTEGER REFERENCES `People` (`id`) ON DELETE RESTRICT ON UPDATE RESTRICT)', bind: [] });
     await connector.unsafeRun({ sql: 'CREATE TABLE IF NOT EXISTS `Tags` (`car` INTEGER REFERENCES `Car` (`id`), `tag` VARCHAR(255))', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `Version`', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `Resource`', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `People`', bind: [] });
-    await connector.unsafeRun({ sql: 'DELETE FROM `Car`', bind: [] });
     await connector.unsafeRun({ sql: 'DELETE FROM `Tags`', bind: [] });
+    await connector.unsafeRun({ sql: 'DELETE FROM `Car`', bind: [] });
+    await connector.unsafeRun({ sql: 'DELETE FROM `People`', bind: [] });
+    await connector.unsafeRun({ sql: 'DELETE FROM `Resource`', bind: [] });
+    await connector.unsafeRun({ sql: 'DELETE FROM `Version`', bind: [] });
     flux.context.connector = connector;
     flux.setFirstElements([createSqlControlCenter]);
     flux.continue();

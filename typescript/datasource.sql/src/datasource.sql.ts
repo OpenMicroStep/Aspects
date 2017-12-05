@@ -35,6 +35,7 @@ export class SqlDataSource extends DataSource {
     let mapper = this.mappers[aspect.classname];
     if (!mapper)
       return Promise.reject(`mapper not found for: ${aspect.classname}`);
+    let db_key = mapper.toDbKey(id);
     let idAttr = mapper.get("_id")!;
     let id_path_last = idAttr.last();
     let isNew = manager.isNew();
@@ -45,8 +46,11 @@ export class SqlDataSource extends DataSource {
       update_sets: SqlBinding[], update_checks: SqlBinding[],
       where: SqlBinding
     }>(); // [table, key]value*[table, key]
+
+    //////////////////////////////////////////
+    //
     let requestsForAttribute = (attribute: SqlMappedAttribute) => {
-      let iddb = attribute.toDbKey(mapper.toDbKey(id));
+      let iddb = attribute.toDbKey(db_key);
       let key = attribute.pathref_uniqid();
       let ret = requestsByPath.get(key);
       let last = attribute.last();
@@ -136,35 +140,8 @@ export class SqlDataSource extends DataSource {
         }
       }
     };
-    for (let attribute of manager.attributes()) {
-      if (!manager.isNew() && !manager.isAttributeModifiedFast(attribute))
-        continue;
-      let mapped_attribute = mapper.get(attribute.name);
-      if (!mapped_attribute)
-        throw new Error(`attribute ${attribute.name} is missing in mapper ${mapper.name}`);
-      if (!mapped_attribute.insert) // virtual attribute
-        continue;
-      let modified = manager.attributeValueFast(attribute);
-      let saved = manager.savedAttributeValueFast(attribute);
 
-      if (attribute.contains_vo) {
-        for (let [position, sub_object] of attribute.diffValue<VersionedObject>(modified, saved)) {
-          if (attribute.is_sub_object)
-            await this.save(tr, reporter, objects, sub_object, position === -1)
-          else if (position !== -1 && sub_object.manager().isNew()) {
-            if (!objects.has(sub_object))
-              reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
-            if (!tr.versions.has(modified))
-              await this.save(tr, reporter, objects, modified);
-          }
-        }
-      }
-      map(attribute, mapped_attribute, modified, saved);
-    }
-    map(Aspect.attribute_version, mapper.get(Aspect.attribute_version.name)!, version + 1, version);
-    version++;
     let inserted = new Set<SqlInsert>();
-
     let insert_attributes = async (c: SqlInsert, insert_values: Map<string, any>[], is_new: boolean) => {
       for (let insert_value of insert_values) {
         let output_columns: string[] = [];
@@ -216,36 +193,78 @@ export class SqlDataSource extends DataSource {
       }
       inserted.add(c);
     }
-    if (isNew) {
-      for (let c of mapper.inserts) {
-        let values = inserts.get(c);
-        if (!values)
-          inserts.set(c, values = [new Map()]);
-        if (values.length > 1)
-          throw new Error(`insert ${c.name} can't be used for multi value`);
-        await insert_attributes(c, values, true);
-      }
+    //
+    //////////////////////////////////////////
+
+    if (manager.isPendingDeletion()) {
+      // sql database requires foreign key and cascade constraints
+      let requests = requestsForAttribute(idAttr);
+      let sql_delete = this.maker.delete(requests.table, requests.where);
+      let changes = await tr.tr.delete(sql_delete);
+      if (changes <= 0)
+        throw new Error(`cannot delete`);
+      tr.versions.set(object, { _id: id, _version: VersionedObjectManager.DeletedVersion });
     }
     else {
-      tr.versions.set(object, { _id: id, _version: version });
-    }
-    for (let entry of requestsByPath.values()) {
-      if (entry.update_sets.length > 0) {
-        let sql_update = this.maker.update(entry.table, entry.update_sets, this.maker.and([entry.where, ...entry.update_checks]));
-        let changes = await tr.tr.update(sql_update); // TODO: test for any advantage to parallelize this ?
-        if (changes !== 1)
-          throw new Error(`cannot update`);
+      for (let attribute of manager.attributes()) {
+        if (!manager.isNew() && !manager.isAttributeModifiedFast(attribute))
+          continue;
+        let mapped_attribute = mapper.get(attribute.name);
+        if (!mapped_attribute)
+          throw new Error(`attribute ${attribute.name} is missing in mapper ${mapper.name}`);
+        if (!mapped_attribute.insert) // virtual attribute
+          continue;
+        let modified = manager.attributeValueFast(attribute);
+        let saved = manager.savedAttributeValueFast(attribute);
+
+        if (attribute.contains_vo) {
+          for (let [position, sub_object] of attribute.diffValue<VersionedObject>(modified, saved)) {
+            if (attribute.is_sub_object)
+              await this.save(tr, reporter, objects, sub_object, position === -1)
+            else if (position !== -1 && sub_object.manager().isNew()) {
+              if (!objects.has(sub_object))
+                reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
+              if (!tr.versions.has(modified))
+                await this.save(tr, reporter, objects, modified);
+            }
+          }
+        }
+        map(attribute, mapped_attribute, modified, saved);
       }
-      for (let del of entry.delete) {
-        let sql_delete = this.maker.delete(entry.table, this.maker.and([entry.where, del]));
-        let changes = await tr.tr.delete(sql_delete); // TODO: where can probably be merged
-        if (changes !== 1)
-          throw new Error(`cannot update`);
+      map(Aspect.attribute_version, mapper.get(Aspect.attribute_version.name)!, version + 1, version);
+      version++;
+
+      if (isNew) {
+        for (let c of mapper.inserts) {
+          let values = inserts.get(c);
+          if (!values)
+            inserts.set(c, values = [new Map()]);
+          if (values.length > 1)
+            throw new Error(`insert ${c.name} can't be used for multi value`);
+          await insert_attributes(c, values, true);
+        }
       }
-    }
-    for (let[c, values] of inserts) {
-      if (!inserted.has(c))
-        await insert_attributes(c, values, false);
+      else {
+        tr.versions.set(object, { _id: id, _version: version });
+      }
+      for (let entry of requestsByPath.values()) {
+        if (entry.update_sets.length > 0) {
+          let sql_update = this.maker.update(entry.table, entry.update_sets, this.maker.and([entry.where, ...entry.update_checks]));
+          let changes = await tr.tr.update(sql_update); // TODO: test for any advantage to parallelize this ?
+          if (changes !== 1)
+            throw new Error(`cannot update`);
+        }
+        for (let del of entry.delete) {
+          let sql_delete = this.maker.delete(entry.table, this.maker.and([entry.where, del]));
+          let changes = await tr.tr.delete(sql_delete); // TODO: where can probably be merged
+          if (changes !== 1)
+            throw new Error(`cannot update`);
+        }
+      }
+      for (let[c, values] of inserts) {
+        if (!inserted.has(c))
+          await insert_attributes(c, values, false);
+      }
     }
   }
 

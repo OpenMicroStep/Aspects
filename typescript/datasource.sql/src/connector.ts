@@ -90,15 +90,32 @@ export namespace DBConnector {
       }
     }
 
-    return function createPool(lib: LIB, options: OPTIONS & { trace?: (sql: SqlBinding)=> void }, config?: Partial<Pool.Config>) : DBConnector {
-      return new GenericConnector(lib, new Pool<DB>({
-        create() { return definition.create(lib, options); },
-        destroy(db: DB) { return definition.destroy(lib, db); }
-      }, config), (sql) => {
+    return function createPool(lib: LIB, options: OPTIONS & { trace?: (sql: SqlBinding)=> void, init?: (db: { unsafeRun(sql: SqlBinding) : Promise<void> }) => Promise<void> }, config?: Partial<Pool.Config>) : DBConnector {
+      function trace(sql: SqlBinding) {
         if (options.trace)
           options.trace(sql);
         return sql;
-      });
+      }
+      return new GenericConnector(lib, new Pool<DB>({
+        async create() {
+          let db = await definition.create(lib, options);
+          if (options.init) {
+            try {
+              await options.init({
+                unsafeRun(sql: SqlBinding) : Promise<void> { return definition.run(lib, db, definition.transform(trace(sql))); }
+              });
+            }
+            catch (e) {
+              await definition.destroy(lib, db);
+              throw e;
+            }
+          }
+          return db;
+        },
+        destroy(db: DB) {
+          return definition.destroy(lib, db);
+        },
+      }, config), trace);
     }
   }
 }

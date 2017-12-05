@@ -184,6 +184,16 @@ function query_peoples(f: Flux<Context>) {
   });
 }
 
+async function delete_c0(f: Flux<Context>) {
+  let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
+  c0.manager().setPendingDeletion(true);
+  let res = await ccc.farPromise(db.rawSave, [c0]);
+  assert.deepEqual(res.diagnostics(), []);
+  assert.sameMembers(res.value(), [c0]);
+  assert.strictEqual(c0.manager().isDeleted(), true);
+  f.continue();
+}
+
 function sort_c0_c1_c2_c3_asc(f: Flux<Context>) {
   let {ccc, db, cc, c0, c1, c2, c3, p0, p1, p2} = f.context;
   ccc.farPromise(db.rawQuery, { name: "cars", where: { $instanceOf: "Car" }, scope: {
@@ -870,6 +880,7 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       query_in_c2,
       query_id_c2,
       query_peoples,
+      delete_c0,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]},
     { name: "sort", tests: [
