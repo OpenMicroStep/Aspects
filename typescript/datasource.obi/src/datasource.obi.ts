@@ -74,7 +74,7 @@ export class ObiDataSource extends DataSource {
           let v = versions.get(value);
           if (v)
             value = v._id;
-          else if (objects.has(value)) {
+          else if (attribute.is_sub_object || objects.has(value)) {
             let n = reporter.diagnostics.length;
             try {
               await this.save(ccc, tr, reporter, objects, versions, value);
