@@ -362,7 +362,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       this._flags &= ~PENDING_DELETION;
   }
 
-  setId(id: Identifier) {
+  private _setId(id: Identifier) {
     if (VersionedObjectManager.isLocalId(id))
       throw new Error(`cannot change identifier to a local identifier`);
     let current_id = this.id();
@@ -372,21 +372,33 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       throw new Error(`id can't be modified once assigned (not local)`);
     this._controlCenter._changeObjectId(this._object, current_id, id);
     this._attribute_data[0].saved = id; // local -> real id (ie. object _id attribute got loaded)
-    if (this._attribute_data[1].saved === VersionedObjectManager.NoVersion)
-      this._attribute_data[1].saved = VersionedObjectManager.UndefinedVersion;
   }
 
-  setSavedVersion(version: number) {
-    if (VersionedObjectManager.isLocalId(this.id()))
-      throw new Error(`version can't be set on a locallly identified object`);
+  private _setSpecialVersion(version: number): boolean {
+    if (version === VersionedObjectManager.DeletedVersion) {
+      this._setDeleted();
+      return true;
+    }
+    else if (version === VersionedObjectManager.UndefinedVersion) {
+      if (this.isModified() || this.isSaved())
+        throw new Error(`undefined version can't be set on a modified/saved object`);
+      return true;
+    }
+    else if (version >= 0) {
+      return false;
+    }
+    else {
+      throw new Error(`version must be >= 0`);
+    }
+  }
+
+  setSavedIdVersion(id: Identifier, version: number) {
+    this._setId(id);
     if (this.isInConflict())
       throw new Error(`version can't be set on a conflicted object`);
     if (this.isDeleted())
       throw new Error(`version can't be set on a deleted object`);
-    if (version === VersionedObjectManager.DeletedVersion) {
-      this._setDeleted();
-    }
-    else if (version >= 0) {
+    if (!this._setSpecialVersion(version)) {
       let is_new = this.isNew();
       if (this.isModified() || is_new) {
         for (let idx = 2; idx <  this._attribute_data.length; idx++) {
@@ -402,15 +414,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         }
       }
     }
-    else
-      throw new Error(`version must be >= 0`);
     this._attribute_data[1].saved = version;
     this._flags |= SAVED;
   }
 
   computeMissingAttributes(snapshot: VersionedObjectSnapshot): string[] {
     let missings: string[] = [];
-    if (this.version() !== snapshot.version()) {
+    if (this.version() !== VersionedObjectManager.UndefinedVersion && this.version() !== snapshot.version()) {
       for (let idx = 2; idx <  this._attribute_data.length; idx++) {
         let data = this._attribute_data[idx];
         if (data.flags > 0) {
@@ -425,13 +435,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   mergeSavedAttributes(snapshot: VersionedObjectSnapshot) {
     // _attributes_ can't be trusted, so we need to validate _attributes_ keys and types
-    this.setId(snapshot.id());
+    this._setId(snapshot.id());
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     let version = snapshot.version();
-    if (version === VersionedObjectManager.DeletedVersion) {
-      this._setDeleted();
-    }
-    else if (version >= 0) {
+    if (!this._setSpecialVersion(version)) {
       let reporter = new Reporter();
       let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', '');
       for (let idx = 2; idx < this._attribute_data.length; idx++) {
@@ -473,14 +480,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       if (reporter.failed)
         throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
     }
-    else {
-      throw new Error(`snapshot.version() must be >= 0`);
-    }
 
-    if (version >= 0) {
-      this._attribute_data[1].saved = version;
-      this._flags |= SAVED;
-    }
+    this._attribute_data[1].saved = version;
+    this._flags |= SAVED;
     return ret;
   }
 

@@ -1,5 +1,5 @@
 import { platformBrowserDynamic } from '@angular/platform-browser-dynamic';
-import { ControlCenter, DataSource, AspectConfiguration, AspectSelection } from '@openmicrostep/aspects';
+import { ControlCenter, DataSource, AspectConfiguration, AspectSelection, VersionedObjectManager } from '@openmicrostep/aspects';
 import { XHRTransport } from '@openmicrostep/aspects.xhr';
 import { AppModule } from './app.module';
 import {Person, DemoApp} from '../shared/index';
@@ -19,8 +19,8 @@ export const dataSource = DataSource.Aspects.client.create(ccc);
 export const app = DemoApp.Aspects.client.create(ccc);
 platformBrowserDynamic().bootstrapModule(AppModule);
 
-app.manager().setId('__root');
-dataSource.manager().setId('__dataSource');
+app.manager().setSavedIdVersion('__root', VersionedObjectManager.UndefinedVersion);
+dataSource.manager().setSavedIdVersion('__dataSource', VersionedObjectManager.UndefinedVersion);
 
 ccc
   .farPromise(app.giveMeANumber, void 0)

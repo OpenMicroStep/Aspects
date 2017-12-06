@@ -87,8 +87,7 @@ function property_access_warm_opt(v) {
     v._firstname;
     v._lastname;
   }
-  v.manager().setId(1);
-  v.manager().setSavedVersion(1);
+  v.manager().setSavedIdVersion(1, 1);
   i = ONE_K;
   while (i-- > 0) {
     v.name();
@@ -123,8 +122,7 @@ function property_access_10_000_000_000_saved() { // around 100ms
   v._name = "this is cool";
   v._firstname = "first name";
   v._lastname = "last name";
-  v.manager().setId(1);
-  v.manager().setSavedVersion(1);
+  v.manager().setSavedIdVersion(1, 1);
   assert.strictEqual(property_access_10B_saved_opt(v), 310000000);
 }
 
@@ -146,8 +144,7 @@ function property_access_10_000_000_000_mixed() { // around 100ms
   v1._name = "this is cool 1";
   v1._firstname = "first name 1";
   v1._lastname = "last name 1";
-  v1.manager().setId(1);
-  v1.manager().setSavedVersion(1);
+  v1.manager().setSavedIdVersion(1, 1);
   let v2 = People.Aspects.test1.create(ccc);
   v2._name = "this is cool 2";
   v2._firstname = "first name 2";

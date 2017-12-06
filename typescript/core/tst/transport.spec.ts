@@ -1,4 +1,4 @@
-import {ControlCenterContext, ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration, AspectSelection,Aspect} from '@openmicrostep/aspects';
+import {ControlCenterContext, ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration, AspectSelection,Aspect, VersionedObjectManager} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -31,7 +31,7 @@ function createContext_C1(publicTransport: (json: string) => Promise<string>) {
 
   function initDefaultContext_C1(ccc:ControlCenterContext) {
     let db = DataSource.Aspects.client.create(ccc);
-    db.manager().setId('datasource');
+    db.manager().setSavedIdVersion('datasource', VersionedObjectManager.UndefinedVersion);
     let common_objects =  add_common_objects(ccc);
     return {db, ...common_objects }
   };
@@ -68,7 +68,7 @@ function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string,
   function initDefaultContext_S1(ccc:ControlCenterContext) {
     let db = InMemoryDataSource.Aspects.server.create(ccc, ds);
     db.setQueries(queries);
-    db.manager().setId('datasource');
+    db.manager().setSavedIdVersion('datasource', VersionedObjectManager.UndefinedVersion);
     let common_objects =  add_common_objects(ccc);
     return {db, ...common_objects }
   };
@@ -128,6 +128,7 @@ async function client_to_server_query(flux) {
     let defCtx = ccc.controlCenter().defaultContext();
     let db = defCtx.db as  DataSource.Aspects.client;
     let inv = await ccc.farPromise(db.query, { id: "s1cars" });
+    assert.deepEqual(inv.diagnostics(), []);
     let res = inv.value();
     let s1Ctx = s1.cc.defaultContext();
     assert.sameMembers(

@@ -123,9 +123,7 @@ export class VersionedObjectCoder {
               if (VersionedObjectManager.isLocalId(id))
                 throw new Error(`reference to an unknown locally defined object ${value.v}`);
               vo = ccc.create(name);
-              let snapshot = new VersionedObjectSnapshot(vo.manager().aspect(), id);
-              snapshot.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.UndefinedVersion);
-              vo.manager().mergeSavedAttributes(snapshot);
+              vo.manager().setSavedIdVersion(id, VersionedObjectManager.UndefinedVersion);
             }
             return vo;
           }
@@ -159,13 +157,14 @@ export class VersionedObjectCoder {
     let ret: VersionedObject[] = [];
     this._decodePhase1(ccc, data, true);
     for (let { v: values } of data) {
-      let vo = ccc.findChecked(values[0]![IDX_SAVED]);
+      let local_id = values[0]![IDX_MODIFIED];
+      let real_id = values[0]![IDX_SAVED];
+      let vo = ccc.findChecked(local_id);
       let m = vo.manager();
       let aspect = m.aspect();
       let attributes_by_index = aspect.attributes_by_index;
-      let id = m.id();
-      if (!VersionedObjectManager.isLocalId(id)) {
-        let snapshot = new VersionedObjectSnapshot(aspect, id);
+      if (!VersionedObjectManager.isLocalId(real_id)) {
+        let snapshot = new VersionedObjectSnapshot(aspect, real_id);
         for (let attribute of attributes_by_index) {
           let v = values[attribute.index];
           if (v && (v[IDX_FLAGS] & SAVED))
@@ -194,13 +193,14 @@ export class VersionedObjectCoder {
     let missings_grouped = new Map<string, { aspect: string, objects: VersionedObject[], attributes: string[] }>();
     let missings_by_vo = new Map<VersionedObject, Mergeable>();
     for (let { v: values } of data) {
-      let vo = ccc.findChecked(values[0]![IDX_SAVED]);
+      let local_id = values[0]![IDX_MODIFIED];
+      let real_id = values[0]![IDX_SAVED];
+      let vo = ccc.findChecked(local_id);
       let m = vo.manager();
-      let id = m.id();
-      if (!VersionedObjectManager.isLocalId(id)) {
+      if (!VersionedObjectManager.isLocalId(real_id)) {
         let aspect = m.aspect();
         let attributes_by_index = aspect.attributes_by_index;
-        let snapshot = new VersionedObjectSnapshot(aspect, id);
+        let snapshot = new VersionedObjectSnapshot(aspect, real_id);
         for (let attribute of attributes_by_index) {
           let v = values[attribute.index];
           if (v && (v[IDX_FLAGS] & SAVED))
@@ -229,12 +229,14 @@ export class VersionedObjectCoder {
         let missing_data = res.value();
         this._decodePhase1(ccc, missing_data, false);
         for (let { v: values } of missing_data) {
-          let vo = ccc.findChecked(values[0]![IDX_SAVED]);
+          let local_id = values[0]![IDX_MODIFIED];
+          let real_id = values[0]![IDX_SAVED];
+          let vo = ccc.findChecked(local_id);
           let m = vo.manager();
           let attributes_by_index = m.aspect().attributes_by_index;
           let mergeable = missings_by_vo.get(vo);
           if (!mergeable)
-            mergeable = { vo, snapshot: new VersionedObjectSnapshot(m.aspect(), m.id()) };
+            mergeable = { vo, snapshot: new VersionedObjectSnapshot(m.aspect(), real_id) };
           let { snapshot } = mergeable;
           for (let i = 2; i < attributes_by_index.length; i++) {
             let v = values[i];
@@ -262,20 +264,18 @@ export class VersionedObjectCoder {
       if (!l) {
         l = ccc.create(is);
         if (!is_local)
-          l.manager().setId(real_id);
+          l.manager().setSavedIdVersion(real_id, VersionedObjectManager.UndefinedVersion);
         else if (allow_unknown_local_id) {
           this.encodedWithLocalId.set(real_id, l);
           this.decodedWithLocalId.set(l, real_id);
-          v_0[IDX_SAVED] = l.id();
+          v_0[IDX_MODIFIED] = l.id();
         }
         else
           throw new Error(`reference to locally defined object ${local_id}`);
       }
-      else if (!is_local)
-        l.manager().setId(real_id);
       else {
         this.encodedWithLocalId.set(real_id, l);
-        v_0[IDX_SAVED] = l.id();
+        v_0[IDX_MODIFIED] = l.id();
       }
       if (v_0[IDX_FLAGS] & PENDING_DELETION)
         l.manager().setPendingDeletion(true);

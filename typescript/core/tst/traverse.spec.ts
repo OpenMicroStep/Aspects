@@ -83,7 +83,7 @@ function traverse_saved() {
     Polygon: { '_s0.': ['_set'] },
   })], [r0]);
 
-  [r0].map((vo, idx) => { vo.manager().setId(`0${idx}`); vo.manager().setSavedVersion(0); });
+  [r0].map((vo, idx) => { vo.manager().setSavedIdVersion(`0${idx}`, 0); });
   assert.sameMembers([...traverseSavedScope([r0], ['_s0'])], [r0, s0]);
   assert.sameMembers([...traverseSavedScope([r0], { RootObject: { '.': ['_s0'] } })], [r0, s0]);
   assert.sameMembers([...traverseSavedScope([r0], { RootObject: { '.': [] } })], [r0]);
@@ -92,7 +92,7 @@ function traverse_saved() {
     Polygon: { '_s0.': ['_set'] },
   })], [r0, s0]);
 
-  [s0].map((vo, idx) => { vo.manager().setId(`1${idx}`); vo.manager().setSavedVersion(0); });
+  [s0].map((vo, idx) => { vo.manager().setSavedIdVersion(`1${idx}`, 0); });
   assert.sameMembers([...traverseSavedScope([r0], ['_s0'])], [r0, s0]);
   assert.sameMembers([...traverseSavedScope([r0], { RootObject: { '.': ['_s0'] } })], [r0, s0]);
   assert.sameMembers([...traverseSavedScope([r0], { RootObject: { '.': [] } })], [r0]);
@@ -137,7 +137,7 @@ function traverse_all() {
     Polygon: { '_s0.': ['_set'] },
   })], [r0, s0, p0, p1, p2]);
 
-  [r0].map((vo, idx) => { vo.manager().setId(`0${idx}`); vo.manager().setSavedVersion(0); });
+  [r0].map((vo, idx) => { vo.manager().setSavedIdVersion(`0${idx}`, 0); });
   assert.sameMembers([...traverseAllScope([r0], ['_s0'])], [r0, s0]);
   assert.sameMembers([...traverseAllScope([r0], { RootObject: { '.': ['_s0'] } })], [r0, s0]);
   assert.sameMembers([...traverseAllScope([r0], { RootObject: { '.': [] } })], [r0]);
@@ -146,7 +146,7 @@ function traverse_all() {
     Polygon: { '_s0.': ['_set'] },
   })], [r0, s0, p0, p1, p2]);
 
-  [s0].map((vo, idx) => { vo.manager().setId(`1${idx}`); vo.manager().setSavedVersion(0); });
+  [s0].map((vo, idx) => { vo.manager().setSavedIdVersion(`1${idx}`, 0); });
   assert.sameMembers([...traverseAllScope([r0], ['_s0'])], [r0, s0]);
   assert.sameMembers([...traverseAllScope([r0], { RootObject: { '.': ['_s0'] } })], [r0, s0]);
   assert.sameMembers([...traverseAllScope([r0], { RootObject: { '.': [] } })], [r0]);
@@ -191,7 +191,7 @@ function traverse_current() {
     Polygon: { '_s0.': ['_set'] },
   })], [r0, s0, p0, p1, p2]);
 
-  [r0].map((vo, idx) => { vo.manager().setId(`0${idx}`); vo.manager().setSavedVersion(0); });
+  [r0].map((vo, idx) => { vo.manager().setSavedIdVersion(`0${idx}`, 0); });
   assert.sameMembers([...traverseCurrentScope([r0], ['_s0'])], [r0, s0]);
   assert.sameMembers([...traverseCurrentScope([r0], { RootObject: { '.': ['_s0'] } })], [r0, s0]);
   assert.sameMembers([...traverseCurrentScope([r0], { RootObject: { '.': [] } })], [r0]);
@@ -200,7 +200,7 @@ function traverse_current() {
     Polygon: { '_s0.': ['_set'] },
   })], [r0, s0, p0, p1, p2]);
 
-  [s0].map((vo, idx) => { vo.manager().setId(`1${idx}`); vo.manager().setSavedVersion(0); });
+  [s0].map((vo, idx) => { vo.manager().setSavedIdVersion(`1${idx}`, 0); });
   assert.sameMembers([...traverseCurrentScope([r0], ['_s0'])], [r0, s0]);
   assert.sameMembers([...traverseCurrentScope([r0], { RootObject: { '.': ['_s0'] } })], [r0, s0]);
   assert.sameMembers([...traverseCurrentScope([r0], { RootObject: { '.': [] } })], [r0]);

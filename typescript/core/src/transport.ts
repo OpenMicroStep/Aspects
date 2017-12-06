@@ -89,9 +89,7 @@ const jsonEncoders: ObjectCoding<any, any, FlatEncoder, FlatDecoder>[] = [
       let vo = d.ccc.find(id);
       if (!vo) {
         vo = d.ccc.create(s.is);
-        let snapshot = new VersionedObjectSnapshot(vo.manager().aspect(), s.id);
-        snapshot.setAttributeValueFast(Aspect.attribute_version, VersionedObjectManager.UndefinedVersion);
-        vo.manager().mergeSavedAttributes(snapshot);
+        vo.manager().setSavedIdVersion(s.id, VersionedObjectManager.UndefinedVersion);
         if (d.ccAllowed)
           d.ccAllowed.add(vo);
       }

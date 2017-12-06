@@ -1,4 +1,4 @@
-import {ControlCenter, DataSource, AspectConfiguration, AspectSelection, DataSourceQuery} from '@openmicrostep/aspects';
+import {ControlCenter, DataSource, AspectConfiguration, AspectSelection, DataSourceQuery, VersionedObjectManager} from '@openmicrostep/aspects';
 import {SqliteDBConnectorFactory, SqlDataSource, loadSqlMappers} from '@openmicrostep/aspects.sql';
 import {ExpressTransport} from '@openmicrostep/aspects.express';
 import {Person, DemoApp} from '../shared/index';
@@ -44,31 +44,35 @@ queries.set("allpersons", (reporter, query) => {
 });
 
 const router = express.Router();
-const cfg = new AspectConfiguration(new AspectSelection([
-  DemoApp.Aspects.server,
-  Person.Aspects.server,
-  SqlDataSource.Aspects.server,
-]));
+const cfg = new AspectConfiguration({
+  selection: new AspectSelection([
+    DemoApp.Aspects.server,
+    Person.Aspects.server,
+    SqlDataSource.Aspects.server,
+  ]),
+  initDefaultContext(ccc) {
+    const db = SqlDataSource.Aspects.server.create(ccc, mappers, connector, connector.maker);
+    const demoapp: DemoApp = DemoApp.Aspects.server.create(ccc);
+    db.setQueries(queries);
+    demoapp.manager().setSavedIdVersion('__root', VersionedObjectManager.UndefinedVersion);
+    db.manager().setSavedIdVersion('__dataSource', VersionedObjectManager.UndefinedVersion);
+    return { db, demoapp };
+  }
+});
 const transport = new ExpressTransport(router, async (cstor, id) => {
   const cc = new ControlCenter(cfg);
-  const ccc = cc.registerComponent({});
-  const db = SqlDataSource.Aspects.server.create(ccc, mappers, connector, connector.maker);
-  const demoapp: DemoApp = DemoApp.Aspects.server.create(ccc);
-  db.setQueries(queries);
-  demoapp.manager().setId('__root');
-  db.manager().setId('__dataSource');
-
+  const { db, demoapp } = cc.defaultContext() as { demoapp: DemoApp.Aspects.server, db: DataSource.Aspects.server };
   if (id === demoapp.id())
       return Promise.resolve(demoapp);
   if (id === db.id())
       return Promise.resolve(db);
   let [name, dbid] = id.toString().split(':');
-  return ccc.farPromise(db.safeQuery, { name: "q", where: { _id: dbid, $instanceof: name } })
+  return cc.safe(ccc => ccc.farPromise(db.safeQuery, { name: "q", where: { _id: dbid, $instanceof: name } })
     .then((envelop) => {
       if (envelop.hasOneValue())
         return Promise.resolve(envelop.value()["q"][0]);
       return Promise.reject('not found')
-    });
+    }));
 });
 cfg.installPublicTransport(transport, DataSource, ["server"]);
 cfg.installPublicTransport(transport, DemoApp, ["far"]);

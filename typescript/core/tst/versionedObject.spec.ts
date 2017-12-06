@@ -154,25 +154,25 @@ function basics() {
   assert.equal(v2.version(), v2.version());
 
   assert.equal(v1.name(), undefined);
-  assert.throw(() => { v1.manager().setSavedVersion(1); }, `version can't be set on a locallly identified object`);
+  assert.throw(() => { v1.manager().setSavedIdVersion(v1.id(), 1); }, `cannot change identifier to a local identifier`);
   assert.throw(() => { v1.manager().setPendingDeletion(true); }, `cannot set pending deletion on locally identified objects`);
   {
     let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
     snapshot.setAttributeValueFast(Aspect.attribute_version, 0);
     assert.throw(() => v1.manager().mergeSavedAttributes(snapshot), `cannot change identifier to a local identifier`);
   }
-  assert.throw(() => { v1.manager().setId(v1.id()); }, `cannot change identifier to a local identifier`);
-  assert.throw(() => { v1.manager().setId(v2.id()); }, `cannot change identifier to a local identifier`);
+  assert.throw(() => { v1.manager().setSavedIdVersion(v1.id(), 0); }, `cannot change identifier to a local identifier`);
+  assert.throw(() => { v1.manager().setSavedIdVersion(v2.id(), 0); }, `cannot change identifier to a local identifier`);
 
-  v1.manager().setId(2);
-  assert.throw(() => { v1.manager().setSavedVersion(-1); }, `version must be >= 0`);
+  v1.manager().setSavedIdVersion(2, 0);
+  assert.throw(() => { v1.manager().setSavedIdVersion(v1.id(), -1); }, `version must be >= 0`);
   assert.equal(v1.id(), 2);
-  assert.throw(() => { v1.manager().setId(3); }, `id can't be modified once assigned (not local)`);
+  assert.throw(() => { v1.manager().setSavedIdVersion(3, 0); }, `id can't be modified once assigned (not local)`);
 
   {
     let snapshot = new VersionedObjectSnapshot(v1_aspect, v1.id());
     snapshot.setAttributeValueFast(Aspect.attribute_version, -1);
-    assert.throw(() => v1.manager().mergeSavedAttributes(snapshot), `snapshot.version() must be >= 0`);
+    assert.throw(() => v1.manager().mergeSavedAttributes(snapshot), `version must be >= 0`);
   }
 
   {
@@ -248,7 +248,7 @@ function basics() {
   assert.sameDeepOrderedMembers([...v1.manager().outdatedAttributes()], [
     { attribute: v1.manager().aspect().checkedAttribute("_name"), outdated: "test3" },
   ]);
-  assert.throw(() => v1.manager().setSavedVersion(5), `version can't be set on a conflicted object`);
+  assert.throw(() => v1.manager().setSavedIdVersion(v1.id(), 5), `version can't be set on a conflicted object`);
 
   v1.manager().resolveOutdatedAttribute("_name");
   assert.strictEqual(v1.manager().attributeValue("_name"), "testM");
@@ -534,7 +534,7 @@ function delete_unmodified_saved() {
   assert.isFalse(v1.manager().isDeleted());
   assert.isTrue(v1.manager().hasAttributeValue("_name"));
 
-  v1.manager().setSavedVersion(VersionedObjectManager.DeletedVersion);
+  v1.manager().setSavedIdVersion(v1.id(), VersionedObjectManager.DeletedVersion);
   assert.strictEqual(v1.manager().version(), VersionedObjectManager.DeletedVersion);
   assert.isFalse(v1.manager().isNew());
   assert.isTrue(v1.manager().isSaved());
@@ -544,7 +544,7 @@ function delete_unmodified_saved() {
   assert.isTrue(v1.manager().isDeleted());
   assert.isFalse(v1.manager().hasAttributeValue("_name"));
 
-  assert.throw(() => v1.manager().setSavedVersion(1), `version can't be set on a deleted object`);
+  assert.throw(() => v1.manager().setSavedIdVersion(v1.id(), 1), `version can't be set on a deleted object`);
   assert.throw(() => v1.manager().setPendingDeletion(true), `cannot set pending deletion on a deleted object`);
 }
 
@@ -588,7 +588,7 @@ function delete_modified_saved() {
   assert.isFalse(v1.manager().isDeleted());
   assert.isTrue(v1.manager().hasAttributeValue("_name"));
 
-  v1.manager().setSavedVersion(VersionedObjectManager.DeletedVersion);
+  v1.manager().setSavedIdVersion(v1.id(), VersionedObjectManager.DeletedVersion);
   assert.strictEqual(v1.manager().version(), VersionedObjectManager.DeletedVersion);
   assert.isFalse(v1.manager().isNew());
   assert.isTrue(v1.manager().isSaved());
@@ -863,14 +863,12 @@ function sub_object_single() {
   assert.strictEqual(r0._p1,  p0);
   assert.isTrue(r0.manager().isModified());
 
-  p0.manager().setId("p0");
-  p0.manager().setSavedVersion(0);
+  p0.manager().setSavedIdVersion("p0", 0);
   assert.isFalse(p0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
   assert.throw(() => { p0.manager().setPendingDeletion(true); }, `cannot set pending deletion on sub-objects, change the parent attribute directly`);
 
-  r0.manager().setId("r0");
-  r0.manager().setSavedVersion(0);
+  r0.manager().setSavedIdVersion("r0", 0);
   assert.isFalse(r0.manager().isModified());
   assert.isFalse(r0.manager().isAttributeModified("_p1"));
   assert.isTrue(r0.manager().isAttributeSaved("_p1"));
@@ -1094,32 +1092,27 @@ function sub_object_set() {
 
   s0._set = new Set([p0, p1, p2]);
 
-  p0.manager().setId("p0");
-  p0.manager().setSavedVersion(0);
+  p0.manager().setSavedIdVersion("p0", 0);
   assert.isFalse(p0.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p1.manager().setId("p1");
-  p1.manager().setSavedVersion(0);
+  p1.manager().setSavedIdVersion("p1", 0);
   assert.isFalse(p1.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p2.manager().setId("p2");
-  p2.manager().setSavedVersion(0);
+  p2.manager().setSavedIdVersion("p2", 0);
   assert.isFalse(p2.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().setId("s0");
-  s0.manager().setSavedVersion(0);
+  s0.manager().setSavedIdVersion("s0", 0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  r0.manager().setId("r0");
-  r0.manager().setSavedVersion(0);
+  r0.manager().setSavedIdVersion("r0", 0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
@@ -1140,7 +1133,7 @@ function sub_object_set() {
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().setSavedVersion(0);
+  s0.manager().setSavedIdVersion(s0.id(), 0);
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
 }
@@ -1172,32 +1165,27 @@ function sub_object_array() {
   assert.isTrue(r0.manager().isModified());
   assert.isTrue(s0.manager().isModified());
 
-  p0.manager().setId("p0");
-  p0.manager().setSavedVersion(0);
+  p0.manager().setSavedIdVersion("p0", 0);
   assert.isFalse(p0.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p1.manager().setId("p1");
-  p1.manager().setSavedVersion(0);
+  p1.manager().setSavedIdVersion("p1", 0);
   assert.isFalse(p1.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  p2.manager().setId("p2");
-  p2.manager().setSavedVersion(0);
+  p2.manager().setSavedIdVersion("p2", 0);
   assert.isFalse(p2.manager().isModified());
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().setId("s0");
-  s0.manager().setSavedVersion(0);
+  s0.manager().setSavedIdVersion("s0", 0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  r0.manager().setId("r0");
-  r0.manager().setSavedVersion(0);
+  r0.manager().setSavedIdVersion("r0", 0);
   assert.isFalse(p2.manager().isModified());
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
@@ -1214,7 +1202,7 @@ function sub_object_array() {
   assert.isTrue(s0.manager().isModified());
   assert.isTrue(r0.manager().isModified());
 
-  s0.manager().setSavedVersion(0);
+  s0.manager().setSavedIdVersion(s0.id(), 0);
   assert.isFalse(s0.manager().isModified());
   assert.isFalse(r0.manager().isModified());
 

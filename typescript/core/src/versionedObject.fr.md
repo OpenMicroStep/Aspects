@@ -175,20 +175,15 @@ __!__: Lève une exception:
  - si l'objet est un sous-objet
  - l'objet de ne possède pas d'identifiant réel ?
 
-#### setId(id: Identifier)
-Définit l'identifiant réel de l'objet.
-
-__!__: Lève une exception si:
- - _id_ est un identifiant local
- - un identifiant à déjà été définit pour l'objet
-
-#### setSavedVersion(version: number)
-Marque l'objet comme sauvé, l'ensemble des modifications sont considérés comme sauvés. 
+#### setSavedIdVersion(id: Identifier, version: number)
+Définit l'identifiant réel de l'objet si nécéssaire et marque l'objet comme sauvé, l'ensemble des modifications sont considérés comme sauvés.
 
 Si l'objet est _nouveau_, l'ensemble des attributs est considérés comme sauvés.
 Si la version est `VersionedObjectManager.DeletedVersion`, l'ensemble des attributs est déchargé.
 
 __!__: Lève une exception si:
+ - _id_ est un identifiant local
+ - un identifiant différent à déjà été définit pour l'objet
  - l'objet est en _conflit_ ou _supprimé_
  - l'objet ne possède pas un identifiant réel
  - `!(version >= 0)`
@@ -230,6 +225,27 @@ Vrai si la valeur de l'attribut _attribute_ fait partie de la capture.
 La valeur de l'attribut _attribute_ au moment de sa capture.
 
 ## Détails d'implémentations
+
+Liste des transitions d'états possibles:
+
+| état précédent                      | | état suivant                         | cause                                                               |
+|:-----------------------------------:|-|:------------------------------------:|---------------------------------------------------------------------|
+| _nouveau_                           |>| _sauvé_                              | mergeSavedAttributes / setSavedIdVersion                            |
+| _nouveau_                           |>| _sauvé_ & _version inconnu_          | mergeSavedAttributes / setSavedIdVersion                            |
+| _nouveau_                           |>| _nouveau_ & _modifié_                | setAttributeValue                                                   |
+| _nouveau_                           |>| _nouveau_ & _supprimé_               | mergeSavedAttributes / setSavedIdVersion                            |
+| _nouveau_ & _modifié_               |>| _nouveau_                            | setAttributeValue / unloadAttribute                                 |
+| _nouveau_ & _modifié_               |>| _sauvé_                              | mergeSavedAttributes / setSavedIdVersion                            |
+| _nouveau_ & _modifié_               |>| _sauvé_ & _modifié_ & _en\_conflit_  | mergeSavedAttributes                                                |
+| _nouveau_ & _modifié_               |>| _sauvé_ & _supprimé_ & _en\_conflit_ | mergeSavedAttributes                                                |
+| _sauvé_ & _version inconnu_         |>| _sauvé_                              | mergeSavedAttributes / setSavedIdVersion                            |
+| _sauvé_ & _version inconnu_         |>| _sauvé_ & _supprimé_                 | mergeSavedAttributes / setSavedIdVersion                            |
+| _sauvé_                             |>| _sauvé_ & _modifié_                  | setAttributeValue                                                   |
+| _sauvé_                             |>| _sauvé_ & _supprimé_                 | mergeSavedAttributes / setSavedIdVersion                            |
+| _sauvé_ & _modifié_                 |>| _sauvé_                              | mergeSavedAttributes / setSavedIdVersion                            |
+| _sauvé_ & _modifié_                 |>| _sauvé_ & _modifié_ & _en\_conflit_  | mergeSavedAttributes                                                |
+| _sauvé_ & _modifié_                 |>| _sauvé_ & _supprimé_ & _en\_conflit_ | mergeSavedAttributes                                                |
+| _sauvé_ & _modifié_ & _en\_conflit_ |>| _sauvé_ & _modifié_                  | setAttributeValue / mergeSavedAttributes / resolveOutdatedAttribute |
 
 Les attributs sont stockés dans des tableaux dont l'indice est calculé pour chaque attribut au démarrage (voir `AspectConfiguration`).
 Les attributs `_id` et `_version` sont toujours respectivement aux indices `0` et `1`.

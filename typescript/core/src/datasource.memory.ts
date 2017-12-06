@@ -247,9 +247,7 @@ export class InMemoryDataSource extends DataSource {
     if (commit) {
       tr.commit();
       tr.versions.forEach((v, vo) => {
-        let manager = vo.manager();
-        manager.setId(v._id);
-        manager.setSavedVersion(v._version);
+        vo.manager().setSavedIdVersion(v._id, v._version);
       });
     }
   }

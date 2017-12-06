@@ -1,4 +1,8 @@
-import {Aspect, VersionedObject, VersionedObjectSnapshot, Identifier, DataSourceInternal, ControlCenterContext} from '@openmicrostep/aspects';
+import {
+  Aspect, Identifier, ControlCenterContext,
+  VersionedObject, VersionedObjectManager, VersionedObjectSnapshot,
+  DataSourceInternal,
+} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlBinding, SqlQuery, SqlQuerySharedContext, DBConnector} from '@openmicrostep/aspects.sql';
@@ -464,8 +468,8 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       if (!value) {
         let obi_is = this.ctx.systemObiById.get(is)!;
         let classname = this.ctx.config.obiEntity_to_aspectClassname(obi_is.system_name!);
-        value = ccc.create(classname);
-        value.manager().setId(subid);
+        let vo = value = ccc.create<VersionedObject>(classname);
+        vo.manager().setSavedIdVersion(subid, VersionedObjectManager.UndefinedVersion);
       }
     }
     return value;

@@ -57,7 +57,7 @@ export class ControlCenterContext {
     let vo = this.find(id);
     if (!vo) {
       vo = this.create<T>(classname, categories);
-      vo.manager().setId(id);
+      vo.manager().setSavedIdVersion(id, VersionedObjectManager.UndefinedVersion);
     }
     return vo as T;
   }
