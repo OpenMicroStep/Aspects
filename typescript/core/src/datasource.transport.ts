@@ -224,7 +224,7 @@ export class VersionedObjectCoder {
         ret.push(vo);
     }
     if (missings_grouped.size) {
-      await dataSource.controlCenter().safe(async ccc => Promise.all([...missings_grouped.values()].map(async g => {
+      await Promise.all([...missings_grouped.values()].map(async g => {
         let res = await ccc.farPromise(dataSource.distantLoad, { objects: g.objects, scope: g.attributes });
         let missing_data = res.value();
         this._decodePhase1(ccc, missing_data, false);
@@ -242,7 +242,7 @@ export class VersionedObjectCoder {
               snapshot.setAttributeValueFast(attributes_by_index[i], this._decodeValue(ccc, v[IDX_SAVED]));
           }
         }
-      })));
+      }));
       for (let [vo, mergeable] of missings_by_vo) {
         vo.manager().mergeSavedAttributes(mergeable.snapshot);
       }
