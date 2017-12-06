@@ -490,8 +490,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       let one_if_modified = (data.flags & MODIFIED_DIRECT) ? 1 : 0;
       // clear saved positions
       for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
-        let pdata = sub_object.manager()._parent!;
-        pdata.saved_position = NO_POSITION;
+        let pdata = sub_object.manager()._parent;
+        if (pdata)
+          pdata.saved_position = NO_POSITION;
       }
       // set new saved positions
       for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
