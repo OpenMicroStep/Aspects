@@ -131,20 +131,27 @@ export class OuiDB {
   }
 
   async raw_delete_obi(tr: DBConnector.Transaction, reporter: Reporter, oid: number)  {
-    let maker = this.maker;
+    const maker = this.maker;
+    const CarTypeIDId = this.systemObiByName.get(this.config.CarTypeLib)!._id!;
+    const TypSIDId = this.systemObiByName.get(this.config.TypSIDLib)!._id!;
+
     let sql_select = maker.select(
-      [maker.column("TJ_VAL_ID", "VAL_INST")],
-      maker.from("TJ_VAL_ID"), [],
+      [maker.column("RID", "VAL_INST")],
+      maker.from("TJ_VAL_ID", "RID"), [
+        maker.join("inner", "TJ_VAL_ID", "CAR", maker.and([
+          maker.compare(maker.column("CAR", "VAL_INST"), ConstraintType.Equal, maker.column("RID", "VAL_CAR")),
+          maker.op(maker.column("CAR", "VAL_CAR"), ConstraintType.Equal, CarTypeIDId),
+          maker.op(maker.column("CAR", "VAL"), ConstraintType.NotEqual, TypSIDId),
+        ])),
+      ],
       maker.or([
-        maker.op(maker.column("TJ_VAL_ID", "VAL")    , ConstraintType.Equal, oid),
-        maker.op(maker.column("TJ_VAL_ID", "VAL_CAR"), ConstraintType.Equal, oid),
+        maker.op(maker.column("RID", "VAL")    , ConstraintType.Equal, oid),
+        maker.op(maker.column("RID", "VAL_CAR"), ConstraintType.Equal, oid),
       ]));
     let rows = await tr.select(sql_select);
     for (let row of rows)
       reporter.diagnostic({ is: "error", msg: `cannot delete (${row["VAL_INST"]} is still linked to ${oid})` });
 
-    let CarTypeIDId = this.systemObiByName.get(this.config.CarTypeLib)!._id!;
-    let TypSIDId = this.systemObiByName.get(this.config.TypSIDLib)!._id!;
     let sql_select_subs = maker.select(
       [maker.column("SID", "VAL")],
       maker.from("TJ_VAL_ID", "SID"), [
