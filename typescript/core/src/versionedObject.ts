@@ -486,27 +486,26 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, merge_value: any) {
     let delta = -_modified_sub_count(data.flags);
-    if (delta) {
-      if (attribute.is_sub_object) {
-        // clear saved positions
-        for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
-          let pdata = sub_object.manager()._parent!;
-          pdata.saved_position = NO_POSITION;
-        }
-        // set new saved positions
-        for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
-          let pdata = sub_object.manager()._parent!;
-          pdata.saved_position = position;
-          pdata.modified_position = position;
-          delta++; // "del" object
-        }
-        // update modified positions
-        for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(data.modified)) {
-          let sub_object_manager = sub_object.manager();
-          let pdata = sub_object_manager._parent!;
-          delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
-          pdata.modified_position = position;
-        }
+    if (attribute.is_sub_object) {
+      let one_if_modified = (data.flags & MODIFIED_DIRECT) ? 1 : 0;
+      // clear saved positions
+      for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
+        let pdata = sub_object.manager()._parent!;
+        pdata.saved_position = NO_POSITION;
+      }
+      // set new saved positions
+      for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
+        let pdata = sub_object.manager()._parent!;
+        pdata.saved_position = position;
+        pdata.modified_position = position;
+        delta += one_if_modified; // "del" object
+      }
+      // update modified positions
+      for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(data.modified)) {
+        let sub_object_manager = sub_object.manager();
+        let pdata = sub_object_manager._parent!;
+        delta += +sub_object_manager.isModified() + bool2delta(pdata.saved_position !== position);
+        pdata.modified_position = position;
       }
     }
     this._apply_attribute_modified_delta(data, areEquals(data.modified, merge_value) ? -1 : 0, delta, false, undefined);
