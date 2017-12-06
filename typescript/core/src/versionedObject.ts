@@ -100,9 +100,11 @@ export class VersionedObjectSnapshot {
   }
 }
 
+const DeletedVersion = Number.MAX_SAFE_INTEGER;
+const UndefinedVersion = Number.MAX_SAFE_INTEGER - 1;
 export class VersionedObjectManager<T extends VersionedObject = VersionedObject> {
-  static DeletedVersion = Number.MAX_SAFE_INTEGER;
-  static UndefinedVersion = Number.MAX_SAFE_INTEGER - 1;
+  static DeletedVersion = DeletedVersion;
+  static UndefinedVersion = UndefinedVersion;
   static NoVersion = -1;
   static SafeMode = true;
   static LocalIdCounter = 0;
@@ -174,7 +176,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   isModified()   { return (this._flags & MODIFIED_MASK) > 0; }
   isInConflict() { return (this._flags & OUTDATED_MASK) > 0; }
   isPendingDeletion() { return (this._flags & PENDING_DELETION) > 0; }
-  isDeleted() { return this.version() === VersionedObjectManager.DeletedVersion; }
+  isDeleted() { return this.version() === DeletedVersion; }
 
   isAttributeSaved(attribute_name: string)      { return this.isAttributeSavedFast(this._aspect.checkedAttribute(attribute_name)); }
   isAttributeModified(attribute_name: string)   { return this.isAttributeModifiedFast(this._aspect.checkedAttribute(attribute_name)); }
@@ -362,36 +364,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       this._flags &= ~PENDING_DELETION;
   }
 
-  private _setId(id: Identifier) {
-    if (VersionedObjectManager.isLocalId(id))
-      throw new Error(`cannot change identifier to a local identifier`);
-    let current_id = this.id();
-    if (current_id === id)
-      return;
-    if (!VersionedObjectManager.isLocalId(current_id))
-      throw new Error(`id can't be modified once assigned (not local)`);
-    this._controlCenter._changeObjectId(this._object, current_id, id);
-    this._attribute_data[0].saved = id; // local -> real id (ie. object _id attribute got loaded)
-  }
-
-  private _setSpecialVersion(version: number): boolean {
-    if (version === VersionedObjectManager.DeletedVersion) {
-      this._setDeleted();
-      return true;
-    }
-    else if (version === VersionedObjectManager.UndefinedVersion) {
-      if (this.isModified() || this.isSaved())
-        throw new Error(`undefined version can't be set on a modified/saved object`);
-      return true;
-    }
-    else if (version >= 0) {
-      return false;
-    }
-    else {
-      throw new Error(`version must be >= 0`);
-    }
-  }
-
   setSavedIdVersion(id: Identifier, version: number) {
     this._setId(id);
     if (this.isInConflict())
@@ -414,13 +386,14 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         }
       }
     }
-    this._attribute_data[1].saved = version;
-    this._flags |= SAVED;
+    this._applyVersion(version);
   }
 
   computeMissingAttributes(snapshot: VersionedObjectSnapshot): string[] {
     let missings: string[] = [];
-    if (this.version() !== VersionedObjectManager.UndefinedVersion && this.version() !== snapshot.version()) {
+    let this_version = this.version();
+    let snapshot_version = snapshot.version();
+    if (this_version !== snapshot_version && snapshot_version !== UndefinedVersion && this_version !== UndefinedVersion) {
       for (let idx = 2; idx <  this._attribute_data.length; idx++) {
         let data = this._attribute_data[idx];
         if (data.flags > 0) {
@@ -481,9 +454,44 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
     }
 
-    this._attribute_data[1].saved = version;
-    this._flags |= SAVED;
+    this._applyVersion(version);
     return ret;
+  }
+
+  private _setId(id: Identifier) {
+    if (VersionedObjectManager.isLocalId(id))
+      throw new Error(`cannot change identifier to a local identifier`);
+    let current_id = this.id();
+    if (current_id === id)
+      return;
+    if (!VersionedObjectManager.isLocalId(current_id))
+      throw new Error(`id can't be modified once assigned (not local)`);
+    this._controlCenter._changeObjectId(this._object, current_id, id);
+    this._attribute_data[0].saved = id; // local -> real id (ie. object _id attribute got loaded)
+  }
+
+  private _setSpecialVersion(version: number): boolean {
+    if (version === DeletedVersion) {
+      this._setDeleted();
+      return true;
+    }
+    else if (version === UndefinedVersion) {
+      return true;
+    }
+    else if (version >= 0) {
+      return false;
+    }
+    else {
+      throw new Error(`version must be >= 0`);
+    }
+  }
+
+  private _applyVersion(version: number) {
+    let data = this._attribute_data[1];
+    if (version !== UndefinedVersion || this.isNew()) {
+      data.saved = version;
+      this._flags |= SAVED;
+    }
   }
 
   private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, merge_value: any) {
