@@ -110,7 +110,9 @@ Element.load(reporter, {
       is: "component",
       "js=": { is: "environment" },
       environments: ["=js"],
-      targets: ["aspects core", "aspects client"],
+      targetsByEnvironment: {
+        "=js": ["aspects core", "aspects client"],
+      },
       componentsByEnvironment: {
         "=js": ["=openms.aspects.angular:target", "=openms.aspects.angular:angular", "=::aspects core::", "=::aspects client::"],
       }
