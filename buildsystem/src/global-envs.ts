@@ -128,6 +128,21 @@ Element.load(reporter, {
         "=js": ["=openms.aspects.node:target", "=openms.aspects.node:express", "=::aspects core::", "=::aspects express::", "=::aspects transport node::", "=::aspects sql::", "=::aspects obi::"],
       }
   },
+  "openms.aspects.node.tests=": {
+    is: "component",
+    tsConfig: { is: "component",
+      "types": ["chai"],
+    },
+    npmPackage: { is: "component",
+      dependencies: { is: "component",
+        "chai": "^4.1.2"
+      },
+      devDependencies: { is: "component",
+        "@types/chai": "^4.0.4",
+        "@openmicrostep/tests": "^0.1.0"
+      },
+    }
+  },
 }, Workspace.globalRoot, Project.elementFactories);
 if (reporter.diagnostics.length)
   console.warn("error while loading global envs", reporter.diagnostics);
