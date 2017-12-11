@@ -82,7 +82,7 @@ export class ControlCenterContext {
     return object;
   }
 
-  registerObjects<T extends VersionedObject>(objects: T[]): T[] {
+  registerObjects<T extends VersionedObject[] | Set<VersionedObject>>(objects: T): T {
     for (let object of objects)
       this.registerObject(object);
     return objects;
@@ -106,12 +106,15 @@ export class ControlCenterContext {
     }
   }
 
-  unregisterObjects(objects: VersionedObject[]) {
+  unregisterObjects(objects: Iterable<VersionedObject>) {
     for (let object of objects)
       this.unregisterObject(object);
   }
 
-  swapObjects<T extends VersionedObject>(oldObjects: T[], newObjects: T[]) : T[] {
+  swapObjects<
+    O extends VersionedObject[] | Set<VersionedObject>,
+    N extends VersionedObject[] | Set<VersionedObject>
+  >(oldObjects: O, newObjects: N) : N {
     this.unregisterObjects(oldObjects);
     this.registerObjects(newObjects);
     return newObjects;
