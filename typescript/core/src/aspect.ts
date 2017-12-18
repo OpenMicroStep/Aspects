@@ -41,7 +41,7 @@ export namespace Aspect {
     return false;
   }
   export function typeIsSingleValue(type: Type) : boolean {
-    if (type.type === "class" || type.type === "primitive")
+    if (type.type === "class" || type.type === "primitive" || type.type === "virtual")
       return true;
     return type_is_or(type, typeIsSingleValue);
   }
@@ -197,7 +197,8 @@ export namespace Aspect {
   export type TypeSet        =  { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"};
   export type TypeDictionary =  { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
   export type TypeOr         =  { is: 'type', type: 'or', types: Type[] }
-  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr ;
+  export type TypeVirtual    =  { is: 'type', type: 'virtual', operator: string, sort: { asc: boolean, attribute: Aspect.InstalledAttribute }[], group_by: InstalledAttribute[] };
+  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr | TypeVirtual ;
   export type TypeValidator = AttributeTypes.Validator0<any>;
   export type AttributeTypeValidator = AttributeTypes.Validator<any, VersionedObjectManager<VersionedObject>>;
   export interface Definition {
@@ -262,6 +263,20 @@ export namespace Aspect {
     abstract traverseValue<T>(value: any): IterableIterator<T>;
     abstract diffValue<T>(newV: any, oldV: any): IterableIterator<[number, T]>;
     abstract subobjectChanges<T extends VersionedObject>(newV: any, oldV: any): IterableIterator<[-1 | 0 | 1, T]>;
+  }
+  export function create_virtual_attribute(name: string, type: TypeVirtual) : Aspect.InstalledAttribute {
+    return {
+      name: name,
+      index: -1,
+      type: type,
+      validator: AttributeTypes.validateAny, //< TODO
+      relation: undefined,
+      contains_vo: false,
+      is_sub_object: false,
+      traverseValueOrdered: traverseValueOrdered_single,
+      traverseValue: traverseValue_single,
+      diffValue: diffValue_single,
+    };
   }
 
   export class InstalledMonoAttribute extends InstalledAttribute {
@@ -404,6 +419,8 @@ export namespace Aspect {
     readonly farMethods: ImmutableMap<string, InstalledFarMethod>;
     readonly implementation: VersionedObjectConstructor;
 
+    /** @internal */ virtual_attributes: Map<string, InstalledAttribute>;
+
     /** @internal */ constructor(classname: string, aspect: string, version: number, is_sub_object: boolean, implementation: VersionedObjectConstructor) {
       this.classname = classname;
       this.version = version;
@@ -419,6 +436,7 @@ export namespace Aspect {
         undefined,
       );
       this.attributes = new Map(voAttributes);
+      this.virtual_attributes = new Map();
       this.attributes_by_index = [Aspect.attribute_id, Aspect.attribute_version];
       this.farMethods = new Map();
       this.implementation = implementation;

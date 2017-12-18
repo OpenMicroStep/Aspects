@@ -1,7 +1,7 @@
 import {
   ControlCenter, VersionedObject,
   areEquals,
-  Aspect, Validation, Result,
+  Aspect, Validation, Result, traverseAllScope,
 } from './core';
 import * as DataSourceScope from './datasource.scope';
 import { AttributeTypes as V, AttributePath, Reporter } from '@openmicrostep/msbuildsystem.shared';
@@ -427,6 +427,7 @@ export namespace DataSourceInternal {
     for (let [name, attr] of attributes) {
       let f_attr = aspect.attributes.get(name);
       if (
+        (attr.type.type !== "virtual") && // TODO: deeper check for virtual
         (!f_attr || !Aspect.typesAreComparable(f_attr.type, attr.type)) &&
         (name !== "_id" || !Aspect.typesAreComparable(aspect.attribute_ref.type, attr.type))
       )
@@ -1055,7 +1056,11 @@ export namespace DataSourceInternal {
       let attr: Aspect.InstalledAttribute | undefined = undefined;
       let n = 0;
       let mult = false;
-      const setAttr = (a: Aspect.InstalledAttribute | undefined) => {
+      const setAttr = (aspect: Aspect.Installed, name: string | undefined) => {
+        let a = name ? aspect.attributes.get(name) : aspect.attribute_ref;
+        if (!a) {
+          name ? aspect.virtual_attributes.get(name) : aspect.attribute_ref;
+        };
         if (a) {
           if (attr && !DataSourceScope.attribute_name_type_are_equals(a, attr)) {
             if (!mult)
@@ -1064,13 +1069,41 @@ export namespace DataSourceInternal {
           }
           attr = a;
         }
+        else if (name && name.startsWith("$")) {
+          //Virtual
+          const RX = /^(\$is_last)\(([+-][a-zA-Z0-9-_]+(?:,[+-][a-zA-Z0-9-_]+)*)\)(?:\/{0,1})(([a-zA-Z0-9-_]+(?:,[a-zA-Z0-9-_]+)*))?$/;
+          let m = name.match(RX);
+          if (m) {
+            let [_, op, sort, groupby] = m;
+            let type: Aspect.TypeVirtual = { is: "type", type: "virtual",operator:op, sort : [], group_by:[] };
+            let s = sort.split(',');
+            if (s.length === 0) s.push(sort);
+            s.map(a => {
+              let attribute = aspect.attributes.get(a.substring(1));
+              if (attribute)
+                type.sort.push({asc: a[0] === '+', attribute:attribute });
+              else
+                p.diagnostic(this.reporter, { is: "error", msg: `attribute ${attribute} not found` });
+            });
+            groupby.split(',').map(a => {
+              let attribute = aspect.attributes.get(a);
+              if (attribute)
+                type.group_by.push(attribute);
+              else
+                p.diagnostic(this.reporter, { is: "error", msg: `attribute ${attribute} not found` });
+            });
+
+            attr = Aspect.create_virtual_attribute(name,type);
+            aspect.virtual_attributes.set(name,attr);
+          }
+        }
       };
 
       const recurse = (set: ObjectSet) => {
         for (let c_self of set.typeConstraints) {
           if (c_self.type === ConstraintType.InstanceOf || c_self.type === ConstraintType.Is) {
             n++;
-            setAttr(name ? c_self.value.attributes.get(name) : c_self.value.attribute_ref);
+            setAttr(c_self.value, name);
           }
           else if (c_self.type === ConstraintType.Union) {
             for (let u of c_self.value)
@@ -1085,7 +1118,7 @@ export namespace DataSourceInternal {
       recurse(set);
       if (n === 0) {
         for (let aspect of this.aspects())
-          setAttr(name ? aspect.attributes.get(name) : aspect.attribute_ref);
+          setAttr(aspect, name);
       }
       if (!attr)
         p.diagnostic(this.reporter, { is: "error", msg: `attribute ${name} not found` });
@@ -1187,7 +1220,13 @@ export namespace DataSourceInternal {
       for (let key in conditions) {
         if (!key.startsWith('$')) {
           p.set(key);
-          if (key.startsWith('=')) {
+          if (key.startsWith('=$')) {
+            //virtual attributes
+            let a = this.resolveAttribute(p, set, [key.substring(1)]);
+            if (a)
+              this.parseRightConditions(p, set, constraints, end, a, conditions[key]);
+          }
+          else if (key.startsWith('=')) {
             // only elements are allowed here ( ie. =element_name(.attribute)* )
             let a = this.resolveElement(p, key.substring(1), set, end);
             if (a)

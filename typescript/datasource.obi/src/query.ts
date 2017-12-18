@@ -301,6 +301,10 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     return query;
   }
 
+  sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute) {
+    return this.sql_sub_count_mutate(var_set, var_attribute, undefined);
+  }
+
   mapSingleValue(attribute: Aspect.InstalledAttribute, value) {
     if (value instanceof VersionedObject) {
       value = value.id();
@@ -310,22 +314,22 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     return this.ctx.config.aspectValue_to_obiValue(value, attribute);
   }
 
-  async execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>> {
-    let ret = new Map<Identifier, { __is: string, _id: any, _version: number }>();
+  async execute_ids(): Promise<Map<Identifier, { $is: string, _id: any, _version: number }>> {
+    let ret = new Map<Identifier, { $is: string, _id: any, _version: number }>();
     let mono_query = this.sql_select();
     let mono_rows = await this.ctx.db.select(mono_query);
     for (let row of mono_rows) {
-      let { __is, _id, _version } = row as any;
-      let is = this.ctx.config.obiEntity_to_aspectClassname(__is);
-      ret.set(_id, { __is: is, _id: _id, _version: _version });
+      let { $is, _id, _version } = row as any;
+      let is = this.ctx.config.obiEntity_to_aspectClassname($is);
+      ret.set(_id, { $is: is, _id: _id, _version: _version });
     }
     return ret;
   }
 
   buildConstraints() {
     this.addDefaultInitialFrom();
-    this.addAttribute("_id");
-    this.addAttribute("_version");
+    this.addAttribute(Aspect.attribute_id);
+    this.addAttribute(Aspect.attribute_version);
     super.buildConstraints();
   }
 

@@ -72,6 +72,8 @@ function parseScopeAttr(ctx: ParseScopeContext,
 
   let safe_attribute = aspect.attributes.get(unsafe_attribute);
   if (!safe_attribute)
+    safe_attribute = aspect.virtual_attributes.get(unsafe_attribute);
+  if (!safe_attribute)
     throw new Error(`'${unsafe_attribute}' requested but not found for '${aspect.classname}'`);
 
   if (!sort_match || sort_match[2] !== "#")

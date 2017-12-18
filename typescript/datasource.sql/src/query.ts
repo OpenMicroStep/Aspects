@@ -13,6 +13,8 @@ import ConstraintVariable = DataSourceInternal.ConstraintVariable;
 import ConstraintSub = DataSourceInternal.ConstraintSub;
 import scope_at_type_path = DataSourceInternal.ResolvedScope.scope_at_type_path;
 
+const $is = Aspect.create_virtual_attribute("$is", { is: "type", type: "virtual", operator:"$is", group_by: [], sort: [] });
+
 export function mapValue(ctx: { mappers: { [s: string]: SqlMappedObject }  }, mapper: SqlMappedObject, attribute: SqlMappedAttribute, value) {
   if (value instanceof VersionedObject) {
     let name = value.manager().classname();
@@ -34,7 +36,7 @@ function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O):
 }
 
 function isMonoAttribute(a: Aspect.InstalledAttribute) : boolean {
-  return a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary";
+  return a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary" || a.type.type === "virtual";
 }
 
 export interface SqlMappedSharedContext extends SqlQuerySharedContext<SqlMappedSharedContext, SqlMappedQuery> {
@@ -56,7 +58,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   inner_join = true;
 
   initialFromTable: string | undefined = undefined;
-  initialFromKeys: string[] = [];
+  initialFromKeys: Aspect.InstalledAttribute[] = [];
   initialFromKeyColumns: SqlBinding[] = [];
   columns = new Map<string, SqlBinding>();
   columns_ordered: string[] = [];
@@ -99,7 +101,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
   abstract sql_column(attribute: Aspect.InstalledAttribute, required?: true): SqlBinding;
   abstract sql_column(attribute: Aspect.InstalledAttribute, required: boolean): SqlBinding | undefined;
   abstract execute(): Promise<VersionedObject[]>;
-  abstract execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>>;
+  abstract execute_ids(): Promise<Map<Identifier, { $is: string, _id: any, _version: number }>>;
   abstract mapSingleValue(attribute: Aspect.InstalledAttribute, value): any;
   abstract setInitialUnionOfAlln(q_0: SqlQuery<SharedContext>, q_n: SqlQuery<SharedContext>, q_np1: SqlQuery<SharedContext>): Promise<void>;
 
@@ -110,6 +112,8 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     lset: ObjectSet, lattribute: Aspect.InstalledAttribute,
     rset: ObjectSet, rattribute: Aspect.InstalledAttribute
   ): SqlBinding;
+
+  abstract sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute): SqlBinding;
 
   mapValue(attribute: Aspect.InstalledAttribute, value): any {
     return Array.isArray(value) ? value.map(v => this.mapSingleValue(attribute, v)) : this.mapSingleValue(attribute, value);
@@ -153,16 +157,16 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     }
     else if (this.initialFromKeys.length === sql_key_columns.length) {
       this.initialFromKeys.forEach((lkey, idx) => {
-        let lc = { sql: this.addAttribute(lkey), bind: [] };
+        let lc = this.addAttribute(lkey);
         let rc = sql_key_columns[idx];
-        constraints.push(maker.compare_bind(lc, ConstraintType.Equal, rc));
+        constraints.push(maker.compare(lc, ConstraintType.Equal, rc));
       });
     }
     else throw new Error(`internal error: initialFromKeys length mismatch`);
 
     if (left_join) {
       constraints.push(maker.compare(
-        this.sql_column("_id"), ConstraintType.Equal, left_join.query.sql_column(left_join.attribute)
+        this.sql_column(Aspect.attribute_id), ConstraintType.Equal, left_join.query.sql_column(left_join.attribute)
       ));
     }
     if (constraints.length > 0)
@@ -534,7 +538,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   tables = new Map<string, string>();
   hasSub = false;
 
-  setInitialType(name: string, instanceOf: boolean, left_join?: { query: SqlMappedQuery, attribute: string }): void {
+  setInitialType(name: string, instanceOf: boolean, left_join?: { query: SqlMappedQuery, attribute: Aspect.InstalledAttribute }): void {
     let mapper = this.ctx.mappers[name];
     if (!mapper)
       throw new Error(`mapper for '${name}' not found`);
@@ -544,8 +548,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let table = attr.path[0].table;
     let key = attr.path[0].key;
     let sql_from = this.ctx.maker.from(table, alias);
-    let keys = ["__is", "_id"];
-    let sql_key_columns = [this.ctx.maker.value(mapper.name), { sql: this.ctx.maker.column(alias, key), bind: [] }];
+    let keys = [$is, Aspect.attribute_id];
+    let sql_key_columns = [this.ctx.maker.value(mapper.name), this.ctx.maker.column(alias, key)];
     this.tables.set(JSON.stringify([table, key]), alias);
     this.addInitialFrom(sql_from, alias, keys, sql_key_columns, left_join);
   }
@@ -583,7 +587,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       q_np1.addLazyAttributes(info.attributes.values());
       q_0.addLazyAttributes(info.attributes.values());
 
-      let sql_columns: string[] = [maker.quote("__is")];
+      let sql_columns: string[] = [maker.quote("$is")];
       for (let a of q_0.columns_ordered)
         sql_columns.push(maker.quote(a));
       let sql_from = maker.select_with_recursive(sql_columns, q_0.sql_select(), u_n, q_np1.sql_select());
@@ -631,6 +635,18 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   sql_column(attribute: Aspect.InstalledAttribute, required?: true): SqlBinding
   sql_column(attribute: Aspect.InstalledAttribute, required: false): SqlBinding | undefined
   sql_column(attribute: Aspect.InstalledAttribute, required: boolean = true): SqlBinding | undefined {
+
+
+    if (attribute.type.type === "virtual") {
+      if (attribute.type.operator === "$is_last") {
+        let sql_select_count: SqlBinding = this.sql_sub_count_virtual(this.set,attribute);
+        return sql_select_count;
+        //let b = this.ctx.maker.op_bind(sql_select_count,(attribute.type. value === true) ? ConstraintType.Equal : ConstraintType.NotEqual, 0);
+      } else {
+        throw new Error(`virtal operator ${attribute.type.operator} is not implemented`);
+      }
+    }
+
     let lsqlattr: SqlMappedAttribute | undefined;
     for (let mapper of this.mappers) {
       lsqlattr = mapper.get(attribute.name);
@@ -683,23 +699,23 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     }
     let cc = this.ctx.controlCenter;
     let aspects = [...this.mappers].map(m => cc.aspectChecked(m.name)!);
-    this.addAttribute("_id");
-    this.addAttribute("_version");
+    this.addAttribute(Aspect.attribute_id);
+    this.addAttribute(Aspect.attribute_version);
     // TODO: share mono attributes computation with execution work
     for (let a of this.monoAttributes(aspects))
       this.addAttribute(a);
     super.buildConstraints();
   }
 
-  monoAttributes(aspects: Iterable<Aspect.Installed>) : IterableIterator<string> {
-    let monoAttributes = new Set<string>();
+  monoAttributes(aspects: Iterable<Aspect.Installed>) : IterableIterator<Aspect.InstalledAttribute> {
+    let monoAttributes = new Set<Aspect.InstalledAttribute>();
     if (this.set.scope) {
       for (let aspect of aspects) {
         let scope_type = this.set.scope[aspect.classname];
         let scope_path = scope_type ? scope_type['.'] : [];
         for (let a of scope_path)
           if (isMonoAttribute(a))
-            monoAttributes.add(a.name);
+            monoAttributes.add(a);
       }
     }
     return monoAttributes.values();
@@ -791,7 +807,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       sql_select_count = [...cases.values()][0];
     }
     else {
-      sql_select_count = this.ctx.maker.case({ sql: rvar_query.sql_column("__is"), bind: [] }, cases);
+      sql_select_count = this.ctx.maker.case(rvar_query.sql_column($is), cases);
     }
     return this.ctx.maker.sub(sql_select_count);
   }
@@ -818,14 +834,85 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       sql_select_count = [...cases.values()][0];
     }
     else {
-      sql_select_count = this.ctx.maker.case({ sql: lvar_query.sql_column("__is"), bind: [] }, cases);
+      lvar_query.sql_column($is)
+      sql_select_count = this.ctx.maker.case(lvar_query.sql_column($is), cases);
     }
     return this.ctx.maker.sub(sql_select_count);
   }
 
+
+  sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute) {
+
+    let type = var_attribute.type as Aspect.TypeVirtual;
+    let lvar_query = this.ctx.queries.get(var_set)!;
+    let cases = new Map<string, SqlBinding>();
+
+    for (let lmapper of lvar_query.mappers) {
+      let lsub_var_set = new ObjectSet(lmapper.name);
+      let lsub_var_query = new SqlMappedQuery(this.ctx, lsub_var_set);
+      this.ctx.queries.set(lsub_var_set, lsub_var_query);
+      lsub_var_query.setInitialType(lmapper.name, false);
+
+      type.group_by.map(g => {
+        lsub_var_query.addConstraint(this.ctx.maker.compare(
+          lsub_var_query.sql_column(g),
+          ConstraintType.Equal,
+          lvar_query.sql_column(g)
+        ));
+      });
+
+      let prev: SqlBinding[]=[];
+      let done: SqlBinding[]=[];
+
+      type.sort.map(s => {
+
+        let cur = this.ctx.maker.compare(
+          lsub_var_query.sql_column(s.attribute),
+          s.asc ? ConstraintType.GreaterThan : ConstraintType.LessThan,
+          lvar_query.sql_column(s.attribute)
+        )
+
+        if (prev.length === 0)
+          done.push ( cur )
+        else if (prev.length>0)
+          done.push ( this.ctx.maker.and([cur,...prev]) )
+
+        prev.push(
+          this.ctx.maker.compare(
+            lsub_var_query.sql_column(s.attribute),
+            ConstraintType.Equal,
+            lvar_query.sql_column(s.attribute)
+          )
+        )
+
+      })
+
+      lsub_var_query.addConstraint(this.ctx.maker.or(done));
+
+      let sql_select_count = lsub_var_query.sql_select_count();
+      cases.set(lmapper.name, sql_select_count);
+    }
+
+    let sql_select_count: SqlBinding;
+    if (cases.size === 1) {
+      sql_select_count = [...cases.values()][0];
+    }
+    else {
+      sql_select_count = this.ctx.maker.case(lvar_query.sql_column($is), cases);
+    }
+
+    return this.ctx.maker.sub(sql_select_count);
+  }
+
+
+
   mapSingleValue(attribute: Aspect.InstalledAttribute, value) {
     let finalValue;
     let hasFinalValue = false;
+    if (attribute.type.type === "virtual"){
+      finalValue = value;
+      hasFinalValue = true;
+    } else
     for (let mapper of this.mappers) {
       let a = mapper.get(attribute.name);
       if (a) {
@@ -845,24 +932,24 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let sql_columns = super.sql_columns();
     if (!this.hasSub) {
       let is = this.mappers.values().next().value.name;
-      sql_columns.unshift(this.ctx.maker.column_alias_bind(this.ctx.maker.value(is), '__is'));
+      sql_columns.unshift(this.ctx.maker.column_alias(this.ctx.maker.value(is), '$is'));
     }
     else {
-      sql_columns.unshift(this.ctx.maker.column(this.initialFromTable!, '__is', '__is'));
+      sql_columns.unshift(this.ctx.maker.column(this.initialFromTable!, '$is', '$is'));
     }
     return sql_columns;
   }
 
-  async execute_ids(): Promise<Map<Identifier, { __is: string, _id: any, _version: number }>> {
-    let ret = new Map<Identifier, { __is: string, _id: any, _version: number }>();
+  async execute_ids(): Promise<Map<Identifier, { $is: string, _id: any, _version: number }>> {
+    let ret = new Map<Identifier, { $is: string, _id: any, _version: number }>();
     let mono_query = this.sql_select();
     let mono_rows = await this.ctx.db.select(mono_query);
     for (let row of mono_rows) {
-      let { __is, _id, _version } = row as any;
-      let mapper = this.ctx.mappers[__is]!;
+      let { $is, _id, _version } = row as any;
+      let mapper = this.ctx.mappers[$is]!;
       let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(_id));
       let version = mapper.get("_version")!.fromDbKey(_version);
-      ret.set(id, { __is: __is, _id: id, _version: version });
+      ret.set(id, { $is: $is, _id: id, _version: version });
     }
     return ret;
   }
@@ -887,7 +974,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     };
 
     const loadMonoRow = (row: any, prefix: string, path: string, mult_items: Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>) => {
-      let type = row[prefix + "__is"];
+      let type = row[prefix + "$is"];
       let db_id = row[prefix + "_id"];
       if (!type || !db_id)
         return;
@@ -946,10 +1033,10 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
               let q_r = new SqlMappedQuery(this.ctx, s_r);
               this.ctx.queries.set(s_r, q_r);
               q_r.setInitialType(type_r, false);
-              q_r.addAttribute("_id");
-              q_r.addAttribute("_version");
+              q_r.addAttribute(Aspect.attribute_id);
+              q_r.addAttribute(Aspect.attribute_version);
               for (let a of scope_path)
-                q_r.addAttribute(a.name);
+                q_r.addAttribute(a);
 
               this.ctx.queries.set(s_m, q_m);
               q_m.setInitialType(aspect.classname, false);
@@ -970,8 +1057,8 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
             let q_m = new SqlMappedQuery(this.ctx, s_m);
             this.ctx.queries.set(s_m, q_m);
             q_m.setInitialType(aspect.classname, false);
-            q_m.addAttribute("_id");
-            q_m.addAttribute(attribute.name);
+            q_m.addAttribute(Aspect.attribute_id);
+            q_m.addAttribute(attribute);
             q_m.addConstraint(q_m.buildConstraintValue(q_m.set, Aspect.attribute_id, ConstraintType.In, this.mapValue(Aspect.attribute_id, [...ids])));
             let sql_select = q_m.sql_select();
             let rows = await this.ctx.db.select(sql_select);

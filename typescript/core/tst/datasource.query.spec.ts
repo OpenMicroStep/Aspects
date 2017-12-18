@@ -1,4 +1,4 @@
-import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration, AspectSelection, Result, Diagnostic} from '@openmicrostep/aspects';
+import {ControlCenter, DataSourceInternal, VersionedObject, AspectConfiguration, AspectSelection, Result, Diagnostic, Aspect} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -978,6 +978,63 @@ function persons_with_cars_and_their_cars_1k() { // about 170ms
   }
 }
 
+function simple_virtual() {
+let sets =
+    DataSourceInternal.parseRequest({
+      name: "virtual",
+      where:{
+        $instanceOf: Car,
+        //_name: { $eq: "Test" } ,
+        "=$is_last(+_name,-_model)/_name,_model":{"$eq":true},
+      },
+      scope: ['_name']
+
+    },cc);
+    assert.deepEqual(sets.diagnostics(),[]);
+  let [set] = sets.value()
+
+  assert.equal(set.name, "virtual");
+  assert.deepEqual(set.typeConstraints, [{ type: ConstraintType.InstanceOf, value: cc.aspectChecked("Car") }]);
+  assert.instanceOf(set.constraints[0],DataSourceInternal.ConstraintValue);
+  let c = set.constraints[0] as DataSourceInternal.ConstraintValue;
+  assert.deepEqual(c.type,ConstraintType.Equal);
+  assert.deepEqual(c.value,true);
+  assert.deepEqual(c.leftAttribute.name,"$is_last(+_name,-_model)/_name,_model");
+  assert.deepEqual(c.leftAttribute.index,-1);
+  //assert.instanceOf(c.leftAttribute.type,Aspect.TypeVirtual);
+  assert.deepEqual(c.leftAttribute.type.type,"virtual");
+  let type = (c.leftAttribute.type as Aspect.TypeVirtual);
+  assert.deepEqual(type.operator,"$is_last");
+  assert.deepEqual(type.sort[0].asc,true);
+  assert.deepEqual(type.sort[0].attribute.name,"_name");
+
+  assert.deepEqual(type.sort[1].asc,false);
+  assert.deepEqual(type.sort[1].attribute.name,"_model");
+
+  assert.deepEqual(type.group_by[0].name,"_name");
+  assert.deepEqual(type.group_by[1].name,"_model");
+}
+
+
+function simple_virtual_scope() {
+  let sets =
+      DataSourceInternal.parseRequest({
+        name: "virtual",
+        where:{
+          $instanceOf: Car,
+          //_name: { $eq: "Test" } ,
+          "=$is_last(+_name,-_model)/_name,_model":{"$eq":true},
+        },
+        scope: ['_name','$is_last(+_name,-_model)/_name,_model']
+
+      },cc);
+    assert.deepEqual(sets.diagnostics(),[]);
+    let [set] = sets.value();
+  }
+
+
+
+
 function makeObjects() {
   let cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
     Car.Aspects.test1,
@@ -1058,6 +1115,12 @@ export const tests = { name: 'DataSource.request', tests: [
       persons_with_cars_and_their_cars_1k,
     ]},
   ]},
+
+  { name: "virtal", tests: [
+    simple_virtual,
+    simple_virtual_scope
+  ]},
+
   applyWhere,
   applyRequest,
 ]};
