@@ -158,8 +158,8 @@ export abstract class SqlMaker {
   }
 
   column(table: string, name: string, alias?: string) {
-    let col = this.quote(table) + "." + this.quote(name);
-    if (alias) return this.column_alias({ sql:col, bind:[] },alias)
+    let col = { sql:this.quote(table) + "." + this.quote(name), bind:[] };
+    if (alias) return this.column_alias(col,alias)
     return col;
   }
 
