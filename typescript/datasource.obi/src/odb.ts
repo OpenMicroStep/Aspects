@@ -339,7 +339,7 @@ export class OuiDB {
       this.maker.column("TJ_VAL_STR", "VAL"),
     ],
     this.maker.from("TJ_VAL_STR"), [],
-    this.maker.op(this.maker.quote("VAL_CAR"), ConstraintType.Equal, this.config.CarSystemNameId)
+    this.maker.op({ sql: this.maker.quote("VAL_CAR"), bind: [] }, ConstraintType.Equal, this.config.CarSystemNameId)
   );
     let rows = await this.connector.select(sql_systemObis);
     let ids: number[] = [];
@@ -379,7 +379,7 @@ export class OuiDB {
         this.maker.column(table, "VAL_INST"),
         this.maker.column(table, "VAL_CAR" ),
         this.maker.column(table, "VAL"     ),
-      ], this.maker.from(table), [], this.maker.op(this.maker.quote("VAL_INST"), ConstraintType.In, ids));
+      ], this.maker.from(table), [], this.maker.op({ sql: this.maker.quote("VAL_INST"), bind: [] }, ConstraintType.In, ids));
       let rows = await db.select(sql_car);
       for (let row of rows as { VAL_INST: number, VAL_CAR: number, VAL: any }[]) {
         let obi = into.get(row.VAL_INST)!;

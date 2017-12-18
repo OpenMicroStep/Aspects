@@ -63,11 +63,11 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     let keys = queries[0].initialFromKeys;
     let from = maker.from_sub(maker.union(queries.map(q => q.sql_select_id())), table);
     this.addDefaultInitialFrom();
-    this.addInitialFrom(from, table, keys, keys.map(k => ({ sql: this.ctx.maker.column(table, k), bind: [] })));
+    this.addInitialFrom(from, table, keys, keys.map(k => (this.ctx.maker.column(table, k.name))));
   }
 
   setInitialRecursion(q_n: ObiQuery) {
-    let c = q_n.initialFromKeys.map(k => ({ sql: this.ctx.maker.column(q_n.initialFromTable!, k), bind: [] }));
+    let c = q_n.initialFromKeys.map(k => (this.ctx.maker.column(q_n.initialFromTable!, k.name)));
     this.addDefaultInitialFrom();
     this.addInitialFrom(q_n.from, q_n.initialFromTable!, q_n.initialFromKeys, c);
   }
@@ -80,7 +80,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     if (maker.select_with_recursive) {
       let u_n = q_n.initialFromTable!;
       let sql_from = maker.select_with_recursive([maker.quote("_id")], q_0.sql_select_id(), u_n, q_np1.sql_select_id());
-      this.addInitialFrom(maker.from_sub(sql_from, alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
+      this.addInitialFrom(maker.from_sub(sql_from, alias), alias, keys, keys.map(k => this.ctx.maker.column(alias, k.name)));
     }
     else {
       let i = 0;
@@ -108,13 +108,13 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       s.typeConstraints.splice(0, 1); // Remove the recursion type
       s.constraints.push(new ConstraintValue(ConstraintType.In, s._name, Aspect.attribute_id, fids));
       let q_all = await SqlQuery.build(this.ctx, s) as ObiQuery;
-      this.addInitialFrom(maker.from_sub(q_all.sql_select_id(), alias), alias, keys, keys.map(k => ({ sql: this.ctx.maker.column(alias, k), bind: [] })));
+      this.addInitialFrom(maker.from_sub(q_all.sql_select_id(), alias), alias, keys, keys.map(k => this.ctx.maker.column(alias, k.name)));
     }
   }
 
   sql_select_id(): SqlBinding {
     return this.ctx.maker.select(
-      [this.ctx.maker.column_alias(this.initialFromKeyColumns[0].sql, "_id")],
+      [this.ctx.maker.column_alias(this.initialFromKeyColumns[0], "_id")],
       this.sql_from(),
       this.sql_join(),
       this.sql_where()
@@ -128,13 +128,13 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     let table = "TJ_VAL_ID";
     let key = "VAL_INST";
     let sql_from = this.ctx.maker.from(table, alias);
-    let keys = ["_id"];
-    let sql_key_columns = [{ sql: this.ctx.maker.column(alias, key), bind: [] }];
+    let keys = [Aspect.attribute_id];
+    let sql_key_columns = [this.ctx.maker.column(alias, key)];
     this.tables.set("_id", alias);
     this.addInitialFrom(sql_from, alias, keys, sql_key_columns);
   }
 
-  addInitialFrom(sql_from: SqlBinding, table: string, keys: string[], sql_key_columns: SqlBinding[]) {
+  addInitialFrom(sql_from: SqlBinding, table: string, keys: Aspect.InstalledAttribute[], sql_key_columns: SqlBinding[]) {
     if (!this.initialFromTable)
       this.fromConditions.push(this.ctx.maker.op(this.ctx.maker.column(table, "VAL_CAR"), ConstraintType.Equal, this.ctx.car_entityid));
     super.addInitialFrom(sql_from, table, keys, sql_key_columns);
@@ -204,25 +204,25 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     throw new Error(`caracteristic ${attribute} not found`);
   }
 
-  sql_column(attribute: string, required?: true): string
-  sql_column(attribute: string, required: false): string | undefined
-  sql_column(attribute: string, required: boolean = true): string | undefined {
+  sql_column(attribute: Aspect.InstalledAttribute, required?: true): SqlBinding
+  sql_column(attribute: Aspect.InstalledAttribute, required: false): SqlBinding | undefined
+  sql_column(attribute: Aspect.InstalledAttribute, required: boolean = true): SqlBinding | undefined {
     let maker = this.ctx.maker;
-    if (attribute !== "_id") {
-      let table = this.tables.get(attribute);
-      let car_info = this.car_info(attribute);
+    if (attribute.name !== "_id") {
+      let table = this.tables.get(attribute.name);
+      let car_info = this.car_info(attribute.name);
       if (!table) {
         table = this.nextAlias();
-        this.tables.set(attribute, table);
+        this.tables.set(attribute.name, table);
         this.joins.push(maker.join("left", car_info.table, table, maker.and([
-          maker.compare(maker.column(table, column_id(car_info.direct)), ConstraintType.Equal, this.initialFromKeyColumns[0].sql),
+          maker.compare(maker.column(table, column_id(car_info.direct)), ConstraintType.Equal, this.initialFromKeyColumns[0]),
           maker.op(maker.column(table, "VAL_CAR" ), ConstraintType.Equal, car_info.car._id),
         ])));
       }
       return maker.column(table, column_val(car_info.direct));
     }
     else {
-      return this.initialFromKeyColumns[0].sql;
+      return this.initialFromKeyColumns[0];
     }
   }
 
@@ -231,7 +231,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       // obi make full text search on the whole object attributes easy and fast
       let alias = this.nextAlias();
       let maker = this.ctx.maker;
-      this.joins.push(maker.join("left", "TJ_VAL_STR", alias, maker.compare(maker.column(alias, "VAL_INST"), ConstraintType.Equal, this.sql_column("_id"))));
+      this.joins.push(maker.join("left", "TJ_VAL_STR", alias, maker.compare(maker.column(alias, "VAL_INST"), ConstraintType.Equal, this.sql_column(Aspect.attribute_id))));
       return maker.op(maker.column(alias, "VAL"), ConstraintType.Text, value);
     }
     else {
@@ -250,14 +250,14 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     return this.sql_sub_count_mutate(var_set, var_attribute, undefined);
   }
 
-  sql_sub_count_lvar_intersects_rvar_single(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, sql_right_column: string) {
+  sql_sub_count_lvar_intersects_rvar_single(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, sql_right_column: SqlBinding) {
     return this.sql_sub_count_mutate(
       var_set, var_attribute,
       (sql_left_column) => this.ctx.maker.compare(sql_left_column, ConstraintType.Equal, sql_right_column)
     );
   }
 
-  sql_sub_count_mutate(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, mutate?: (sql_left_column: string) => SqlBinding) {
+  sql_sub_count_mutate(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute, mutate?: (sql_left_column: SqlBinding) => SqlBinding) {
     let maker = this.ctx.maker;
     let columns = [maker.column_count()];
     let joins: SqlBinding[] = [];
@@ -490,7 +490,7 @@ function mk_query_ids(ctx: ObiSharedContext, direct: boolean, version: ObiQuery.
     ctx.maker.column("AIS", "VAL", "__is"),
     ctx.maker.column(table, column_val(direct) , "_id"),
     ctx.maker.column("AVE", "VAL", "_version"),
-    ctx.maker.column_alias_bind(ctx.maker.value(path), "_path"),
+    ctx.maker.column_alias(ctx.maker.value(path), "_path"),
   ];
   let from = ctx.maker.from(table);
   let joins = [
@@ -522,7 +522,7 @@ function mk_query_val(ctx: ObiSharedContext, table: string, direct: boolean, whe
     ctx.maker.column(table, column_id(direct) , "_id"),
     ctx.maker.column(table, "VAL_CAR" , "car"),
     ctx.maker.column(table, column_val(direct), "val"),
-    ctx.maker.column_alias_bind(ctx.maker.value(direct) , "direct"),
+    ctx.maker.column_alias(ctx.maker.value(direct) , "direct"),
   ];
   let joins: SqlBinding[] = [];
   if (table === "TJ_VAL_ID") {

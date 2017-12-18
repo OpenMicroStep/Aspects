@@ -13,13 +13,13 @@ class PostgresSqlMaker extends SqlMaker {
     }
   }
 
-  value_null_typed(type: SqlMaker.NullType): string {
+  value_null_typed(type: SqlMaker.NullType): SqlBinding {
     switch (type) {
-      case "string": return "NULL::text";
-      case "integer": return "NULL::integer";
-      case "boolean": return "NULL::boolean";
+      case "string": return  { sql: "NULL::text", bind: [] };
+      case "integer": return { sql: "NULL::integer", bind: [] };
+      case "boolean": return { sql: "NULL::boolean", bind: [] };
     }
-    return "NULL";
+    return  { sql:"NULL", bind: [] };
   }
 
   insert(table: string, columns: string[], sql_values: SqlBinding[], output_columns: string[]): SqlBinding {

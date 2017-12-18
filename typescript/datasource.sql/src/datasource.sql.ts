@@ -74,10 +74,10 @@ export class SqlDataSource extends DataSource {
             l = p;
           }
           let select = this.maker.sub(this.maker.select([this.maker.column(`U${i_last - 1}`, l.value)], from, joins, where));
-          ret.where = this.maker.compare_bind({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
+          ret.where = this.maker.compare({ sql: this.maker.quote(last.key), bind: [] }, ConstraintType.Equal, select);
         }
         else {
-          ret.where = this.maker.op(this.maker.quote(last.key), ConstraintType.Equal, iddb);
+          ret.where = this.maker.op({sql:this.maker.quote(last.key), bind:[]}, ConstraintType.Equal, iddb);
         }
       }
       return ret;
@@ -123,7 +123,7 @@ export class SqlDataSource extends DataSource {
         if (is_single_value) {
           requests.update_sets.push(this.maker.set(last.value, map_value(mapped_attribute, modified)));
           if (!isNew) // TODO: check this if
-            requests.update_checks.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, map_value(mapped_attribute, saved)));
+            requests.update_checks.push(this.maker.op({sql:this.maker.quote(last.value),bind:[]}, ConstraintType.Equal, map_value(mapped_attribute, saved)));
         }
         else {
           for (let [idx, value_i] of attribute.diffValue(modified, saved)) {
@@ -136,7 +136,7 @@ export class SqlDataSource extends DataSource {
               insert.push(m);
             }
             else {
-              requests.delete.push(this.maker.op(this.maker.quote(last.value), ConstraintType.Equal, map_value(mapped_attribute, value_i)));
+              requests.delete.push(this.maker.op({sql:this.maker.quote(last.value), bind:[]}, ConstraintType.Equal, map_value(mapped_attribute, value_i)));
             }
           }
         }

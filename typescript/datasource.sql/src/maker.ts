@@ -137,8 +137,8 @@ export abstract class SqlMaker {
     };
   }
 
-  value_null_typed(type: SqlMaker.NullType) : string {
-    return "NULL";
+  value_null_typed(type: SqlMaker.NullType) : SqlBinding {
+    return {sql: "NULL", bind: [] };
   }
 
   value_fast(value: null | number) : string {
@@ -158,24 +158,21 @@ export abstract class SqlMaker {
   }
 
   column(table: string, name: string, alias?: string) {
-    let r = this.quote(table) + "." + this.quote(name);
-    return alias ? this.column_alias(r, alias) : r;
+    let col = this.quote(table) + "." + this.quote(name);
+    if (alias) return this.column_alias({ sql:col, bind:[] },alias)
+    return col;
   }
 
   column_count() {
     return "COUNT(*)";
   }
 
-  column_alias(sql_column: string, alias: string) {
-    return `${sql_column} ${this.quote(alias)}`;
-  }
-
-  column_alias_bind(sql_column: SqlBinding, alias: string) : SqlBinding {
+  column_alias(sql_column: SqlBinding, alias: string) : SqlBinding {
     return { sql: `${sql_column.sql} ${this.quote(alias)}`, bind: sql_column.bind };
   }
 
-  sort_column(sql_column: string, asc: boolean): string {
-    return `${sql_column} ${asc ? 'ASC' : 'DESC'}`;
+  sort_column(sql_column: SqlBinding, asc: boolean): string {
+    return `${sql_column.sql} ${asc ? 'ASC' : 'DESC'}`;
   }
 
   set(column: string, value: any) : SqlBinding {
@@ -213,7 +210,9 @@ export abstract class SqlMaker {
     return this._conditions(conditions, " OR ");
   }
 
-  op(sql_column: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
+  /**@internal*/
+  _op(sql_column: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
+
     switch (operator) {
       case ConstraintType.Equal:
         if (value === null || value === undefined)
@@ -234,8 +233,8 @@ export abstract class SqlMaker {
     throw new Error(`unsupported op operator ${ConstraintType[operator]}`);
   }
 
-  op_bind(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
-    let b = this.op(sql_column.sql, operator, value) as SqlBindingM;
+  op(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
+    let b = this._op(sql_column.sql, operator, value) as SqlBindingM;
     b.bind.unshift(...sql_column.bind);
     return b;
   }
@@ -254,34 +253,33 @@ export abstract class SqlMaker {
     return sql;
   }
 
-  compare(sql_columnLeft: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: string): SqlBinding {
+  compare(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: SqlBinding): SqlBinding {
+    let op:string;
     switch (operator) {
-      case ConstraintType.Equal:              return { sql: `${sql_columnLeft} = ${sql_columnRight}` , bind: [] };
-      case ConstraintType.NotEqual:           return { sql: `${sql_columnLeft} <> ${sql_columnRight}`, bind: [] };
-      case ConstraintType.GreaterThan:        return { sql: `${sql_columnLeft} > ${sql_columnRight}` , bind: [] };
-      case ConstraintType.GreaterThanOrEqual: return { sql: `${sql_columnLeft} >= ${sql_columnRight}`, bind: [] };
-      case ConstraintType.LessThan:           return { sql: `${sql_columnLeft} < ${sql_columnRight}` , bind: [] };
-      case ConstraintType.LessThanOrEqual:    return { sql: `${sql_columnLeft} <= ${sql_columnRight}`, bind: [] };
+      case ConstraintType.Equal:              op = '='; break;
+      case ConstraintType.NotEqual:           op = '<>';break;
+      case ConstraintType.GreaterThan:        op = '>'; break;
+      case ConstraintType.GreaterThanOrEqual: op = '>=';break;
+      case ConstraintType.LessThan:           op = '<'; break;
+      case ConstraintType.LessThanOrEqual:    op = '<=';break;
+      default:
+        throw new Error(`unsupported compare operator ${ConstraintType[operator]}`);
     }
-    throw new Error(`unsupported compare operator ${ConstraintType[operator]}`);
-  }
+    let b:SqlBindingM;
+    b = { sql: `${sql_columnLeft.sql} ${op} ${sql_columnRight.sql}` , bind: [] };
+    b.bind.unshift(...sql_columnRight.bind);
+    b.bind.unshift(...sql_columnLeft.bind);
+    return b;
 
+  }
+/*
   compare_bind(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: SqlBinding): SqlBinding {
-    let b: SqlBindingM;
-    switch (operator) {
-      case ConstraintType.In:
-        b = { sql: `${sql_columnLeft} IN ${sql_columnRight}` , bind: [] };
-        break;
-      case ConstraintType.NotIn:
-        b = { sql: `${sql_columnLeft} NOT IN ${sql_columnRight}` , bind: [] };
-        break;
-      default: b = this.compare(sql_columnLeft.sql, operator, sql_columnRight.sql) as SqlBindingM;
-    }
+    let b = this.compare(sql_columnLeft.sql, operator, sql_columnRight.sql) as SqlBindingM;
     b.bind.unshift(...sql_columnRight.bind);
     b.bind.unshift(...sql_columnLeft.bind);
     return b;
   }
-
+*/
   protected abstract admin_create_table_column_type(type: SqlMaker.ColumnType,): string;
 
   protected admin_create_table_primary_key(table: SqlMaker.Table): string {
