@@ -7,6 +7,7 @@ import {tests as datasource_scope_tests} from './datasource.scope.spec';
 import {tests as datasource_query_tests} from './datasource.query.spec';
 import {tests as datasource_memory_tests} from './datasource.memory.spec';
 import {tests as transport_tests} from './transport.spec';
+import {tests as pool_tests} from './pool.spec';
 
 export const name = "core";
 export const tests = [
@@ -18,4 +19,5 @@ export const tests = [
   datasource_query_tests,
   datasource_memory_tests,
   transport_tests,
+  pool_tests,
 ];

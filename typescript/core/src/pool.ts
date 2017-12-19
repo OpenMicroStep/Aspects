@@ -29,7 +29,7 @@ export class Pool<T> implements Pool.Protocol<T> {
     let db = await this.acquire(priority);
     return scope(db)
       .then(v => { this.release(db); return Promise.resolve(v); })
-      .catch(v => { this.release(db); return Promise.reject(v); })
+      .catch(v => { this.releaseAndDestroy(db); return Promise.reject(v); })
   }
 
   acquire(priority: number = 0) : Promise<T> {
@@ -45,20 +45,25 @@ export class Pool<T> implements Pool.Protocol<T> {
       return new Promise<T>((resolve, reject) => {
         this._queue.push({ resolve: resolve, reject: reject, time: Date.now() });
         if (this._counter < this.config.max) {
-          this._counter++;
-          this._provider.create()
-            .then(t => this._dispatch({ t: t, usages: 0 }))
-            .catch(() => this._counter--);
+          this._create();
         }
       });
     }
+  }
+
+  release(t: T) {
+    this._dispatch(this._release(t));
+  }
+
+  releaseAndDestroy(t: T) {
+    this._destroy(this._release(t));
   }
 
   close() {
     if (!this._open) return;
 
     this._open = false;
-    this._queue.forEach(q => q.reject(new Error(`cannot acquire on closed pool`)));
+    this._queue.forEach(q => q.reject(new Error(`pool closed`)));
     this._freeResources.forEach(r => this._destroy(r));
     this._queue = [];
     this._freeResources = [];
@@ -80,6 +85,20 @@ export class Pool<T> implements Pool.Protocol<T> {
     return this._queue.length;
   }
 
+  private _create() {
+    this._counter++;
+    this._provider.create().then(
+      t => this._dispatch({ t: t, usages: 0 }),
+      err => {
+        this._counter--;
+        if (this._counter === 0) { // all _create did fail
+          this._queue.forEach(q => q.reject(new Error(`cannot acquire create() keeps failing`)));
+          this._queue = [];
+        }
+      }
+    );
+  }
+
   private _dispatch(r: Resource<T>) {
     if (!this._open) return this._destroy(r);
 
@@ -98,7 +117,7 @@ export class Pool<T> implements Pool.Protocol<T> {
   private _release(t: T) : Resource<T> {
     let r = this._acquiredResources.get(t);
     if (!r)
-      throw new Error(`released resource is not owned & acquired by this pool`);
+      throw new Error(`resource is not owned & acquired by this pool`);
     this._acquiredResources.delete(t);
     return r;
   }
@@ -106,14 +125,9 @@ export class Pool<T> implements Pool.Protocol<T> {
   private _destroy(r: Resource<T>) {
     this._counter--;
     this._provider.destroy(r.t);
-  }
-
-  release(t: T) {
-    this._dispatch(this._release(t));
-  }
-
-  releaseAndDestroy(t: T) {
-    this._destroy(this._release(t));
+    if (this._open && this._queue.length > 0) {
+      this._create(); // keep the ressources count high
+    }
   }
 }
 
