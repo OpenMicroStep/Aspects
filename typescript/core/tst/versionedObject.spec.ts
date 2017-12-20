@@ -1011,16 +1011,61 @@ function sub_object_single_modified_delete() {
     snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_latitude"), 1133);
     snapshot_p0.setAttributeValueFast(p0_aspect.checkedAttribute("_longitude"), 1133);
     p0.manager().mergeSavedAttributes(snapshot_p0);
-    p0._altitute = 2000;
-    p0._longitude = 2133;
   }
+  assert.isFalse(r0.manager().isModified());
+  assert.isFalse(p0.manager().isModified());
+  assert.isFalse(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isFalse(r0.manager().isDeleted());
+  assert.isFalse(p0.manager().isDeleted());
+  assert.isTrue(r0.manager().hasAttributeValue("_p1"));
+  assert.isTrue(p0.manager().hasAttributeValue("_altitute"));
+  assert.isTrue(p0.manager().hasAttributeValue("_latitude"));
+  assert.isTrue(p0.manager().hasAttributeValue("_longitude"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_latitude"));
+  assert.isTrue(p0.manager().isAttributeSaved("_longitude"));
+
+  p0._altitute = 2000;
+  p0._longitude = 2133;
+  assert.isFalse(r0.manager().isModified());
+  assert.isTrue(p0.manager().isModified());
+  assert.isFalse(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isFalse(r0.manager().isDeleted());
+  assert.isFalse(p0.manager().isDeleted());
+  assert.isTrue(r0.manager().hasAttributeValue("_p1"));
+  assert.isTrue(p0.manager().hasAttributeValue("_altitute"));
+  assert.isTrue(p0.manager().hasAttributeValue("_latitude"));
+  assert.isTrue(p0.manager().hasAttributeValue("_longitude"));
+  assert.isFalse(r0.manager().isAttributeSaved("_p1"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_latitude"));
+  assert.isTrue(p0.manager().isAttributeSaved("_longitude"));
+
   {
     let snapshot_r0 = new VersionedObjectSnapshot(r0_aspect, "r0");
     snapshot_r0.setAttributeValueFast(Aspect.attribute_version, 1);
     snapshot_r0.setAttributeValueFast(r0_aspect.checkedAttribute("_p1"), p0);
     r0.manager().mergeSavedAttributes(snapshot_r0);
-    r0._p1 = p1;
   }
+  assert.isTrue(r0.manager().isModified());
+  assert.isTrue(p0.manager().isModified());
+  assert.isTrue(r0.manager().isSaved());
+  assert.isTrue(p0.manager().isSaved());
+  assert.isFalse(r0.manager().isDeleted());
+  assert.isFalse(p0.manager().isDeleted());
+  assert.isTrue(r0.manager().hasAttributeValue("_p1"));
+  assert.isTrue(p0.manager().hasAttributeValue("_altitute"));
+  assert.isTrue(p0.manager().hasAttributeValue("_latitude"));
+  assert.isTrue(p0.manager().hasAttributeValue("_longitude"));
+  assert.isTrue(r0.manager().isAttributeSaved("_p1"));
+  assert.isTrue(p0.manager().isAttributeSaved("_altitute"));
+  assert.isTrue(p0.manager().isAttributeSaved("_latitude"));
+  assert.isTrue(p0.manager().isAttributeSaved("_longitude"));
+
+  r0._p1 = p1;
   assert.isTrue(r0.manager().isModified());
   assert.isTrue(p0.manager().isModified());
   assert.isTrue(r0.manager().isSaved());

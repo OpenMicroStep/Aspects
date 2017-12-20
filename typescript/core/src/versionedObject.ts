@@ -496,8 +496,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, merge_value: any) {
     let delta = -_modified_sub_count(data.flags);
+    let is_modified_direct = (data.flags & MODIFIED_DIRECT) > 0;
     if (attribute.is_sub_object) {
-      let one_if_modified = (data.flags & MODIFIED_DIRECT) ? 1 : 0;
+      let one_if_modified = is_modified_direct ? 1 : 0;
       // clear saved positions
       for (let sub_object of attribute.traverseValue<VersionedObject>(data.saved)) {
         let pdata = sub_object.manager()._parent;
@@ -506,10 +507,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
       }
       // set new saved positions
       for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
-        let pdata = sub_object.manager()._parent!;
+        let sub_object_manager = sub_object.manager();
+        let pdata = sub_object_manager._parent!;
         pdata.saved_position = position;
         pdata.modified_position = position;
         delta += one_if_modified; // "del" object
+        if (!is_modified_direct && sub_object_manager.isModified())
+          delta++;
       }
       // update modified positions
       for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(data.modified)) {
@@ -519,7 +523,9 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         pdata.modified_position = position;
       }
     }
-    this._apply_attribute_modified_delta(data, areEquals(data.modified, merge_value) ? -1 : 0, delta, false, undefined);
+    let is_still_modified_direct = is_modified_direct && !areEquals(data.modified, merge_value);
+    let modified_value = is_still_modified_direct ? data.modified : merge_value;
+    this._apply_attribute_modified_delta(data, bool2delta(is_still_modified_direct), delta, true, modified_value);
     data.saved = merge_value;
     data.flags |= SAVED;
   }
