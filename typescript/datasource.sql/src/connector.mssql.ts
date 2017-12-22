@@ -59,7 +59,7 @@ function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
   let TYPES = tedious.TYPES;
   let request = new tedious.Request(sql.sql, cb);
   for (let i = 0; i < sql.bind.length; i++) {
-    let bind = sql.bind[i];
+    let bind: any = sql.bind[i];
     let type;
     switch (typeof bind) {
       case 'number':

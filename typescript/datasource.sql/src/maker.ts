@@ -1,19 +1,19 @@
 import {DataSourceInternal} from '@openmicrostep/aspects';
 import ConstraintType = DataSourceInternal.ConstraintType;
 
-type SqlBindingM = { sql: string, bind: any[] };
-export type SqlBindingW = { sql: string, bind: ReadonlyArray<any> };
+type SqlBindingM = { sql: string, bind: SqlMaker.Bind[] };
+export type SqlBindingW = { sql: string, bind: ReadonlyArray<SqlMaker.Bind> };
 export type SqlBinding = Readonly<SqlBindingW>;
 export abstract class SqlMaker {
-  protected push_bindings(bind: any[], bindings: SqlBinding[]) {
+  protected push_bindings(bind: SqlMaker.Bind[], bindings: SqlBinding[]) {
     for (let b of bindings)
       bind.push(...b.bind);
   }
   protected join_sqls(bind: SqlBinding[], separator: string) : string {
     return bind.map(b => b.sql).join(separator);
   }
-  protected join_bindings(bind: SqlBinding[]) : any[] {
-    return ([] as any[]).concat(...bind.map(b => b.bind));
+  protected join_bindings(bind: SqlBinding[]) : SqlMaker.Bind[] {
+    return ([] as SqlMaker.Bind[]).concat(...bind.map(b => b.bind));
   }
 
   protected sql_sort(sql_sort?: string[]) : string {
@@ -33,7 +33,7 @@ export abstract class SqlMaker {
   }
 
   select(sql_columns: (string | SqlBinding)[], sql_from: SqlBinding, sql_joins: SqlBinding[], sql_where?: SqlBinding, sql_sort?: string[]) : SqlBinding {
-    let bind: SqlBinding[] = [];
+    let bind: SqlMaker.Bind[] = [];
     let columns = sql_columns.map(c => {
       if (typeof c === "string")
         return c;
@@ -141,20 +141,24 @@ export abstract class SqlMaker {
     return {sql: "NULL", bind: [] };
   }
 
-  value_fast(value: null | number) : string {
-    return typeof value === "number" ? value.toString() : "NULL";
-  }
-
-  value(value: any) : SqlBinding {
-    return { sql: '?', bind: [value !== undefined ? value : null] };
+  value(value: SqlMaker.Value) : SqlBinding {
+    if (value === undefined || value === null)
+      return { sql: 'NULL', bind: [] };
+    if (typeof value === "number")
+      return { sql: value.toString(), bind: [] };
+    if (value === true)
+      return { sql: "1", bind: [] };
+    if (value === false)
+      return { sql: "0", bind: [] };
+    return { sql: '?', bind: [value] };
   }
 
   value_concat(values: SqlBinding[]) : SqlBinding {
     return { sql: this.join_sqls(values, " || "), bind: this.join_bindings(values) };
   }
 
-  values(values: any[]) : SqlBinding[] {
-    return values.map(this.value.bind(this));
+  values(values: SqlMaker.Value[]) : SqlBinding[] {
+    return values.map(v => this.value(v));
   }
 
   column(table: string, name: string, alias?: string) {
@@ -175,10 +179,9 @@ export abstract class SqlMaker {
     return `${sql_column.sql} ${asc ? 'ASC' : 'DESC'}`;
   }
 
-  set(column: string, value: any) : SqlBinding {
-    if (value === undefined)
-      value = null;
-    return { sql: `${this.quote(column)} = ?`, bind: [value] };
+  set(column: string, value: SqlMaker.Value) : SqlBinding {
+    let sql_value = this.value(value);
+    return { sql: `${this.quote(column)} = ${sql_value.sql}`, bind: sql_value.bind };
   }
 
   protected _conditions(conditions: SqlBinding[], sql_op: string) : SqlBinding {
@@ -187,7 +190,7 @@ export abstract class SqlMaker {
     if (conditions.length === 1)
       return conditions[0];
     let sql = "(";
-    let bind: SqlBinding[] = [];
+    let bind: SqlMaker.Bind[] = [];
     let first = true;
     for (let condition of conditions) {
       if (condition.sql) {
@@ -210,33 +213,39 @@ export abstract class SqlMaker {
     return this._conditions(conditions, " OR ");
   }
 
-  /**@internal*/
-  _op(sql_column: string, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
-
+  op(sql_column_left: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value_right: SqlMaker.Value | SqlMaker.Value[]): SqlBinding {
     switch (operator) {
-      case ConstraintType.Equal:
-        if (value === null || value === undefined)
-          return { sql: `${sql_column} IS NULL`, bind: [] };
-        return { sql: `${sql_column} = ?`       , bind: [value] };
-      case ConstraintType.NotEqual:           return { sql: `${sql_column} <> ?`      , bind: [value] };
-      case ConstraintType.GreaterThan:        return { sql: `${sql_column} > ?`       , bind: [value] };
-      case ConstraintType.GreaterThanOrEqual: return { sql: `${sql_column} >= ?`      , bind: [value] };
-      case ConstraintType.LessThan:           return { sql: `${sql_column} < ?`       , bind: [value] };
-      case ConstraintType.LessThanOrEqual:    return { sql: `${sql_column} <= ?`      , bind: [value] };
-      case ConstraintType.Text:               return { sql: `${sql_column} LIKE ?`    , bind: [`%${value}%`] };
-      case ConstraintType.In:                 return value.length > 0
-        ? { sql: `${sql_column} IN (${value.map(v => '?').join(',')})`    , bind: value }
-        : { sql: `1 = 0`    , bind: [] };
-      case ConstraintType.NotIn:              return { sql: `${sql_column} NOT IN (${value.map(v => '?').join(',')})`, bind: value };
-      case ConstraintType.Exists:             return { sql: `${sql_column} ${value ? 'NOT NULL' : 'IS NULL'}`, bind: [] };
+      case ConstraintType.Text: return { sql: `${sql_column_left.sql} LIKE ?`, bind: [...sql_column_left.bind, `%${value_right}%`] };
+      case ConstraintType.In: return this._op_in_or_nin(value_right as SqlMaker.Value[], 'IN', sql_column_left);
+      case ConstraintType.NotIn: return this._op_in_or_nin(value_right as SqlMaker.Value[], 'NOT IN', sql_column_left);
+      case ConstraintType.Exists:             return { sql: `${sql_column_left.sql} ${value_right ? 'NOT NULL' : 'IS NULL'}`, bind: sql_column_left.bind };
+      default: {
+        if (value_right === null || value_right === undefined) {
+          switch (operator) {
+            case ConstraintType.Equal:    return { sql: `${sql_column_left.sql} IS NULL`, bind: [] };
+            case ConstraintType.NotEqual: return { sql: `${sql_column_left.sql} IS NOT NULL`, bind: [] };
+            default: throw new Error(`unsupported compare operator ${ConstraintType[operator]}`);
+          }
+        }
+        else {
+          let sql_value_right = this.value(value_right as SqlMaker.Value);
+          return {
+            sql: `${sql_column_left.sql} ${this._operator(operator)} ${sql_value_right.sql}`,
+            bind: [...sql_column_left.bind, ...sql_value_right.bind]
+          };
+        }
+      }
     }
-    throw new Error(`unsupported op operator ${ConstraintType[operator]}`);
   }
 
-  op(sql_column: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndFixedValue, value): SqlBinding {
-    let b = this._op(sql_column.sql, operator, value) as SqlBindingM;
-    b.bind.unshift(...sql_column.bind);
-    return b;
+  private _op_in_or_nin(value_right: SqlMaker.Value[], op: string, sql_column_left: SqlBinding) {
+    let sql_value_right: SqlBinding[] = [];
+    for (let v_right of value_right) {
+      sql_value_right.push(this.value(v_right));
+    }
+    return sql_value_right.length > 0
+      ? { sql: `${sql_column_left.sql} ${op} (${this.join_sqls(sql_value_right, ',')})`, bind: [...sql_column_left.bind, ...this.join_bindings(sql_value_right)] }
+      : { sql: `1 = 0`, bind: sql_column_left.bind };
   }
 
   case(sql_case: SqlBinding, cases: Iterable<[string, SqlBinding]>, sql_else?: SqlBinding) : SqlBinding {
@@ -254,32 +263,26 @@ export abstract class SqlMaker {
   }
 
   compare(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: SqlBinding): SqlBinding {
-    let op:string;
-    switch (operator) {
-      case ConstraintType.Equal:              op = '='; break;
-      case ConstraintType.NotEqual:           op = '<>';break;
-      case ConstraintType.GreaterThan:        op = '>'; break;
-      case ConstraintType.GreaterThanOrEqual: op = '>=';break;
-      case ConstraintType.LessThan:           op = '<'; break;
-      case ConstraintType.LessThanOrEqual:    op = '<=';break;
-      default:
-        throw new Error(`unsupported compare operator ${ConstraintType[operator]}`);
-    }
-    let b:SqlBindingM;
-    b = { sql: `${sql_columnLeft.sql} ${op} ${sql_columnRight.sql}` , bind: [] };
-    b.bind.unshift(...sql_columnRight.bind);
-    b.bind.unshift(...sql_columnLeft.bind);
-    return b;
+    return { 
+      sql: `${sql_columnLeft.sql} ${this._operator(operator)} ${sql_columnRight.sql}`,
+      bind: [...sql_columnLeft.bind, ...sql_columnRight.bind]
+    };
+  }
 
+  private _operator(operator: DataSourceInternal.ConstraintType) {
+    let op: string;
+    switch (operator) {
+      case ConstraintType.Equal:              op = '=';  break;
+      case ConstraintType.NotEqual:           op = '<>'; break;
+      case ConstraintType.GreaterThan:        op = '>';  break;
+      case ConstraintType.GreaterThanOrEqual: op = '>='; break;
+      case ConstraintType.LessThan:           op = '<';  break;
+      case ConstraintType.LessThanOrEqual:    op = '<='; break;
+      default: throw new Error(`unsupported compare operator ${ConstraintType[operator]}`);
+    }
+    return op;
   }
-/*
-  compare_bind(sql_columnLeft: SqlBinding, operator: DataSourceInternal.ConstraintBetweenAnyValueAndAnyValue, sql_columnRight: SqlBinding): SqlBinding {
-    let b = this.compare(sql_columnLeft.sql, operator, sql_columnRight.sql) as SqlBindingM;
-    b.bind.unshift(...sql_columnRight.bind);
-    b.bind.unshift(...sql_columnLeft.bind);
-    return b;
-  }
-*/
+
   protected abstract admin_create_table_column_type(type: SqlMaker.ColumnType,): string;
 
   protected admin_create_table_primary_key(table: SqlMaker.Table): string {
@@ -342,6 +345,8 @@ export abstract class SqlMaker {
   abstract select_index_list() : SqlBinding;
 }
 export namespace SqlMaker {
+  export type Value = string | Buffer | Date | number | boolean | null | undefined;
+  export type Bind = string | Buffer | number | Date;
   export type JoinType = "left" | "inner" | "right" | "cross" | "";
   export type NullType = 'integer' | 'decimal' | 'date' | 'string' | 'boolean' | undefined;
   export type Table = {
