@@ -120,6 +120,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   /** @internal */ _flags: number;
   /** @internal */ _attribute_data: InternalAttributeData[];
+  /** @internal */ _virtual_attributes: Map<string,any>;
 
   constructor(controlCenter: ControlCenter, object: T) {
     this._controlCenter = controlCenter;
@@ -129,6 +130,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._object = object;
     this._parent = undefined;
     let len = this._aspect.attributes_by_index.length;
+    this._virtual_attributes = new Map();
     this._attribute_data = new Array(len);
     this._attribute_data[0] = { // _id
       flags   : SAVED,
@@ -196,6 +198,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return (this._attribute_data[attribute.index].flags & HAS_VALUE) > 0 || this.isNew();
   }
 
+  hasVirtualAttributeValue(attribute_name: string) {
+    return this._virtual_attributes.has(attribute_name);
+  }
+
   // Values
   attributeValue(attribute_name: string) : any;
   attributeValue<K extends VersionedObjectManager.AttributeNames<T>>(attribute_name: K) : T[K];
@@ -212,6 +218,12 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (this.isNew())
       return this._missingValue(attribute);
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is not loaded`);
+  }
+
+  virtualAttributeValue(attribute_name: string): any {
+    if (this.hasVirtualAttributeValue(attribute_name))
+      return this._virtual_attributes.get(attribute_name);
+    throw new Error(`attribute '${this.classname()}.${attribute_name}' is not loaded`);
   }
 
   savedAttributeValue(attribute_name: string) : any;
@@ -245,6 +257,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   *attributes() {
     for (let idx = 2; idx <  this._attribute_data.length; idx++)
       yield this._aspect.attributes_by_index[idx];
+  }
+
+  virtualAttributes() {
+    return this._virtual_attributes.keys();
   }
 
   *modifiedAttributes() {
@@ -285,6 +301,10 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   setAttributeValueFast(attribute: Aspect.InstalledAttribute, value) {
     this._setAttributeValueFast(attribute, value, false);
+  }
+
+  setVirtualAttributeValue(attribute_name: string, value: any) {
+    this._virtual_attributes.set(attribute_name,value);
   }
 
   resolveOutdatedAttribute(attribute_name: string) {
