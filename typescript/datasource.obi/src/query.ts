@@ -401,15 +401,15 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     };
     await load_ids(this.sql_select());
 
-    let car2attr_d = new Map<number, Aspect.InstalledAttribute>();
-    let car2attr_r = new Map<number, Aspect.InstalledAttribute>();
+    let car2attr_d = new Map<number, string>();
+    let car2attr_r = new Map<number, string>();
     const load_attributes = async (sql_select: SqlBinding) => {
       let row_values = await this.ctx.db.select(sql_select);
       for (let row of row_values) {
         let {__is, _id, car, val, direct} = row as {__is?: number, _id: number, car: number, val: any, direct: boolean};
         let vo = ccc.find(_id)!;
         let snapshot = snapshots.get(vo)!;
-        let a = (direct ? car2attr_d : car2attr_r).get(car)!;
+        let a = vo.manager().aspect().checkedAttribute((direct ? car2attr_d : car2attr_r).get(car)!);
         val = this.ctx.config.obiValue_to_aspectValue(val, a);
         val = this.loadValue(ccc, val, __is);
         if (a.type.type === "set" || a.type.type === "array") {
@@ -432,7 +432,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         for (let a of attributes) {
           let car_info = this.car_info(a.name);
           let cars = cars_by_tables.get(car_info.table);
-          (car_info.direct ? car2attr_d : car2attr_r).set(car_info.car._id!, a);
+          (car_info.direct ? car2attr_d : car2attr_r).set(car_info.car._id!, a.name);
           if (!cars)
             cars_by_tables.set(car_info.table, cars = { dcar_ids: [], rcar_ids: [] });
           (car_info.direct ? cars.dcar_ids : cars.rcar_ids).push(car_info.car._id!);
