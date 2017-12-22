@@ -195,10 +195,10 @@ export class InMemoryDataSource extends DataSource {
             if (!areEquals(dbv, tr.toDSValue(saved)))
               diags.push({ is: "error", msg: `cannot update ${lObject.id()}: attribute ${attribute.name} mismatch` });
             else {
-              let dbm = tr.toDSValue(modified, create);
+              let dbm = tr.toDSValue(modified, creator(attribute));
               if (attribute.is_sub_object) {
-                for (let [position, sub_object] of attribute.diffValue<VersionedObject>(modified, saved)) {
-                  save(sub_object, position === -1);
+                for (let [action, sub_object] of attribute.subobjectChanges(modified, saved)) {
+                  save(sub_object, action === -1);
                 }
               }
               dObject.set(attribute, dbm);
@@ -225,18 +225,20 @@ export class InMemoryDataSource extends DataSource {
               save(sub_object);
             }
           }
-          dObject.set(attribute, tr.toDSValue(modified, create));
+          dObject.set(attribute, tr.toDSValue(modified, creator(attribute)));
         }
         return dObject;
       }
     };
 
-    function create(vo) : InMemoryDataSource.DataStoreObject | undefined {
-      if (objects_set.has(vo))
-        return save(vo);
-      diags.push({ is: "error", msg: `cannot save, the object ${vo.id()} is not is the save list` });
-      return undefined;
-    };
+    function creator(attribute: Aspect.InstalledAttribute) {
+      return function create(vo) : InMemoryDataSource.DataStoreObject | undefined {
+        if (objects_set.has(vo) || attribute.is_sub_object)
+          return save(vo);
+        diags.push({ is: "error", msg: `cannot save, the object ${vo.id()} is not is the save list` });
+        return undefined;
+      };
+    }
 
     for (let lObject of objects)
       save(lObject);

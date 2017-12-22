@@ -4,7 +4,7 @@ import {SqliteDBConnectorFactory} from '@openmicrostep/aspects.sql';
 import {parseObis, ObiDefinition, OuiDB, ObiDataSource, StdDefinition} from '@openmicrostep/aspects.obi';
 import {assert} from 'chai';
 import {createTests} from '../../core/tst/datasource.impl.spec';
-import {Resource, Car, People} from '../../../generated/aspects.interfaces';
+import {Resource, Car, People, Point, Polygon, RootObject} from '../../../generated/aspects.interfaces';
 
 type D = ObiDefinition;
 function sortvalue(a) {
@@ -599,6 +599,68 @@ pattern:
   _end:
 _end:
 
+ENT
+system name: T_RootObject
+pattern:
+  Gab
+  characteristic: t_p1
+  cardinality: one
+  _end:
+pattern:
+  Gab
+  characteristic: t_p2
+  cardinality: one
+  _end:
+pattern:
+  Gab
+  characteristic: t_p3
+  cardinality: one
+  _end:
+pattern:
+  Gab
+  characteristic: t_s0
+  cardinality: one
+  _end:
+pattern:
+  Gab
+  characteristic: t_s1
+  cardinality: one
+  _end:
+_end:
+
+ENT
+system name: T_Polygon
+pattern:
+  Gab
+  characteristic: t_points
+  cardinality: multi
+  _end:
+pattern:
+  Gab
+  characteristic: t_set
+  cardinality: multi
+  _end:
+_end:
+
+ENT
+system name: T_Point
+pattern:
+  Gab
+  characteristic: t_longitude
+  cardinality: one
+  _end:
+pattern:
+  Gab
+  characteristic: t_latitude
+  cardinality: one
+  _end:
+pattern:
+  Gab
+  characteristic: t_altitute
+  cardinality: one
+  _end:
+_end:
+
 Car
 system name: t_version
 type: INT
@@ -663,6 +725,64 @@ system name: t_mother
 type: ID
 domain entity: T_People
 _end:
+
+Car
+system name: t_p1
+type: SID
+domain entity: T_Point
+_end:
+
+Car
+system name: t_p2
+type: SID
+domain entity: T_Point
+_end:
+
+Car
+system name: t_p3
+type: SID
+domain entity: T_Point
+_end:
+
+Car
+system name: t_s0
+type: SID
+domain entity: T_Polygon
+_end:
+
+Car
+system name: t_s1
+type: SID
+domain entity: T_Polygon
+_end:
+
+Car
+system name: t_points
+type: SID
+domain entity: T_Point
+_end:
+
+Car
+system name: t_set
+type: SID
+domain entity: T_Point
+_end:
+
+Car
+system name: t_longitude
+type: INT
+_end:
+
+Car
+system name: t_latitude
+type: INT
+_end:
+
+Car
+system name: t_altitute
+type: INT
+_end:
+
 `;
 
 async function createObiControlCenter(flux) {
@@ -687,6 +807,9 @@ async function createObiControlCenter(flux) {
     Car.Aspects.test1,
     People.Aspects.test1,
     ObiDataSource.Aspects.server,
+    Point.Aspects.test1,
+    Polygon.Aspects.test1,
+    RootObject.Aspects.test1,
   ])));
   let ccc = cc.registerComponent({});
   let db = ObiDataSource.Aspects.server.create(ccc, ouiDb, {

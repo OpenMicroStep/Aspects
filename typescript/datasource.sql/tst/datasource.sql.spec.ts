@@ -5,7 +5,7 @@ import {
   SqlMaker, SqlBinding, DBConnector,
 } from '@openmicrostep/aspects.sql';
 import {createTests} from '../../core/tst/datasource.impl.spec';
-import {Resource, Car, People} from '../../../generated/aspects.interfaces';
+import {Resource, Car, People, Point, Polygon, RootObject} from '../../../generated/aspects.interfaces';
 
 function fromDbKeyPeople(id) { return `${id}:People`; }
 function fromDbKeyCar(id)    { return `${id}:Car`   ; }
@@ -70,12 +70,63 @@ function createSqlControlCenter(flux) {
           { is: "sql-mapped-attribute", name: "_drivers"                 , path: [{ is: "sql-path", table: "Drivers" , key: "car"   , value: "people"    }] },
           { is: "sql-mapped-attribute", name: "_tags"      , insert: "=T", path: [{ is: "sql-path", table: "Tags"    , key: "car"   , value: "tag"       }] },
       ]
+    },
+    "Point=": {
+      is: "sql-mapped-object",
+      fromDbKey: (id) => `${id}:Point`,
+      toDbKey: toDBKey,
+      "P=": { is: "sql-insert", table: "Point", values: [{ is: "sql-value", name: "id", type: "autoincrement" }] },
+      inserts: ["=P"],
+      delete_cascade: [{ is: "sql-path", table: "Point", key: "id", value: "id" }],
+      attributes: [
+          { is: "sql-mapped-attribute", name: "_id"       , insert: "=P", path: [{ is: "sql-path", table: "Point", key: "id", value: "id"        }] },
+          { is: "sql-mapped-attribute", name: "_version"  , insert: "=P", path: [{ is: "sql-path", table: "Point", key: "id", value: "version"   }] },
+          { is: "sql-mapped-attribute", name: "_longitude", insert: "=P", path: [{ is: "sql-path", table: "Point", key: "id", value: "longitude" }] },
+          { is: "sql-mapped-attribute", name: "_latitude" , insert: "=P", path: [{ is: "sql-path", table: "Point", key: "id", value: "latitude"  }] },
+          { is: "sql-mapped-attribute", name: "_altitute" , insert: "=P", path: [{ is: "sql-path", table: "Point", key: "id", value: "altitute"  }] },
+      ]
+    },
+    "Polygon=": {
+      is: "sql-mapped-object",
+      fromDbKey: (id) => `${id}:Polygon`,
+      toDbKey: toDBKey,
+      "P=": { is: "sql-insert", table: "Polygon", values: [{ is: "sql-value", name: "id", type: "autoincrement" }] },
+      "A=": { is: "sql-insert", table: "PolygonPoints", values: [{ is: "sql-value", name: "polygon", type: "ref", insert: "=P", value: "id" }] },
+      "S=": { is: "sql-insert", table: "PolygonSets", values: [{ is: "sql-value", name: "polygon", type: "ref", insert: "=P", value: "id" }] },
+      inserts: ["=P"],
+      delete_cascade: [{ is: "sql-path", table: "Polygon", key: "id", value: "id" }],
+      attributes: [
+          { is: "sql-mapped-attribute", name: "_id"     , insert: "=P", path: [{ is: "sql-path", table: "Polygon", key: "id", value: "id"        }] },
+          { is: "sql-mapped-attribute", name: "_version", insert: "=P", path: [{ is: "sql-path", table: "Polygon", key: "id", value: "version"   }] },
+          { is: "sql-mapped-attribute", name: "_points" , insert: "=A", path: [{ is: "sql-path", table: "PolygonPoints", key: "polygon", value: "point" }] },
+          { is: "sql-mapped-attribute", name: "_set"    , insert: "=S", path: [{ is: "sql-path", table: "PolygonSets"  , key: "polygon", value: "point" }] },
+      ]
+    },
+    "RootObject=": {
+      is: "sql-mapped-object",
+      fromDbKey: (id) => `${id}:RootObject`,
+      toDbKey: toDBKey,
+      "R=": { is: "sql-insert", table: "RootObject", values: [{ is: "sql-value", name: "id", type: "autoincrement" }] },
+      inserts: ["=R"],
+      delete_cascade: [{ is: "sql-path", table: "RootObject", key: "id", value: "id" }],
+      attributes: [
+          { is: "sql-mapped-attribute", name: "_id"     , insert: "=R", path: [{ is: "sql-path", table: "RootObject", key: "id", value: "id"        }] },
+          { is: "sql-mapped-attribute", name: "_version", insert: "=R", path: [{ is: "sql-path", table: "RootObject", key: "id", value: "version"   }] },
+          { is: "sql-mapped-attribute", name: "_p1"     , insert: "=R", path: [{ is: "sql-path", table: "RootObject", key: "id", value: "p1"        }] },
+          { is: "sql-mapped-attribute", name: "_p2"     , insert: "=R", path: [{ is: "sql-path", table: "RootObject", key: "id", value: "p2"        }] },
+          { is: "sql-mapped-attribute", name: "_p3"     , insert: "=R", path: [{ is: "sql-path", table: "RootObject", key: "id", value: "p3"        }] },
+          { is: "sql-mapped-attribute", name: "_s0"     , insert: "=R", path: [{ is: "sql-path", table: "RootObject", key: "id", value: "s0"        }] },
+          { is: "sql-mapped-attribute", name: "_s1"     , insert: "=R", path: [{ is: "sql-path", table: "RootObject", key: "id", value: "s1"        }] },
+      ]
     }
   });
 
   let cfg = new AspectConfiguration(new AspectSelection([
     Car.Aspects.test1,
     People.Aspects.test1,
+    Point.Aspects.test1,
+    Polygon.Aspects.test1,
+    RootObject.Aspects.test1,
     SqlDataSource.Aspects.server,
   ]));
   let cc = new ControlCenter(cfg);
@@ -169,7 +220,71 @@ const tables: SqlMaker.Table[] = [
     foreign_keys: [
       { columns: ["car"], foreign_table: "Car", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
     ],
-  }
+  },
+  {
+    name: "RootObject",
+    columns: [
+      { name: "id", type: { is: "autoincrement", bytes: 8 } },
+      { name: "version", type: { is: "integer", bytes: 8 } },
+      { name: "p1", type: { is: "integer", bytes: 8 } },
+      { name: "p2", type: { is: "integer", bytes: 8 } },
+      { name: "p3", type: { is: "integer", bytes: 8 } },
+      { name: "s0", type: { is: "integer", bytes: 8 } },
+      { name: "s1", type: { is: "integer", bytes: 8 } },
+    ],
+    primary_key: ["id"],
+    foreign_keys: [
+      { columns: ["p1"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["p2"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["p3"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["s0"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["s1"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
+  },
+  {
+    name: "Polygon",
+    columns: [
+      { name: "id", type: { is: "autoincrement", bytes: 8 } },
+      { name: "version", type: { is: "integer", bytes: 8 } },
+    ],
+    primary_key: ["id"],
+    foreign_keys: [],
+  },
+  {
+    name: "Point",
+    columns: [
+      { name: "id", type: { is: "autoincrement", bytes: 8 } },
+      { name: "version", type: { is: "integer", bytes: 8 } },
+      { name: "longitude", type: { is: "double", bytes: 8 } },
+      { name: "latitude", type: { is: "double", bytes: 8 } },
+      { name: "altitute", type: { is: "double", bytes: 8 } },
+    ],
+    primary_key: ["id"],
+  },
+  {
+    name: "PolygonPoints",
+    columns: [
+      { name: "polygon", type: { is: "integer", bytes: 8 } },
+      { name: "point", type: { is: "integer", bytes: 8 } },
+    ],
+    primary_key: ["polygon", "point"],
+    foreign_keys: [
+      { columns: ["polygon"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["point"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
+  },
+  {
+    name: "PolygonSets",
+    columns: [
+      { name: "polygon", type: { is: "integer", bytes: 8 } },
+      { name: "point", type: { is: "integer", bytes: 8 } },
+    ],
+    primary_key: ["polygon", "point"],
+    foreign_keys: [
+      { columns: ["polygon"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["point"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
+  },
 ];
 
 function do_once(once: any, work: () => Promise<void>) {

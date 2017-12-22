@@ -219,11 +219,14 @@ export class SqlDataSource extends DataSource {
         let modified = manager.attributeValueFast(attribute);
         let saved = manager.savedAttributeValueFast(attribute);
 
-        if (attribute.contains_vo) {
+        if (attribute.is_sub_object) {
+          for (let [action, sub_object] of attribute.subobjectChanges(modified, saved)) {
+            await this.save(tr, reporter, objects, sub_object, action === -1);
+          }
+        }
+        else if (attribute.contains_vo) {
           for (let [position, sub_object] of attribute.diffValue<VersionedObject>(modified, saved)) {
-            if (attribute.is_sub_object)
-              await this.save(tr, reporter, objects, sub_object, position === -1)
-            else if (position !== -1 && sub_object.manager().isNew()) {
+            if (position !== -1 && sub_object.manager().isNew()) {
               if (!objects.has(sub_object))
                 reporter.diagnostic({ is: "error", msg: `cannot save ${attribute.name}: referenced object is not saved and won't be` });
               if (!tr.versions.has(modified))

@@ -1,7 +1,7 @@
 import {ControlCenter, DataSource, ControlCenterContext, VersionedObject, VersionedObjectManager, Result} from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
-import {Resource, Car, People} from '../../../generated/aspects.interfaces';
+import {Resource, Car, People, Point, Polygon, RootObject} from '../../../generated/aspects.interfaces';
 
 interface Flux<T> {
   context: T;
@@ -19,6 +19,16 @@ type Context = {
   p2: People.Aspects.test1,
   p3: People.Aspects.test1,
   p4: People.Aspects.test1,
+  root0: RootObject.Aspects.test1,
+  root1: RootObject.Aspects.test1,
+  point0: Point.Aspects.test1,
+  point1: Point.Aspects.test1,
+  point2: Point.Aspects.test1,
+  point3: Point.Aspects.test1,
+  point4: Point.Aspects.test1,
+  point5: Point.Aspects.test1,
+  poly0: Polygon.Aspects.test1,
+  poly1: Polygon.Aspects.test1,
   ccc: ControlCenterContext,
 };
 
@@ -35,13 +45,21 @@ function init(flux: Flux<Context>) {
   ctx.p3 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Marge Simpson"  , _firstname: "Marge"  , _lastname: "Simpson", _birthDate: new Date()  });
   ctx.p0 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Lisa Simpson"   , _firstname: "Lisa"   , _lastname: "Simpson", _birthDate: new Date(), _father: ctx.p2, _mother: ctx.p3 });
   ctx.p1 = Object.assign(People.Aspects.test1.create(ccc), { _name: "Bart Simpson"   , _firstname: "Bart"   , _lastname: "Simpson", _birthDate: new Date(), _father: ctx.p2, _mother: ctx.p3 });
+  ctx.point0 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 0, _latitude: 15 });
+  ctx.point1 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 1, _latitude: 56 });
+  ctx.point2 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 2, _latitude: 347 });
+  ctx.point3 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 3, _latitude: 75 });
+  ctx.point4 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 4, _latitude: 786 });
+  ctx.point5 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 5, _latitude: 456 });
+  ctx.poly0 =  Object.assign(Polygon.Aspects.test1.create(ccc), { _points: [ctx.point2, ctx.point3] });
+  ctx.poly1 =  Object.assign(Polygon.Aspects.test1.create(ccc), { _set: new Set([ctx.point4, ctx.point5]) });
+  ctx.root0 =  Object.assign(RootObject.Aspects.test1.create(ccc), { _p1: ctx.point0, _p2: ctx.point1, _s0: ctx.poly0 });
+  ctx.root1 =  Object.assign(RootObject.Aspects.test1.create(ccc), { _s0: ctx.poly1 });
   flux.continue();
 }
 
 function clean(f: Flux<Context>) {
   let {db, cc, ccc, c0, c1, c2, c3, p0, p1, p2, p3, p4} = f.context;
-  ccc.unregisterObjects([c0, c1, c2, c3, p0, p1, p2, p3, p4]);
-  assert.deepEqual([...ccc.componentObjects()], []);
   ccc.destroy();
   f.continue();
 }
@@ -218,6 +236,61 @@ function sort_c0_c1_c2_c3_dsc(f: Flux<Context>) {
     });
     f.continue();
   });
+}
+
+async function sub_object_single(f: Flux<Context>) {
+  let {db, cc} = f.context;
+  await cc.safe(async ccc => {
+     let point0 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 0, _latitude: 15 }) as Point.Aspects.test1;
+     let point1 = Object.assign(Point.Aspects.test1.create(ccc), { _longitude: 1, _latitude: 78 }) as Point.Aspects.test1;
+     let root0 =  Object.assign(RootObject.Aspects.test1.create(ccc), { _p1: point0, _p2: point1 }) as RootObject.Aspects.test1;
+     assert.isFalse(root0.manager().isSaved());
+     assert.isTrue(root0.manager().isModified());
+     assert.isFalse(root0.manager().isInConflict());
+     assert.isFalse(point0.manager().isSaved());
+     assert.isTrue(point0.manager().isModified());
+     assert.isFalse(point0.manager().isInConflict());
+     assert.isFalse(point1.manager().isSaved());
+     assert.isTrue(point1.manager().isModified());
+     assert.isFalse(point1.manager().isInConflict());
+
+     let res0 = await ccc.farPromise(db.rawSave, [root0]);
+     assert.deepEqual(res0.diagnostics(), []);
+     assert.sameMembers(res0.value(), [root0]);
+     assert.isTrue(root0.manager().isSaved());
+     assert.isFalse(root0.manager().isModified());
+     assert.isFalse(root0.manager().isInConflict());
+     assert.isTrue(point0.manager().isSaved());
+     assert.isFalse(point0.manager().isModified());
+     assert.isFalse(point0.manager().isInConflict());
+     assert.isTrue(point1.manager().isSaved());
+     assert.isFalse(point1.manager().isModified());
+     assert.isFalse(point1.manager().isInConflict());
+
+
+     point0._latitude = 16;
+     assert.isTrue(root0.manager().isSaved());
+     assert.isTrue(root0.manager().isModified());
+     assert.isFalse(root0.manager().isInConflict());
+     assert.isTrue(point0.manager().isSaved());
+     assert.isTrue(point0.manager().isModified());
+     assert.isFalse(point0.manager().isInConflict());
+     assert.isTrue(point1.manager().isSaved());
+     assert.isFalse(point1.manager().isModified());
+     assert.isFalse(point1.manager().isInConflict());
+
+     let res1 = await ccc.farPromise(db.rawSave, [root0]);
+     assert.isTrue(root0.manager().isSaved());
+     assert.isFalse(root0.manager().isModified());
+     assert.isFalse(root0.manager().isInConflict());
+     assert.isTrue(point0.manager().isSaved());
+     assert.isFalse(point0.manager().isModified());
+     assert.isFalse(point0.manager().isInConflict());
+     assert.isTrue(point1.manager().isSaved());
+     assert.isFalse(point1.manager().isModified());
+     assert.isFalse(point1.manager().isInConflict());
+  });
+  f.continue();
 }
 
 function save_c0_c1_c2_c3_p0_p1_p2_p3_p4(f: Flux<Context>) {
@@ -889,6 +962,11 @@ export function createTests(createControlCenter: (flux) => void, destroyControlC
       save_relation_c0p0_c1p0_c2p1,
       sort_c0_c1_c2_c3_asc,
       sort_c0_c1_c2_c3_dsc,
+      { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
+    ]},
+    { name: "subobjects", tests: [
+      { name: "init", test: (f: any) => { f.setFirstElements([createControlCenter, init]); f.continue(); } },
+      sub_object_single,
       { name: "clean", test: (f: any) => { f.setFirstElements([clean, destroyControlCenter]); f.continue(); } },
     ]},
     { name: "relations", tests: [

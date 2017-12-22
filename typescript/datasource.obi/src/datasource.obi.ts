@@ -153,11 +153,23 @@ export class ObiDataSource extends DataSource {
           direct: true,
         };
 
-        for (let [idx, vv] of a.diffValue<any>(nv, ov)) {
-          if (idx === -1)
-            await remove(tr, table, oid as number, car._id!, a, ci, vv);
-          else
-            await insert(tr, table, oid as number, car._id!, a, ci, vv);
+        if (a.is_sub_object) {
+          for (let [action, sub_object] of a.subobjectChanges(nv, ov)) {
+            if (action === -1)
+              await remove(tr, table, oid as number, car._id!, a, ci, sub_object);
+            else if (action === 1)
+              await insert(tr, table, oid as number, car._id!, a, ci, sub_object);
+            else
+              await this.save(ccc, tr, reporter, objects, versions, sub_object);
+          }
+        }
+        else {
+          for (let [idx, vv] of a.diffValue<any>(nv, ov)) {
+            if (idx === -1)
+              await remove(tr, table, oid as number, car._id!, a, ci, vv);
+            else
+              await insert(tr, table, oid as number, car._id!, a, ci, vv);
+          }
         }
       };
 
