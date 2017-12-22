@@ -16,78 +16,6 @@ export interface PublicTransport {
 export const NO_POSITION = -1;
 export const ANY_POSITION = 0;
 
-function *traverseValueOrdered_array<T>(v: T[]) : IterableIterator<[number, T]> {
-  if (v)
-    yield* v.entries();
-}
-function *traverseValueOrdered_set<T>(v: T[]) : IterableIterator<[number, T]> {
-  if (v)
-    for (let n of v)
-      yield [ANY_POSITION, n];
-}
-function *traverseValueOrdered_single<T>(v: T) : IterableIterator<[number, T]> {
-  if (v !== undefined)
-    yield [0, v];
-}
-function *traverseValue_array<T>(v: T[]) : IterableIterator<T> {
-  if (v)
-    yield* v;
-}
-function *traverseValue_set<T>(v: T[]) : IterableIterator<T> {
-  if (v)
-    for (let n of v)
-      yield n;
-}
-function *traverseValue_single<T>(v: T) : IterableIterator<T> {
-  if (v !== undefined)
-    yield v;
-}
-
-function *diffValue_array<T>(newV: any, oldV: any) : IterableIterator<[number, T]> {
-  if (oldV) {
-    for (let [idx, o] of (oldV as any[]).entries()) {
-      if (!newV || newV[idx] !== o)
-        yield [NO_POSITION, o];
-    }
-  }
-  if (newV) {
-    for (let [idx, n] of (newV as any[]).entries()) {
-      if (!oldV || oldV[idx] !== n)
-        yield [idx, n];
-    }
-  }
-}
-function *diffValue_set<T>(newV: any, oldV: any) : IterableIterator<[number, T]> {
-  if (oldV) for (let o of oldV)
-    if (!newV || !newV.has(o))
-      yield [NO_POSITION, o];
-  if (newV) for (let n of newV)
-    if (!oldV || !oldV.has(n))
-      yield [ANY_POSITION, n];
-}
-function *diffValue_single<T>(newV: any, oldV: any) : IterableIterator<[number, T]> {
-  if (oldV !== newV) {
-    if (oldV !== undefined) yield [NO_POSITION, oldV];
-    if (newV !== undefined) yield [0, newV];
-  }
-}
-
-function selectTraverseValueOrdered(type: Aspect.Type) {
-  if (Aspect.typeIsArrayValue(type)) return traverseValueOrdered_array;
-  else if (Aspect.typeIsSetValue(type)) return traverseValueOrdered_set;
-  else return traverseValueOrdered_single;
-}
-function selectTraverseValue(type: Aspect.Type) {
-  if (Aspect.typeIsArrayValue(type)) return traverseValue_array;
-  else if (Aspect.typeIsSetValue(type)) return traverseValue_set;
-  else return traverseValue_single;
-}
-function selectDiffValue(type: Aspect.Type) {
-  if (Aspect.typeIsArrayValue(type)) return diffValue_array;
-  else if (Aspect.typeIsSetValue(type)) return diffValue_set;
-  else return diffValue_single;
-}
-
 export interface Aspect {
   is: string;
   name: string;
@@ -314,18 +242,155 @@ export namespace Aspect {
     class: Installed;
     attribute: InstalledAttribute;
   };
-  export interface InstalledAttribute {
-    readonly name: string;
-    readonly index: number;
-    readonly type: Type;
-    readonly validator: AttributeTypeValidator;
-    readonly relation: Reference | undefined;
-    readonly contains_vo: boolean;
-    readonly is_sub_object: boolean;
-    traverseValueOrdered<T>(value: any): IterableIterator<[number, T]>;
-    traverseValue<T>(value: any): IterableIterator<T>;
-    diffValue<T>(newV: any, oldV: any): IterableIterator<[number, T]>;
-  };
+  export abstract class InstalledAttribute {
+    constructor(
+      public readonly name: string,
+      public readonly index: number,
+      public readonly type: Type,
+      public readonly validator: AttributeTypeValidator,
+      public readonly relation: Reference | undefined = undefined,
+      public readonly contains_vo: boolean = false,
+      public readonly is_sub_object: boolean = false,
+    ) {}
+
+    abstract defaultValue(): any;
+    abstract isMonoValue(): boolean;
+    abstract isMultValue(): boolean;
+    abstract isArrayValue(): boolean;
+    abstract isSetValue(): boolean;
+    abstract traverseValueOrdered<T>(value: any): IterableIterator<[number, T]>;
+    abstract traverseValue<T>(value: any): IterableIterator<T>;
+    abstract diffValue<T>(newV: any, oldV: any): IterableIterator<[number, T]>;
+    abstract subobjectChanges<T extends VersionedObject>(newV: any, oldV: any): IterableIterator<[-1 | 0 | 1, T]>;
+  }
+
+  export class InstalledMonoAttribute extends InstalledAttribute {
+    defaultValue(): any { return undefined; }
+    isMonoValue(): boolean { return true; }
+    isMultValue(): boolean { return false; }
+    isArrayValue(): boolean { return false; }
+    isSetValue(): boolean { return false; }
+
+    *traverseValueOrdered<T>(value: any): IterableIterator<[number, T]> {
+      if (value !== undefined)
+        yield [0, value];
+    }
+
+    *traverseValue<T>(value: any): IterableIterator<T> {
+      if (value !== undefined)
+        yield value;
+    }
+
+    *diffValue<T>(newV: any, oldV: any): IterableIterator<[number, T]> {
+      if (oldV !== newV) {
+        if (oldV !== undefined) yield [NO_POSITION, oldV];
+        if (newV !== undefined) yield [0, newV];
+      }
+    }
+
+    *subobjectChanges<T extends VersionedObject>(newV: T, oldV: T): IterableIterator<[-1 | 0 | 1, T]> {
+      if (oldV !== newV) {
+        if (oldV !== undefined) yield [-1, oldV];
+        if (newV !== undefined) yield [1, newV];
+      }
+      else if (newV && newV.manager().isModified()) {
+        yield [0, newV];
+      }
+    }
+  }
+
+  export class InstalledArrayAttribute extends InstalledAttribute {
+    defaultValue(): any[] { return []; }
+    isMonoValue(): boolean { return false; }
+    isMultValue(): boolean { return true; }
+    isArrayValue(): boolean { return true; }
+    isSetValue(): boolean { return false; }
+
+    *traverseValueOrdered<T>(value: any[] | undefined): IterableIterator<[number, T]> {
+      if (value)
+        yield* value.entries();
+    }
+
+    *traverseValue<T>(value: any[] | undefined): IterableIterator<T> {
+      if (value)
+        yield* value;
+    }
+
+    *diffValue<T>(newV: any[] | undefined, oldV: any[] | undefined): IterableIterator<[number, T]> {
+      if (oldV) {
+        for (let [idx, o] of oldV.entries()) {
+          if (!newV || newV[idx] !== o)
+            yield [NO_POSITION, o];
+        }
+      }
+      if (newV) {
+        for (let [idx, n] of newV.entries()) {
+          if (!oldV || oldV[idx] !== n)
+            yield [idx, n];
+        }
+      }
+    }
+
+    *subobjectChanges<T extends VersionedObject>(newV: T[], oldV: T[]): IterableIterator<[-1 | 0 | 1, T]> {
+      if (oldV) {
+        for (let [idx, sub_object] of oldV.entries()) {
+          if (!newV || newV[idx] !== sub_object)
+            yield [-1, sub_object];
+        }
+      }
+      if (newV) {
+        for (let [idx, sub_object] of newV.entries()) {
+          if (!oldV || oldV[idx] !== sub_object)
+            yield [1, sub_object];
+          else if (sub_object.manager().isModified())
+            yield [0, sub_object];
+        }
+      }
+    }
+  }
+
+  export class InstalledSetAttribute extends InstalledAttribute {
+    defaultValue(): Set<any> { return new Set<any>(); }
+    isMonoValue(): boolean { return false; }
+    isMultValue(): boolean { return true; }
+    isArrayValue(): boolean { return false; }
+    isSetValue(): boolean { return true; }
+
+    *traverseValueOrdered<T>(value: Set<any> | undefined): IterableIterator<[number, T]> {
+      if (value)
+        for (let n of value)
+          yield [ANY_POSITION, n];
+    }
+
+    *traverseValue<T>(value: Set<any> | undefined): IterableIterator<T> {
+      if (value)
+        for (let n of value)
+          yield n;
+    }
+
+    *diffValue<T>(newV: Set<any> | undefined, oldV: Set<any> | undefined): IterableIterator<[number, T]> {
+      if (oldV) for (let o of oldV)
+        if (!newV || !newV.has(o))
+          yield [NO_POSITION, o];
+      if (newV) for (let n of newV)
+        if (!oldV || !oldV.has(n))
+          yield [ANY_POSITION, n];
+    }
+
+    *subobjectChanges<T extends VersionedObject>(newV: Set<T>, oldV: Set<T>): IterableIterator<[-1 | 0 | 1, T]> {
+      if (oldV) for (let o of oldV) {
+        if (!newV || !newV.has(o))
+          yield [-1, o];
+      }
+      if (newV) for (let n of newV) {
+        if (!oldV || !oldV.has(n))
+          yield [1, n];
+        else if (n.manager().isModified())
+          yield [0, n];
+      }
+    }
+  }
+
   export class Installed {
     readonly classname: string;
     readonly aspect: string;
@@ -346,18 +411,13 @@ export namespace Aspect {
       this.is_sub_object = is_sub_object;
       this.references = [];
       this.categories = new Set();
-      this.attribute_ref = {
-        name: "_id",
-        index: 0,
-        type: { is: "type", type: "class", name: classname },
-        validator: Validation.validateId,
-        relation: undefined,
-        contains_vo: false,
-        is_sub_object: false,
-        traverseValueOrdered: traverseValueOrdered_single,
-        traverseValue: traverseValue_single,
-        diffValue: diffValue_single,
-      },
+      this.attribute_ref = new Aspect.InstalledMonoAttribute(
+        "_id",
+        0,
+        { is: "type", type: "class", name: classname },
+        Validation.validateId,
+        undefined,
+      );
       this.attributes = new Map(voAttributes);
       this.attributes_by_index = [Aspect.attribute_id, Aspect.attribute_version];
       this.farMethods = new Map();
@@ -390,31 +450,20 @@ export namespace Aspect {
   export type Invokable<A0, R> = { to: VersionedObject, method: string, _check?: { _a0: A0, _r: R } };
   export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, ctx: FarContext, arg: A) => R | Result<R> | Promise<R | Result<R>>);
 
-  export const attribute_id: Aspect.InstalledAttribute = {
-    name: "_id",
-    index: 0,
-    type: { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
-    validator: Validation.validateId,
-    relation: undefined,
-    contains_vo: false,
-    is_sub_object: false,
-    traverseValueOrdered: traverseValueOrdered_single,
-    traverseValue: traverseValue_single,
-    diffValue: diffValue_single,
-  };
-  export const attribute_version: Aspect.InstalledAttribute = {
-    name: "_version",
-    index: 1,
-    type: { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
-    validator: Validation.validateVersion,
-    relation: undefined,
-    contains_vo: false,
-    is_sub_object: false,
-    traverseValueOrdered: traverseValueOrdered_single,
-    traverseValue: traverseValue_single,
-    diffValue: diffValue_single,
-
-  };
+  export const attribute_id = new Aspect.InstalledMonoAttribute(
+    "_id",
+    0,
+    { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
+    Validation.validateId,
+    undefined,
+  );
+  export const attribute_version = new Aspect.InstalledMonoAttribute(
+    "_version",
+    1,
+    { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
+    Validation.validateVersion,
+    undefined,
+  );
 }
 
 export interface VersionedObjectConstructorCache extends VersionedObjectConstructor {
@@ -677,18 +726,16 @@ export class AspectConfiguration {
     pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
   ) {
     let contains_types = Aspect.typeToAspectNames(attribute_definition.type);
-    const attribute: Aspect.InstalledAttribute = {
-      name: attribute_definition.name as keyof VersionedObject,
-      index: index,
-      validator: attribute_definition.validator || this.createValidator(true, attribute_definition.type),
-      type: attribute_definition.type,
-      relation: undefined,
-      contains_vo: contains_types.length > 0,
-      is_sub_object: attribute_definition.is_sub_object === true,
-      traverseValueOrdered: selectTraverseValueOrdered(attribute_definition.type),
-      traverseValue: selectTraverseValue(attribute_definition.type),
-      diffValue: selectDiffValue(attribute_definition.type),
-    };
+    let cstor = typeToInstalledAttributeCstor(attribute_definition.type);
+    const attribute = new cstor(
+      attribute_definition.name as keyof VersionedObject,
+      index,
+      attribute_definition.type,
+      attribute_definition.validator || this.createValidator(true, attribute_definition.type),
+      undefined,
+      contains_types.length > 0,
+      attribute_definition.is_sub_object === true,
+    );
     for (let name of contains_types) {
       let sub_aspect_cstor = this._aspects.get(name);
       if (!sub_aspect_cstor)
@@ -831,4 +878,12 @@ function fastSafeCall(ctx: Aspect.FarContext, farImpl: Aspect.FarImplementation<
   } catch (e) {
     return Promise.reject(e);
   }
+}
+
+function typeToInstalledAttributeCstor(type: Aspect.Type) {
+  if (Aspect.typeIsArrayValue(type))
+    return Aspect.InstalledArrayAttribute;
+  if (Aspect.typeIsSetValue(type))
+    return Aspect.InstalledSetAttribute;
+  return Aspect.InstalledMonoAttribute;
 }
