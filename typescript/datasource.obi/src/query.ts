@@ -301,7 +301,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
     return query;
   }
 
-  sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute) {
+  sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute,op:DataSourceInternal.ConstraintBetweenValueAndValue,value:number) {
     return this.sql_sub_count_mutate(var_set, var_attribute, undefined);
   }
 

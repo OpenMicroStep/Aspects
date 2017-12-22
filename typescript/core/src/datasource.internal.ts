@@ -1057,10 +1057,7 @@ export namespace DataSourceInternal {
       let n = 0;
       let mult = false;
       const setAttr = (aspect: Aspect.Installed, name: string | undefined) => {
-        let a = name ? aspect.attributes.get(name) : aspect.attribute_ref;
-        if (!a) {
-          name ? aspect.virtual_attributes.get(name) : aspect.attribute_ref;
-        };
+        let a = name ? (aspect.attributes.get(name) || DataSourceScope.parse_virtual_attribute(this.reporter, p, aspect, name)) : aspect.attribute_ref;
         if (a) {
           if (attr && !DataSourceScope.attribute_name_type_are_equals(a, attr)) {
             if (!mult)
@@ -1068,34 +1065,6 @@ export namespace DataSourceInternal {
             mult = true;
           }
           attr = a;
-        }
-        else if (name && name.startsWith("$")) {
-          //Virtual
-          const RX = /^(\$is_last)\(([+-][a-zA-Z0-9-_]+(?:,[+-][a-zA-Z0-9-_]+)*)\)(?:\/{0,1})(([a-zA-Z0-9-_]+(?:,[a-zA-Z0-9-_]+)*))?$/;
-          let m = name.match(RX);
-          if (m) {
-            let [_, op, sort, groupby] = m;
-            let type: Aspect.TypeVirtual = { is: "type", type: "virtual",operator:op, sort : [], group_by:[] };
-            let s = sort.split(',');
-            if (s.length === 0) s.push(sort);
-            s.map(a => {
-              let attribute = aspect.attributes.get(a.substring(1));
-              if (attribute)
-                type.sort.push({asc: a[0] === '+', attribute:attribute });
-              else
-                p.diagnostic(this.reporter, { is: "error", msg: `attribute ${attribute} not found` });
-            });
-            groupby.split(',').map(a => {
-              let attribute = aspect.attributes.get(a);
-              if (attribute)
-                type.group_by.push(attribute);
-              else
-                p.diagnostic(this.reporter, { is: "error", msg: `attribute ${attribute} not found` });
-            });
-
-            attr = Aspect.create_virtual_attribute(name,type);
-            aspect.virtual_attributes.set(name,attr);
-          }
         }
       };
 

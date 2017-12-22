@@ -1,4 +1,5 @@
-import { Aspect, ImmutableSet, VersionedObject, VersionedObjectManager } from './core';
+import { Aspect, ImmutableSet, VersionedObject, VersionedObjectManager, } from './core';
+import { AttributeTypes as V, AttributePath, Reporter } from '@openmicrostep/msbuildsystem.shared';
 
 export type Scope = {
   [s: string]: {
@@ -71,8 +72,12 @@ function parseScopeAttr(ctx: ParseScopeContext,
   }
 
   let safe_attribute = aspect.attributes.get(unsafe_attribute);
-  if (!safe_attribute)
-    safe_attribute = aspect.virtual_attributes.get(unsafe_attribute);
+  if (!safe_attribute) {
+    let reporter = new Reporter();
+    safe_attribute = parse_virtual_attribute(reporter, new AttributePath(safe_path), aspect, unsafe_attribute);
+    if (reporter.failed)
+      throw new Error(JSON.stringify(reporter.diagnostics));
+  }
   if (!safe_attribute)
     throw new Error(`'${unsafe_attribute}' requested but not found for '${aspect.classname}'`);
 
@@ -266,4 +271,36 @@ function* iterParseTypes(ctx: ParseScopeContext, safe_path: string, types: Itera
         yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type_, allow_sort);
     }
   }
+}
+
+export function parse_virtual_attribute(reporter: Reporter, p: AttributePath, aspect: Aspect.Installed, name: string) {
+  let a = aspect.virtual_attributes.get(name);
+  if (!a && name && name.startsWith("$")) {
+    const RX = /^(\$is_last)\(([+-][a-zA-Z0-9-_]+(?:,[+-][a-zA-Z0-9-_]+)*)\)(?:\/{0,1})(([a-zA-Z0-9-_]+(?:,[a-zA-Z0-9-_]+)*))?$/;
+    let m = name.match(RX);
+    if (m) {
+      let [_, op, sort, groupby] = m;
+      let type: Aspect.TypeVirtual = { is: "type", type: "virtual", operator: op, sort: [], group_by: [] };
+      for (let a of sort.split(',')) {
+        let attribute = aspect.attributes.get(a.substring(1));
+        if (attribute)
+          type.sort.push({ asc: a[0] === '+', attribute: attribute });
+        else
+          p.diagnostic(reporter, { is: "error", msg: `attribute ${a.substring(1)} not found` });
+      }
+      for (let a of groupby.split(',')) {
+        let attribute = aspect.attributes.get(a);
+        if (attribute)
+          type.group_by.push(attribute);
+        else
+          p.diagnostic(reporter, { is: "error", msg: `attribute ${a} not found` });
+      }
+      a = Aspect.create_virtual_attribute(name, type);
+      aspect.virtual_attributes.set(name, a);
+    }
+    else {
+      p.diagnostic(reporter, { is: "error", msg: `bad virtual attribute syntax` });
+    }
+  }
+  return a;
 }

@@ -35,10 +35,6 @@ function mapIfExists<I, O>(arr: I[] | undefined, map: (v: I, idx: number) => O):
   return arr ? arr.map(map) : undefined;
 }
 
-function isMonoAttribute(a: Aspect.InstalledAttribute) : boolean {
-  return a.type.type === "primitive" || a.type.type === "class" || a.type.type === "dictionary" || a.type.type === "virtual";
-}
-
 export interface SqlMappedSharedContext extends SqlQuerySharedContext<SqlMappedSharedContext, SqlMappedQuery> {
   db: { select(sql_select: SqlBinding): Promise<object[]> },
   mappers: { [s: string]: SqlMappedObject },
@@ -113,7 +109,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     rset: ObjectSet, rattribute: Aspect.InstalledAttribute
   ): SqlBinding;
 
-  abstract sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute): SqlBinding;
+  abstract sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute,op:DataSourceInternal.ConstraintBetweenValueAndValue,value:number): SqlBinding;
 
   mapValue(attribute: Aspect.InstalledAttribute, value): any {
     return Array.isArray(value) ? value.map(v => this.mapSingleValue(attribute, v)) : this.mapSingleValue(attribute, value);
@@ -639,11 +635,11 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
 
     if (attribute.type.type === "virtual") {
       if (attribute.type.operator === "$is_last") {
-        let sql_select_count: SqlBinding = this.sql_sub_count_virtual(this.set,attribute);
+        let sql_select_count: SqlBinding = this.sql_sub_count_virtual(this.set,attribute,ConstraintType.Equal,0);
         return sql_select_count;
-        //let b = this.ctx.maker.op_bind(sql_select_count,(attribute.type. value === true) ? ConstraintType.Equal : ConstraintType.NotEqual, 0);
+        //let b = this.ctx.maker.op_bind(sql_select_count,(value === true) ? ConstraintType.Equal : ConstraintType.NotEqual, 0);
       } else {
-        throw new Error(`virtal operator ${attribute.type.operator} is not implemented`);
+        throw new Error(`virtual operator ${attribute.type.operator} is not implemented`);
       }
     }
 
@@ -714,7 +710,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let scope_type = this.set.scope[aspect.classname];
         let scope_path = scope_type ? scope_type['.'] : [];
         for (let a of scope_path)
-          if (isMonoAttribute(a))
+          if (Aspect.typeIsSingleValue(a.type))
             monoAttributes.add(a);
       }
     }
@@ -841,7 +837,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   }
 
 
-  sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute) {
+  sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute,op:DataSourceInternal.ConstraintBetweenValueAndValue,value:number) {
 
     let type = var_attribute.type as Aspect.TypeVirtual;
     let lvar_query = this.ctx.queries.get(var_set)!;
@@ -888,9 +884,9 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       })
 
       lsub_var_query.addConstraint(this.ctx.maker.or(done));
-
-      let sql_select_count = lsub_var_query.sql_select_count();
-      cases.set(lmapper.name, sql_select_count);
+      let sql_select_count =  this.ctx.maker.sub(lsub_var_query.sql_select_count());
+      let sql =  this.ctx.maker.sub(this.ctx.maker.op(sql_select_count,op,value));
+      cases.set(lmapper.name, sql);
     }
 
     let sql_select_count: SqlBinding;
@@ -1000,12 +996,17 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       version = mapper.attribute_version().fromDb(version);
       snapshot.setAttributeValueFast(Aspect.attribute_version, version);
       for (let a of scope_path) {
-        if (isMonoAttribute(a)) {
+        if (Aspect.typeIsSingleValue(a.type)) {
           let k = a.name;
           let v = row[prefix + k];
-          v = mapper.get(k)!.fromDb(v);
-          v = this.loadValue(ccc, a.type, v);
-          snapshot.setAttributeValueFast(a, v);
+          if (a.type.type != "virtual") {
+            v = mapper.get(k)!.fromDb(v);
+            v = this.loadValue(ccc, a.type, v);
+            snapshot.setAttributeValueFast(a, v);
+          } else {
+            vo.manager().setVirtualAttributeValue(a.name, v);
+          }
+
         }
         else {
           let m_attrs = mult_items.get(vo.manager().aspect());
