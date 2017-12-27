@@ -296,7 +296,7 @@ module.exports =  {
       shell: true,
     },
     'cwd=': { is: 'group', elements: [{ is: 'file', name: "./" }] },
-    "install-deps=": { is: "task", components: ["=cmd"], cmd: "npm install -g -q coveralls nyc@11.1.0 @openmicrostep/tests" },
+    "install-deps=": { is: "task", components: ["=cmd"], cmd: "npm install -g -q coveralls nyc @openmicrostep/tests" },
     "build-bs=": { is: "task", components: ["=cmd"], cmd: Value([
       "msbuildsystem", "build", "-p", "MSBuildSystem/@msbuildsystem", "-p", "buildsystem", "-w", "dist/bs-aspects/"
     ]) },
@@ -314,11 +314,11 @@ module.exports =  {
       cmd: Value(["mstests", "-c", "-t", "20000", ...tests_aspects("dist/aspects")]),
     },
 
-    "coverage-local=": { is: "task", components: ["=cmd"], env: { is: "component", NYC_CWD: "dist/aspects/js/node_modules/@openmicrostep" }, cmd:
-      `nyc --reporter=html --report-dir dist/coverage -x "*.tests/**" -x "**/generated/**" mstests -c -t 20000 ${tests_aspects("dist/aspects").join(' ')}`
+    "coverage-local=": { is: "task", components: ["=cmd"], cmd:
+      `nyc --no-exclude-after-remap --cwd dist/aspects/js/node_modules/@openmicrostep --reporter=html --report-dir dist/coverage -x "*.tests/**" -x "**/generated/**" mstests -c -t 20000 ${tests_aspects("dist/aspects").join(' ')}`
     },
-    "coveralls=": { is: "task", components: ["=cmd"], env: { is: "component", NYC_CWD: "dist/aspects/js/node_modules/@openmicrostep" }, cmd:
-      `nyc --reporter=text-lcov --report-dir dist/coverage -x "*.tests/**" -x "**/generated/**" mstests -c -t 20000 ${tests_aspects("dist/aspects").join(' ')} | coveralls`
+    "coveralls=": { is: "task", components: ["=cmd"], cmd:
+      `nyc --no-exclude-after-remap --cwd dist/aspects/js/node_modules/@openmicrostep --reporter=text-lcov --report-dir dist/coverage -x "*.tests/**" -x "**/generated/**" mstests -c -t 20000 ${tests_aspects("dist/aspects").join(' ')} | coveralls`
     },
 
     "deploy-msbuildsystem.aspects=": { is: "task", components: ["=cmd"], cmd: Value(["npm", "publish", "dist/bs-aspects/node/node_modules/@openmicrostep/msbuildsystem.aspects"]) },
