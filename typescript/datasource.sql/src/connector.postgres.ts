@@ -60,72 +60,68 @@ class PostgresSqlMaker extends SqlMaker {
     return { sql: `SELECT schemaname || '.' || indexname index_name, schemaname || '.' || tablename table_name FROM pg_catalog.pg_indexes`, bind: [] };
   }
 }
+
+
+function query(
+  pg,
+  db: { errored: Promise<void>, client: { query(sql: string, bind: ReadonlyArray<any>, cb: (err, result) => void) } },
+  sql: SqlBinding
+): Promise<{ rows: any[], fields: any[], rowCount: number, command: string }> {
+  return Promise.race([db.errored, new Promise<any>((resolve, reject) => {
+    db.client.query(sql.sql, sql.bind, (err, result) => {
+      err ? reject(err) : resolve(result);
+    });
+  })]);
+}
+
 export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { new(o: object): any } }, {
   host: string, port?: number, ssl?: boolean,
   user: string, password?: string, database: string,
   application_name?: string
-}, {
-  query(sql: string, cb: (err, result) => void),
+}, { errored: Promise<void>, client: {
   query(sql: string, bind: ReadonlyArray<any>, cb: (err, result) => void),
   end()
-}
+} }
 >({
   maker: new PostgresSqlMaker(),
   create(pg, options) {
     return new Promise((resolve, reject) => {
       let db = new pg.Client(options);
-      db.connect(err => err ? reject(err) : resolve(db));
+      db.connect(err => err ? reject(err) : resolve({
+        errored: new Promise((resolve, reject) => db.on("error", reject)),
+        client: db
+      }));
     });
   },
   destroy(pg, db) {
     return new Promise<void>((resolve, reject) => {
-      db.end();
+      db.client.end();
       resolve();
     });
   },
   select(pg, db, sql_select: SqlBinding) : Promise<object[]> {
-    return new Promise<any>((resolve, reject) => {
-      db.query(sql_select.sql, sql_select.bind, function (err, result) {
-        err ? reject(err) : resolve(result.rows);
-      });
-    });
+    return query(pg, db, sql_select).then(result => Promise.resolve(result.rows));
   },
   update(pg, db, sql_update: SqlBinding) : Promise<number> {
-    return new Promise<any>((resolve, reject) => {
-      db.query(sql_update.sql, sql_update.bind, function (err, result) {
-        err ? reject(err) : resolve(result.rowCount);
-      });
-    });
+    return query(pg, db, sql_update).then(result => Promise.resolve(result.rowCount));
   },
-  delete(pg, db, sql_update: SqlBinding) : Promise<number> {
-    return new Promise<any>((resolve, reject) => {
-      db.query(sql_update.sql, sql_update.bind, function (err, result) {
-        err ? reject(err) : resolve(result.rowCount);
-      });
-    });
+  delete(pg, db, sql_delete: SqlBinding) : Promise<number> {
+    return query(pg, db, sql_delete).then(result => Promise.resolve(result.rowCount));
   },
   insert(pg, db, sql_insert: SqlBinding, output_columns) : Promise<any[]> {
-    return new Promise<any>((resolve, reject) => {
-      db.query(sql_insert.sql, sql_insert.bind, function (err, result) {
-        err ? reject(err) : resolve(output_columns.map(c => result.rows[0][c]));
-      });
-    });
+    return query(pg, db, sql_insert).then(result => Promise.resolve(output_columns.map(c => result.rows[0][c])));
   },
   run(pg, db, sql: SqlBinding) : Promise<any> {
-    return new Promise<any>((resolve, reject) => {
-      db.query(sql.sql, sql.bind, function (err, rows) {
-        err ? reject(err) : resolve();
-      });
-    });
+    return query(pg, db, sql).then(result => Promise.resolve());
   },
   beginTransaction(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query("BEGIN", (err) => err ? reject(err) : resolve()); });
+    return query(pg, db, { sql: "BEGIN", bind: [] }).then(result => Promise.resolve());
   },
   commit(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query("COMMIT", (err) => err ? reject(err) : resolve()); });
+    return query(pg, db, { sql: "COMMIT", bind: [] }).then(result => Promise.resolve());
   },
   rollback(pg, db): Promise<void> {
-    return new Promise<any>((resolve, reject) => { db.query("ROLLBACK", (err) => err ? reject(err) : resolve()); });
+    return query(pg, db, { sql: "ROLLBACK", bind: [] }).then(result => Promise.resolve());
   },
   transform(sql) { return DBConnector.transformBindings(sql, idx => `$${idx + 1}`); },
 });
