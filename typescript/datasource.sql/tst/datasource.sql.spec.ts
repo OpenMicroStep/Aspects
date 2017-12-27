@@ -222,26 +222,6 @@ const tables: SqlMaker.Table[] = [
     ],
   },
   {
-    name: "RootObject",
-    columns: [
-      { name: "id", type: { is: "autoincrement", bytes: 8 } },
-      { name: "version", type: { is: "integer", bytes: 8 } },
-      { name: "p1", type: { is: "integer", bytes: 8 } },
-      { name: "p2", type: { is: "integer", bytes: 8 } },
-      { name: "p3", type: { is: "integer", bytes: 8 } },
-      { name: "s0", type: { is: "integer", bytes: 8 } },
-      { name: "s1", type: { is: "integer", bytes: 8 } },
-    ],
-    primary_key: ["id"],
-    foreign_keys: [
-      { columns: ["p1"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-      { columns: ["p2"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-      { columns: ["p3"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-      { columns: ["s0"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-      { columns: ["s1"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
-    ],
-  },
-  {
     name: "Polygon",
     columns: [
       { name: "id", type: { is: "autoincrement", bytes: 8 } },
@@ -260,6 +240,26 @@ const tables: SqlMaker.Table[] = [
       { name: "altitute", type: { is: "double", bytes: 8 } },
     ],
     primary_key: ["id"],
+  },
+  {
+    name: "RootObject",
+    columns: [
+      { name: "id", type: { is: "autoincrement", bytes: 8 } },
+      { name: "version", type: { is: "integer", bytes: 8 } },
+      { name: "p1", type: { is: "integer", bytes: 8 } },
+      { name: "p2", type: { is: "integer", bytes: 8 } },
+      { name: "p3", type: { is: "integer", bytes: 8 } },
+      { name: "s0", type: { is: "integer", bytes: 8 } },
+      { name: "s1", type: { is: "integer", bytes: 8 } },
+    ],
+    primary_key: ["id"],
+    foreign_keys: [
+      { columns: ["p1"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["p2"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["p3"], foreign_table: "Point", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["s0"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+      { columns: ["s1"], foreign_table: "Polygon", foreign_columns: ["id"], on_delete: "cascade", on_update: "restrict" },
+    ],
   },
   {
     name: "PolygonPoints",
@@ -297,21 +297,23 @@ function do_once(once: any, work: () => Promise<void>) {
 async function create_tables(connector: DBConnector.Init) {
   const maker = connector.maker;
   for (let table of tables) {
+    let sql_admin = maker.admin_create_table(table);
     try {
-      await connector.admin(maker.admin_create_table(table));
+      await connector.admin(sql_admin);
     } catch (e) {
-      console.info(e);
+      console.info(sql_admin, e);
     }
   }
 }
 
 async function drop_tables(connector: DBConnector.Init) {
   const maker = connector.maker;
-  for (let table of tables.reverse()) {
+  for (let table of [...tables].reverse()) {
+    let sql_admin = maker.admin_drop_table(table);
     try {
-      await connector.admin(maker.admin_drop_table(table));
+      await connector.admin(sql_admin);
     } catch (e) {
-      console.info(e);
+      console.info(sql_admin, e);
     }
   }
 }
