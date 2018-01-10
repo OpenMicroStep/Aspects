@@ -2,6 +2,7 @@ export * from './validation';
 export * from './deepEqual';
 export * from './notificationCenter';
 export * from './aspect';
+export * from './aspect.boot';
 export * from './versionedObject';
 export * from './traverse';
 export * from './controlCenter';
