@@ -4,7 +4,7 @@ import {
   SafePostLoad, SafePreSave, SafePostSave,
 } from './core';
 import { Flux } from '@openmicrostep/async';
-import { Reporter, Diagnostic, AttributePath } from '@openmicrostep/msbuildsystem.shared';
+import { Reporter, Diagnostic, PathReporter } from '@openmicrostep/msbuildsystem.shared';
 
 /*
 {
@@ -283,11 +283,11 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
   validateAttributeValue(attribute_name: string, value: any): Diagnostic[] {
     let reporter = new Reporter();
     let attribute = this._aspect.attributes.get(attribute_name);
-    let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', attribute_name);
+    let at = new PathReporter(reporter, this.classname(), '{id=', this.id(), '}.', attribute_name);
     if (!attribute)
-      path.diagnostic(reporter, { is: "error", msg: `attribute doesn't exists` });
+      at.diagnostic({ is: "error", msg: `attribute doesn't exists` });
     else
-      attribute.validator.validate(reporter, path, value, this);
+      attribute.validator.validate(at, value, this);
     return reporter.diagnostics;
   }
 
@@ -433,16 +433,16 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let version = snapshot.version();
     if (!this._setSpecialVersion(version)) {
       let reporter = new Reporter();
-      let path = new AttributePath(this.classname(), '{id=', this.id(), '}.', '');
+      let at = new PathReporter(reporter, this.classname(), '{id=', this.id(), '}.', '');
       for (let idx = 2; idx < this._attribute_data.length; idx++) {
         let data = this._attribute_data[idx];
         let attribute = this._aspect.attributes_by_index[idx];
         let merge_data = snapshot._attributes[idx];
         let data_is_saved = (data.flags & SAVED) > 0;
-        path.set(attribute.name);
+        at.set(attribute.name);
         if (merge_data) {
           let merge_value = merge_data.value;
-          attribute.validator.validate(reporter, path, merge_value, this);
+          attribute.validator.validate(at, merge_value, this);
           if (attribute.contains_vo) {
             for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
               let sub_object_manager = sub_object.manager();

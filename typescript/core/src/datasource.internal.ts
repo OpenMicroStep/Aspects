@@ -4,7 +4,7 @@ import {
   Aspect, Validation, Result, traverseAllScope,
 } from './core';
 import * as DataSourceScope from './datasource.scope';
-import { AttributeTypes as V, AttributePath, Reporter } from '@openmicrostep/msbuildsystem.shared';
+import { AttributeTypes as V, PathReporter, Reporter } from '@openmicrostep/msbuildsystem.shared';
 
 export namespace DataSourceInternal {
   export import Scope = DataSourceScope.Scope;
@@ -707,7 +707,7 @@ export namespace DataSourceInternal {
   }
   export type RequestDefinition = ResultDefinition | { results:ResultDefinition[], [s: string]: any; };
 
-  type OperatorOnSet<T> = (context: ParseContext, p: AttributePath, set: ObjectSet, value: T) => void;
+  type OperatorOnSet<T> = (context: ParseContext, p: PathReporter, set: ObjectSet, value: T) => void;
   const operatorsOnSet: { [op: string]: OperatorOnSet<any>; } = {
     $or: (context, p, set, value) => {
       let constraints: Constraint[] = [];
@@ -765,7 +765,7 @@ export namespace DataSourceInternal {
     },
     $diff: (context, p, set, value) => {
       if (!Array.isArray(value) || value.length !== 2)
-        return p.diagnostic(context.reporter, { is: "error", msg: `diff value must be an array of 2 object set` });
+        return p.diagnostic({ is: "error", msg: `diff value must be an array of 2 object set` });
       p.pushArray();
       let add = context.parseSet(p.setArrayKey(0), value[0], `${set._name}.$diff+`);
       let del = context.parseSet(p.setArrayKey(1), value[1], `${set._name}.$diff-`);
@@ -779,7 +779,7 @@ export namespace DataSourceInternal {
       else {
         let sub = context.parseSet(p, value, `${set._name}.$in`);
         if (!set.tryToMerge(sub)) // must be compatible
-          return p.diagnostic(context.reporter, { is: "error", msg: `cannot intersect between incompatible sets` });
+          return p.diagnostic({ is: "error", msg: `cannot intersect between incompatible sets` });
       }
     },
     $nin: (context, p, set, value) => {
@@ -809,55 +809,55 @@ export namespace DataSourceInternal {
     a_op_v,
     set_op,
   }
-  type OperatorValidation = (reporter: Reporter, p: AttributePath, left_var: VarPath, right_var: VarPath | undefined, right_fixed: any) => boolean;
+  type OperatorValidation = (at: PathReporter, left_var: VarPath, right_var: VarPath | undefined, right_fixed: any) => boolean;
 
-  function in_value_on_set(context: ParseContext, p: AttributePath, set: DataSourceInternal.ObjectSet, value: any[], type: ConstraintBetweenAnyValueAndFixedValue) {
+  function in_value_on_set(context: ParseContext, at: PathReporter, set: DataSourceInternal.ObjectSet, value: any[], type: ConstraintBetweenAnyValueAndFixedValue) {
     let ok = true;
-    p.pushArray();
+    at.pushArray();
     for (let [i, v] of value.entries()) {
       if (!(v instanceof VersionedObject)) {
-        p.setArrayKey(i).diagnostic(context.reporter, { is: "error", msg: `only versioned object are allowed here` });
+        at.setArrayKey(i).diagnostic({ is: "error", msg: `only versioned object are allowed here` });
         ok = false;
       }
     }
-    p.popArray();
-    let attr = ok && context.aspectAttribute(p, set, undefined);
+    at.popArray();
+    let attr = ok && context.aspectAttribute(at, set, undefined);
     if (attr)
       set.and(c_value(ConstraintType.In, set._name, attr, value));
   }
 
-  function validate_var_is_undefined(reporter: Reporter, p: AttributePath, v: VarPath, side: string): boolean {
-    p.diagnostic(reporter, { is: "error", msg: `${side} operand must be a fixed value` });
+  function validate_var_is_undefined(at: PathReporter, v: VarPath, side: string): boolean {
+    at.diagnostic({ is: "error", msg: `${side} operand must be a fixed value` });
     return false;
   }
-  function validate_var_is_value(reporter: Reporter, p: AttributePath, v: VarPath, side: string): boolean {
+  function validate_var_is_value(at: PathReporter, v: VarPath, side: string): boolean {
     let ret = Aspect.typeIsSingleValue(v.attribute.type);
     if (!ret)
-      p.diagnostic(reporter, { is: "error", msg: `${side} operand must be a single value, ${JSON.stringify(v.attribute.type)} was found` });
+      at.diagnostic({ is: "error", msg: `${side} operand must be a single value, ${JSON.stringify(v.attribute.type)} was found` });
     return ret;
   }
-  function validate_var_is_set(reporter: Reporter, p: AttributePath, v: VarPath, side: string): boolean {
+  function validate_var_is_set(at: PathReporter, v: VarPath, side: string): boolean {
     let ret = Aspect.typeIsMultValue(v.attribute.type);
     if (!ret)
-      p.diagnostic(reporter, { is: "error", msg: `${side} operand must be a set of values, ${JSON.stringify(v.attribute.type)} was found` });
+      at.diagnostic({ is: "error", msg: `${side} operand must be a set of values, ${JSON.stringify(v.attribute.type)} was found` });
     return ret;
   }
-  function validate_fixed_is_value(reporter: Reporter, p: AttributePath, fixed: any): boolean {
+  function validate_fixed_is_value(at: PathReporter, fixed: any): boolean {
     let ret = fixed === undefined || !(fixed instanceof Array || fixed instanceof Set);
     if (!ret)
-      p.diagnostic(reporter, { is: "error", msg: `right operand must be a single value,  ${Object.prototype.toString.call(fixed)} was found` });
+      at.diagnostic({ is: "error", msg: `right operand must be a single value,  ${Object.prototype.toString.call(fixed)} was found` });
     return ret;
   }
-  function validate_fixed_is_set(reporter: Reporter, p: AttributePath, fixed: any): boolean {
+  function validate_fixed_is_set(at: PathReporter, fixed: any): boolean {
     let ret = fixed === undefined || fixed instanceof Array || fixed instanceof Set;
     if (!ret)
-      p.diagnostic(reporter, { is: "error", msg: `right operand must be a set of values, ${Object.prototype.toString.call(fixed)} was found` });
+      at.diagnostic({ is: "error", msg: `right operand must be a set of values, ${Object.prototype.toString.call(fixed)} was found` });
     return ret;
   }
-  function validate_are_comparable(reporter: Reporter, p: AttributePath, a: Aspect.Type, b: Aspect.Type) {
+  function validate_are_comparable(at: PathReporter, a: Aspect.Type, b: Aspect.Type) {
     let ret = Aspect.typesAreComparable(a, b);
     if (!ret)
-      p.diagnostic(reporter, { is: "error",
+      at.diagnostic({ is: "error",
         msg: `operands are incompatible, ${Aspect.typeToString(a)} !== ${Aspect.typeToString(b)}`
       });
     return ret;
@@ -865,41 +865,41 @@ export namespace DataSourceInternal {
   function subtype(a: Aspect.Type) : Aspect.Type {
     return (a as Aspect.TypeArray | Aspect.TypeSet).itemType;
   }
-  const a_op_b: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
+  const a_op_b: OperatorValidation = function a_op_b(at, left_var, right_var, right_fixed) {
     if (left_var.attribute === Aspect.attribute_id && !right_fixed)
-      p.diagnostic(reporter, { is: "error", msg: `right operand must be defined for _id` });
-    return validate_var_is_value(reporter, p, left_var, 'left')
+      at.diagnostic({ is: "error", msg: `right operand must be defined for _id` });
+    return validate_var_is_value(at, left_var, 'left')
       && right_var
-      ? validate_var_is_value(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, left_var.attribute.type, right_var.attribute.type)
-      : validate_fixed_is_value(reporter, p, right_fixed);
+      ? validate_var_is_value(at, right_var, 'right') && validate_are_comparable(at, left_var.attribute.type, right_var.attribute.type)
+      : validate_fixed_is_value(at, right_fixed);
   };
-  const A_op_b: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    return validate_var_is_set(reporter, p, left_var, 'left')
+  const A_op_b: OperatorValidation = function a_op_b(at, left_var, right_var, right_fixed) {
+    return validate_var_is_set(at, left_var, 'left')
       && right_var
-      ? validate_var_is_value(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, subtype(left_var.attribute.type), right_var.attribute.type)
-      : validate_fixed_is_value(reporter, p, right_fixed);
+      ? validate_var_is_value(at, right_var, 'right') && validate_are_comparable(at, subtype(left_var.attribute.type), right_var.attribute.type)
+      : validate_fixed_is_value(at, right_fixed);
   };
-  const a_op_B: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    return validate_var_is_value(reporter, p, left_var, 'left')
+  const a_op_B: OperatorValidation = function a_op_b(at, left_var, right_var, right_fixed) {
+    return validate_var_is_value(at, left_var, 'left')
       && right_var
-      ? validate_var_is_set(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, left_var.attribute.type, subtype(right_var.attribute.type))
-      : validate_fixed_is_set(reporter, p, right_fixed);
+      ? validate_var_is_set(at, right_var, 'right') && validate_are_comparable(at, left_var.attribute.type, subtype(right_var.attribute.type))
+      : validate_fixed_is_set(at, right_fixed);
   };
-  const A_op_B: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    return validate_var_is_set(reporter, p, left_var, 'left')
+  const A_op_B: OperatorValidation = function a_op_b(at, left_var, right_var, right_fixed) {
+    return validate_var_is_set(at, left_var, 'left')
       && right_var
-      ? validate_var_is_set(reporter, p, right_var, 'right') && validate_are_comparable(reporter, p, left_var.attribute.type, right_var.attribute.type)
-      : validate_fixed_is_set(reporter, p, right_fixed);
+      ? validate_var_is_set(at, right_var, 'right') && validate_are_comparable(at, left_var.attribute.type, right_var.attribute.type)
+      : validate_fixed_is_set(at, right_fixed);
   };
-  const a_op_v: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    let ret = validate_var_is_value(reporter, p, left_var, 'left')
+  const a_op_v: OperatorValidation = function a_op_b(at, left_var, right_var, right_fixed) {
+    let ret = validate_var_is_value(at, left_var, 'left')
       && right_var
-      ? validate_var_is_undefined(reporter, p, right_var, 'right')
-      : validate_fixed_is_value(reporter, p, right_fixed);
+      ? validate_var_is_undefined(at, right_var, 'right')
+      : validate_fixed_is_value(at, right_fixed);
     return ret;
   };
-  const set_op: OperatorValidation = function a_op_b(reporter, p, left_var, right_var, right_fixed) {
-    p.diagnostic(reporter, { is: "error", msg: `only operators on attributes are allowed here` });
+  const set_op: OperatorValidation = function a_op_b(at, left_var, right_var, right_fixed) {
+    at.diagnostic({ is: "error", msg: `only operators on attributes are allowed here` });
     return false;
   };
   type OperatorDesc = { is: OperatorValidation, type: ConstraintType };
@@ -949,14 +949,14 @@ export namespace DataSourceInternal {
 
   class ParseStack {
     parent: ParseStack | undefined;
-    path: AttributePath;
+    at: PathReporter;
     resolved: Map<string, ObjectSet>; // Pre-resolved sets
     original: any; // Original object
-    constructor(path: AttributePath, original, parent: ParseStack | undefined) {
+    constructor(at: PathReporter, original, parent: ParseStack | undefined) {
       this.parent = parent;
       this.resolved = new Map();
       this.original = original;
-      this.path = path;
+      this.at = at;
     }
   }
   type VarPath = { set: ObjectSet, variable: string, attribute: Aspect.InstalledAttribute };
@@ -964,11 +964,10 @@ export namespace DataSourceInternal {
     constructor(
       public head: ParseStack,
       public cc: ControlCenter,
-      public readonly reporter: Reporter = new Reporter()
     ) {}
 
     derive(head: ParseStack) {
-      return new ParseContext(head, this.cc, this.reporter);
+      return new ParseContext(head, this.cc);
     }
     aspect(name: string | Function) : Aspect.Installed {
       let n: string = typeof name === "string" ? name : (name as any).aspect ? (name as any).aspect.name : (name as any).definition.name;
@@ -977,8 +976,8 @@ export namespace DataSourceInternal {
     aspects() {
       return this.cc.installedAspects();
     }
-    push(p: AttributePath, original: any) {
-      this.head = new ParseStack(p.copy(), original, this.head);
+    push(at: PathReporter, original: any) {
+      this.head = new ParseStack(at.copy(), original, this.head);
     }
     pop() {
       if (!this.head.parent)
@@ -986,7 +985,7 @@ export namespace DataSourceInternal {
       this.head = this.head.parent;
     }
 
-    resolve(p: AttributePath, reference: string, end: ParseStack | undefined = undefined) : ObjectSet {
+    resolve(at: PathReporter, reference: string, end: ParseStack | undefined = undefined) : ObjectSet {
       let key = `${reference}=`;
       let v: ObjectSet | undefined;
       let s: ParseStack | undefined = this.head;
@@ -996,7 +995,7 @@ export namespace DataSourceInternal {
           v = s.resolved.get(key);
           if (!v) {
             let c = this.derive(s);
-            v = c.parseSet(s.path, o, reference);
+            v = c.parseSet(s.at, o, reference);
             s.resolved.set(key, v);
           }
         }
@@ -1004,7 +1003,7 @@ export namespace DataSourceInternal {
           break;
       }
       if (!v) {
-        p.diagnostic(this.reporter, { is: "error", msg: `no object set with the name ${key} found` });
+        at.diagnostic({ is: "error", msg: `no object set with the name ${key} found` });
         v = this.createSet(key);
       }
       return v;
@@ -1015,13 +1014,13 @@ export namespace DataSourceInternal {
       return set;
     }
 
-    resolveSet(p: AttributePath, reference: string) : ObjectSet {
+    resolveSet(at: PathReporter, reference: string) : ObjectSet {
       let parts = reference.split(':');
-      let set = this.resolve(p, parts[0]);
+      let set = this.resolve(at, parts[0]);
       if (parts.length > 1) {
         let k = set._name;
         let vars: [string, ObjectSet, Constraint | undefined][] = [];
-        let fattr = this.resolveAttribute(p, set, parts, k, 1, parts.length, (k, s, c) => {
+        let fattr = this.resolveAttribute(at, set, parts, k, 1, parts.length, (k, s, c) => {
           vars.push([k, s, c]);
         });
         if (!fattr)
@@ -1037,19 +1036,19 @@ export namespace DataSourceInternal {
       return set;
     }
 
-    resolveElement(p: AttributePath, reference: string, set: ObjectSet, end: ParseStack | undefined) : VarPath | undefined {
+    resolveElement(at: PathReporter, reference: string, set: ObjectSet, end: ParseStack | undefined) : VarPath | undefined {
       let parts = reference.split('.');
       let k = parts[0];
       let variable = set.variable(k);
       if (!variable) {
-        let sub = this.resolve(p, k, end);
+        let sub = this.resolve(at, k, end);
         variable = sub.clone(k);
         set.setVariable(k, variable);
       }
-      return this.resolveAttribute(p, variable, parts, k, 1);
+      return this.resolveAttribute(at, variable, parts, k, 1);
     }
 
-    aspectAttribute(p: AttributePath, set: ObjectSet, name: string | undefined): Aspect.InstalledAttribute| undefined {
+    aspectAttribute(at: PathReporter, set: ObjectSet, name: string | undefined): Aspect.InstalledAttribute| undefined {
       if (name === "_id")
         return Aspect.attribute_id;
 
@@ -1057,11 +1056,11 @@ export namespace DataSourceInternal {
       let n = 0;
       let mult = false;
       const setAttr = (aspect: Aspect.Installed, name: string | undefined) => {
-        let a = name ? (aspect.attributes.get(name) || DataSourceScope.parse_virtual_attribute(this.reporter, p, aspect, name)) : aspect.attribute_ref;
+        let a = name ? (aspect.attributes.get(name) || DataSourceScope.parse_virtual_attribute(at, aspect, name)) : aspect.attribute_ref;
         if (a) {
           if (attr && !DataSourceScope.attribute_name_type_are_equals(a, attr)) {
             if (!mult)
-              p.diagnostic(this.reporter, { is: "error", msg: `attribute ${name} refer to multiple aspect attributes` });
+              at.diagnostic({ is: "error", msg: `attribute ${name} refer to multiple aspect attributes` });
             mult = true;
           }
           attr = a;
@@ -1090,11 +1089,11 @@ export namespace DataSourceInternal {
           setAttr(aspect, name);
       }
       if (!attr)
-        p.diagnostic(this.reporter, { is: "error", msg: `attribute ${name} not found` });
+        at.diagnostic({ is: "error", msg: `attribute ${name} not found` });
       return attr;
     }
 
-    resolveAttribute(p: AttributePath, set: ObjectSet, parts: string[], k: string = set._name, start: number = 0, last = parts.length - 1, decl?: (k: string, s: ObjectSet, c?: Constraint) => void) : VarPath | undefined {
+    resolveAttribute(at: PathReporter, set: ObjectSet, parts: string[], k: string = set._name, start: number = 0, last = parts.length - 1, decl?: (k: string, s: ObjectSet, c?: Constraint) => void) : VarPath | undefined {
       if (!decl) {
         decl = (k, s, c) => {
           set.setVariable(k, s);
@@ -1107,7 +1106,7 @@ export namespace DataSourceInternal {
         let s = set.variable(k);
         if (!s) {
           s = this.createSet(k);
-          let attr = this.aspectAttribute(p, set, parts[i]);
+          let attr = this.aspectAttribute(at, set, parts[i]);
           if (attr) {
             let type = attr.type;
             if (type.type === "class") {
@@ -1119,133 +1118,133 @@ export namespace DataSourceInternal {
               decl(k, s, c_var(ConstraintType.Equal, set._name, attr, k, Aspect.attribute_id));
             }
             else {
-              p.diagnostic(this.reporter, { is: "error", msg: `invalid constraint attribute type ${attr.type.type} on ${parts[i]}` });
+              at.diagnostic({ is: "error", msg: `invalid constraint attribute type ${attr.type.type} on ${parts[i]}` });
             }
           }
         }
         set = s;
       }
-      let attr = this.aspectAttribute(p, set, i < parts.length ? parts[i] : undefined);
+      let attr = this.aspectAttribute(at, set, i < parts.length ? parts[i] : undefined);
       return attr ? { set: set, variable: k, attribute: attr  } : undefined;
     }
 
-    parseSet(p: AttributePath, v: Instance<ObjectSetDefinition>, name: string, set?: ObjectSet) : ObjectSet {
+    parseSet(at: PathReporter, v: Instance<ObjectSetDefinition>, name: string, set?: ObjectSet) : ObjectSet {
       if (typeof v === "string") {
         if (!v.startsWith("=")) {
-          p.diagnostic(this.reporter, { is: "error", msg: `an object set definition or reference was expected` });
+          at.diagnostic({ is: "error", msg: `an object set definition or reference was expected` });
           return this.createSet("bad reference");
         }
-        return this.resolveSet(p, v.substring(1));
+        return this.resolveSet(at, v.substring(1));
       }
-      this.push(p, v);
+      this.push(at, v);
 
 
       let nout = v["$out"];
       if (nout) {
-        p.push('.$out');
+        at.push('.$out');
         if (!nout.startsWith("=") && nout.indexOf(".") !== -1) {
-          p.diagnostic(this.reporter, { is: "error", msg: `an object set definition or reference was expected` });
+          at.diagnostic({ is: "error", msg: `an object set definition or reference was expected` });
           return this.createSet("bad $out");
         }
         nout = nout.substring(1);
-        set = this.resolve(p, nout);
-        p.pop();
+        set = this.resolve(at, nout);
+        at.pop();
       }
       else {
         set = set || this.createSet(name);
       }
 
-      p.push('.', '');
+      at.push('.', '');
       for (let key in v) {
         if (key.startsWith('$') && key !== "$out") {
           // key is an operator
-          p.set(key);
+          at.set(key);
           let op_on_set = operatorsOnSet[key];
           if (!op_on_set) {
             let msg = operators[key] ? `only operators on set are allowed here` : `unknown operator`;
-            p.diagnostic(this.reporter, { is: "error", msg: msg });
+            at.diagnostic({ is: "error", msg: msg });
           }
           else
-            op_on_set(this, p, set, v[key]);
+            op_on_set(this, at, set, v[key]);
         }
       }
-      p.pop(2);
+      at.pop(2);
 
-      this.parseConditions(p, set, set.constraints, this.head, v);
+      this.parseConditions(at, set, set.constraints, this.head, v);
 
       this.pop();
       return set;
     }
 
-    parseConditionsArray(p: AttributePath, set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, c: ConstraintDefinition[]) {
-      p.pushArray();
+    parseConditionsArray(at: PathReporter, set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, c: ConstraintDefinition[]) {
+      at.pushArray();
       for (let [i, conditions] of c.entries())
-        this.parseConditions(p.setArrayKey(i), set, constraints, this.head, conditions);
-      p.popArray();
+        this.parseConditions(at.setArrayKey(i), set, constraints, this.head, conditions);
+      at.popArray();
     }
 
-    parseConditions(p: AttributePath, set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, conditions: ConstraintDefinition) {
-      p.push('.', '');
+    parseConditions(at: PathReporter, set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, conditions: ConstraintDefinition) {
+      at.push('.', '');
       for (let key in conditions) {
         if (!key.startsWith('$')) {
-          p.set(key);
+          at.set(key);
           if (key.startsWith('=$')) {
             //virtual attributes
-            let a = this.resolveAttribute(p, set, [key.substring(1)]);
+            let a = this.resolveAttribute(at, set, [key.substring(1)]);
             if (a)
-              this.parseRightConditions(p, set, constraints, end, a, conditions[key]);
+              this.parseRightConditions(at, set, constraints, end, a, conditions[key]);
           }
           else if (key.startsWith('=')) {
             // only elements are allowed here ( ie. =element_name(.attribute)* )
-            let a = this.resolveElement(p, key.substring(1), set, end);
+            let a = this.resolveElement(at, key.substring(1), set, end);
             if (a)
-              this.parseRightConditions(p, set, constraints, end, a, conditions[key]);
+              this.parseRightConditions(at, set, constraints, end, a, conditions[key]);
           }
           else if (!key.endsWith('=')) {
             // key is an attribute path
-            let a = this.resolveAttribute(p, set, key.split('.'));
+            let a = this.resolveAttribute(at, set, key.split('.'));
             if (a)
-              this.parseRightConditions(p, set, constraints, end, a, conditions[key]);
+              this.parseRightConditions(at, set, constraints, end, a, conditions[key]);
           }
         }
       }
-      p.pop(2);
+      at.pop(2);
     }
 
-    parseRightConditions(p: AttributePath, set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, left: VarPath, conditions: any) {
+    parseRightConditions(at: PathReporter, set: ObjectSet, constraints: Constraint[], end: ParseStack | undefined, left: VarPath, conditions: any) {
       if (conditions && typeof conditions === "object") {
         if (conditions instanceof VersionedObject) {
           constraints.push(c_value(ConstraintType.Equal, left.variable, left.attribute, conditions));
         }
         else {
-          this.push(p, conditions);
-          p.push('.', '');
+          this.push(at, conditions);
+          at.push('.', '');
           for (var key in conditions) {
-            p.set(key);
+            at.set(key);
             if (!key.startsWith(`$`))
-              p.diagnostic(this.reporter, { is: "error", msg: `an operator was expected` });
+              at.diagnostic({ is: "error", msg: `an operator was expected` });
             else {
               let v = conditions[key];
               let op = operators[key];
               if (!op)
-                p.diagnostic(this.reporter, { is: "error", msg: `unknown operator` });
+                at.diagnostic({ is: "error", msg: `unknown operator` });
               else if (typeof v === "string" && v.startsWith('=')) {
-                let right = this.resolveElement(p, v.substring(1), set, end);
-                if (right && op.is(this.reporter, p, left, right, undefined))
+                let right = this.resolveElement(at, v.substring(1), set, end);
+                if (right && op.is(at, left, right, undefined))
                   constraints.push(c_var(op.type as any, left.variable, left.attribute, right.variable, right.attribute));
               }
               else {
-                if (op.is(this.reporter, p, left, undefined, v))
+                if (op.is(at, left, undefined, v))
                   constraints.push(c_value(op.type as any, left.variable, left.attribute, v));
               }
             }
           }
-          p.pop(2);
+          at.pop(2);
           this.pop();
         }
       }
       else if (typeof conditions === "string" && conditions.startsWith('=')) {
-        let right = this.resolveElement(p, conditions.substring(1), set, end);
+        let right = this.resolveElement(at, conditions.substring(1), set, end);
         if (right)
           constraints.push(c_var(ConstraintType.Equal, left.variable, left.attribute, right.variable, right.attribute));
       }
@@ -1255,11 +1254,11 @@ export namespace DataSourceInternal {
     }
   }
 
-  function parseResult(context: ParseContext, p: AttributePath, result: ResultDefinition) {
-    context.push(p, result);
-    p.push('.where');
-    let set = context.parseSet(p, result.where, result.name);
-    p.pop();
+  function parseResult(context: ParseContext, at: PathReporter, result: ResultDefinition) {
+    context.push(at, result);
+    at.push('.where');
+    let set = context.parseSet(at, result.where, result.name);
+    at.pop();
     set = set.clone(set._name);
     set.name = result.name;
     if (result.scope) {
@@ -1291,26 +1290,26 @@ export namespace DataSourceInternal {
   }
 
   export function parseRequest(request: RequestDefinition, cc: ControlCenter) : Result<ObjectSet[]> {
-    let p = new AttributePath();
-    let context = new ParseContext(new ParseStack(p, request, undefined), cc);
+    let at = new PathReporter(new Reporter());
+    let context = new ParseContext(new ParseStack(at, request, undefined), cc);
     let sets: ObjectSet[] = [];
     if (isResult(request))
-      sets.push(parseResult(context, p, request));
+      sets.push(parseResult(context, at, request));
     else {
-      p.push('results').pushArray();
+      at.push('results').pushArray();
       request.results.forEach((result, i) => {
-        sets.push(parseResult(context, p.setArrayKey(i), result));
+        sets.push(parseResult(context, at.setArrayKey(i), result));
       });
     }
-    return Result.fromReporterAndValue(context.reporter, sets);
+    return Result.fromReporterAndValue(at.reporter, sets);
   }
 
   export function applyWhere(where: ObjectSetDefinition, objects: VersionedObject[], cc: ControlCenter) : Result<VersionedObject[]> {
-    let p = new AttributePath();
-    let context = new ParseContext(new ParseStack(p, where, undefined), cc);
-    let set = context.parseSet(p, where, "where");
+    let at = new PathReporter(new Reporter());
+    let context = new ParseContext(new ParseStack(at, where, undefined), cc);
+    let set = context.parseSet(at, where, "where");
     let sctx = new FilterContext(objects, versionedObjectMapper);
-    return Result.fromReporterAndValue(context.reporter, sctx.solveSorted(set));
+    return Result.fromReporterAndValue(at.reporter, sctx.solveSorted(set));
   }
 
   export function applyRequest(request: RequestDefinition, objects: VersionedObject[], cc: ControlCenter) : Result<{ [s: string]: VersionedObject[] }> {

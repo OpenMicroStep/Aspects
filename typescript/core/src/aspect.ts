@@ -3,7 +3,7 @@ import {
   Validation, Result,
   ImmutableList, ImmutableMap, ImmutableSet
 } from './core';
-import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
+import {Reporter, PathReporter, Validate as V} from '@openmicrostep/msbuildsystem.shared';
 
 export interface FarTransport {
   remoteCall(ctx: Aspect.FarContext, to: VersionedObject, method: string, args: any[]): Promise<any>;
@@ -190,17 +190,18 @@ export namespace Aspect {
   }
 
   export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object' | 'boolean';
-  export type TypeVoid       =  { is: 'type', type: 'void' };
-  export type TypePrimitive  =  { is: 'type', type: 'primitive', name: PrimaryType };
-  export type TypeClass      =  { is: 'type', type: 'class', name: string };
-  export type TypeArray      =  { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" };
-  export type TypeSet        =  { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"};
-  export type TypeDictionary =  { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
-  export type TypeOr         =  { is: 'type', type: 'or', types: Type[] }
-  export type TypeVirtual    =  { is: 'type', type: 'virtual', operator: string, sort: { asc: boolean, attribute: Aspect.InstalledAttribute }[], group_by: InstalledAttribute[] };
-  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr | TypeVirtual ;
-  export type TypeValidator = AttributeTypes.Validator0<any>;
-  export type AttributeTypeValidator = AttributeTypes.Validator<any, VersionedObjectManager<VersionedObject>>;
+  export type TypeVoid = { is: 'type', type: 'void' };
+  export type TypePrimitive = { is: 'type', type: 'primitive', name: PrimaryType };
+  export type TypeClass = { is: 'type', type: 'class', name: string };
+  export type TypeArray = { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" };
+  export type TypeSet = { is: 'type', type: 'set', itemType: Type, min: number, max: number | "*" };
+  export type TypeDictionary = { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
+  export type TypeOr = { is: 'type', type: 'or', types: Type[] }
+  export type TypeVirtual = { is: 'type', type: 'virtual', operator: string, sort: { asc: boolean, attribute: Aspect.InstalledAttribute }[], group_by: InstalledAttribute[] };
+  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr | TypeVirtual;
+
+  export type TypeValidator = V.Validator0<any>;
+  export type AttributeTypeValidator = V.Validator<any, VersionedObjectManager<VersionedObject>>;
   export interface Definition {
     is: string;
     name: string;
@@ -211,6 +212,8 @@ export namespace Aspect {
     categories?: Category[];
     farCategories?: Category[];
     aspects: Aspect[];
+  }
+  export namespace Definition {
   }
   export interface Attribute {
     is: string;
@@ -259,24 +262,15 @@ export namespace Aspect {
     abstract isMultValue(): boolean;
     abstract isArrayValue(): boolean;
     abstract isSetValue(): boolean;
+    abstract isVirtualValue(): boolean;
     abstract traverseValueOrdered<T>(value: any): IterableIterator<[number, T]>;
     abstract traverseValue<T>(value: any): IterableIterator<T>;
     abstract diffValue<T>(newV: any, oldV: any): IterableIterator<[number, T]>;
     abstract subobjectChanges<T extends VersionedObject>(newV: any, oldV: any): IterableIterator<[-1 | 0 | 1, T]>;
   }
+
   export function create_virtual_attribute(name: string, type: TypeVirtual) : Aspect.InstalledAttribute {
-    return {
-      name: name,
-      index: -1,
-      type: type,
-      validator: AttributeTypes.validateAny, //< TODO
-      relation: undefined,
-      contains_vo: false,
-      is_sub_object: false,
-      traverseValueOrdered: traverseValueOrdered_single,
-      traverseValue: traverseValue_single,
-      diffValue: diffValue_single,
-    };
+    return new InstalledVirtualAttribute(name, -1, type, V.validateAny);
   }
 
   export class InstalledMonoAttribute extends InstalledAttribute {
@@ -285,6 +279,7 @@ export namespace Aspect {
     isMultValue(): boolean { return false; }
     isArrayValue(): boolean { return false; }
     isSetValue(): boolean { return false; }
+    isVirtualValue(): boolean { return false; }
 
     *traverseValueOrdered<T>(value: any): IterableIterator<[number, T]> {
       if (value !== undefined)
@@ -314,12 +309,17 @@ export namespace Aspect {
     }
   }
 
+  export class InstalledVirtualAttribute extends InstalledMonoAttribute {
+    isVirtualValue(): boolean { return true; }
+  }
+
   export class InstalledArrayAttribute extends InstalledAttribute {
     defaultValue(): any[] { return []; }
     isMonoValue(): boolean { return false; }
     isMultValue(): boolean { return true; }
     isArrayValue(): boolean { return true; }
     isSetValue(): boolean { return false; }
+    isVirtualValue(): boolean { return false; }
 
     *traverseValueOrdered<T>(value: any[] | undefined): IterableIterator<[number, T]> {
       if (value)
@@ -370,6 +370,7 @@ export namespace Aspect {
     isMultValue(): boolean { return true; }
     isArrayValue(): boolean { return false; }
     isSetValue(): boolean { return true; }
+    isVirtualValue(): boolean { return false; }
 
     *traverseValueOrdered<T>(value: Set<any> | undefined): IterableIterator<[number, T]> {
       if (value)
@@ -771,7 +772,7 @@ export class AspectConfiguration {
       },
       set(this: VersionedObject, value) {
         let manager = this.__manager;
-        value = validateValue(value, new AttributePath(manager._aspect.classname, manager.id(), '.', attribute.name), attribute.validator, manager);
+        value = validateValue(value, new PathReporter(new Reporter(), manager._aspect.classname, manager.id(), '.', attribute.name), attribute.validator, manager);
         manager.setAttributeValueFast(attribute, value);
       }
     });
@@ -806,51 +807,51 @@ export class AspectConfiguration {
 
   private arrayValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*') : Aspect.TypeValidator {
     let validateItem = this.createValidator(forAttribute, itemType, lvl + 1);
-    return { validate: function validateArray(reporter: Reporter, path: AttributePath, value: any) {
+    return { validate: function validateArray(at: PathReporter, value: any) {
       if (Array.isArray(value)) {
         if (forAttribute)
           value = [...value];
-        return validate(reporter, path, value, validateItem, min, max);
+        return validate(at, value, validateItem, min, max);
       }
       else
-        path.diagnostic(reporter, { is: "warning", msg: `attribute must be an array`});
+        at.diagnostic({ is: "warning", msg: `attribute must be an array`});
       return undefined;
     }};
   }
   private setValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*') : Aspect.TypeValidator {
     let validateItem = this.createValidator(forAttribute, itemType, lvl + 1);
-    return { validate: function validateSet(reporter: Reporter, path: AttributePath, value: any) {
+    return { validate: function validateSet(at: PathReporter, value: any) {
       if (value instanceof Set) {
         if (forAttribute)
           value = new Set(value);
-        return validate(reporter, path, value, validateItem, min, max);
+        return validate(at, value, validateItem, min, max);
       }
       else
-        path.diagnostic(reporter, { is: "warning", msg: `attribute must be a set`});
+        at.diagnostic({ is: "warning", msg: `attribute must be a set`});
       return undefined;
     }};
   }
   private propertiesValidator(forAttribute: boolean, lvl: number, properties:  { [s: string]: Aspect.Type }) : Aspect.TypeValidator {
-    let extensions: AttributeTypes.Extensions<any, VersionedObjectManager> = {};
-    let objectForKeyValidator: Aspect.TypeValidator = AttributeTypes.validateAnyToUndefined;
+    let extensions: V.Extensions<any, VersionedObjectManager> = {};
+    let objectForKeyValidator: Aspect.TypeValidator = V.validateAnyToUndefined;
     for (let k in properties) {
       if (k === '*')
         objectForKeyValidator = this.createValidator(forAttribute, properties[k], lvl + 1);
       else
         extensions[k] = this.createValidator(forAttribute, properties[k], lvl + 1);
     }
-    return AttributeTypes.objectValidator(extensions, objectForKeyValidator) as Aspect.TypeValidator;
+    return V.objectValidator(extensions, objectForKeyValidator) as Aspect.TypeValidator;
   }
   private createValidator(forAttribute: boolean, type: Aspect.Type, lvl = 0) : Aspect.TypeValidator {
     if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class" && type.type !== "or")
       throw new Error(`cannot create deep type validator for attribute`);
     switch (type.type) {
       case "primitive": return forAttribute && lvl === 0 ? Validation.primitiveLevel0Validators[type.name] : Validation.primitiveValidators[type.name];
-      case "class": return forAttribute ? Validation.classValidator(type.name, forAttribute && lvl === 0) : AttributeTypes.validateAny;
+      case "class": return forAttribute ? Validation.classValidator(type.name, forAttribute && lvl === 0) : V.validateAny;
       case "array": return this.arrayValidator(forAttribute, lvl, type.itemType, type.min, type.max);
       case "set": return this.setValidator(forAttribute, lvl, type.itemType, type.min, type.max);
       case "dictionary": return this.propertiesValidator(forAttribute, lvl, type.properties);
-      case "or": return AttributeTypes.oneOf(...type.types.map(t => this.createValidator(forAttribute, t, lvl)));
+      case "or": return V.oneOf(...type.types.map(t => this.createValidator(forAttribute, t, lvl)));
     }
     throw new Error(`cannot create ${type.type} type validator`);
   }
@@ -866,27 +867,26 @@ function findReferences(type: Aspect.Type, apply: (ref: string) => void) {
 }
 
 function validate(
-  reporter: Reporter, path: AttributePath,
+  at: PathReporter,
   collection: any, validateItem: Aspect.TypeValidator,
   min: number, max: number | '*'
 ) {
-  path.pushArray();
+  at.pushArray();
   if (collection.size < min)
-    path.diagnostic(reporter, { is: "warning", msg: `attribute must contains at least ${min} elements`});
+    at.diagnostic({ is: "warning", msg: `attribute must contains at least ${min} elements`});
   if (max !== '*' && collection.size > max)
-    path.diagnostic(reporter, { is: "warning", msg: `attribute must contains at most ${max} elements`});
+    at.diagnostic({ is: "warning", msg: `attribute must contains at most ${max} elements`});
   let i = 0;
-  collection.forEach((v) => validateItem.validate(reporter, path.setArrayKey(i++), v));
-  path.popArray();
+  collection.forEach((v) => validateItem.validate(at.setArrayKey(i++), v));
+  at.popArray();
   return collection;
 }
-function validateValue(value, path: AttributePath, validator: Aspect.TypeValidator): any;
-function validateValue(value, path: AttributePath, validator: Aspect.AttributeTypeValidator, manager: VersionedObjectManager): any;
-function validateValue(value, path: AttributePath, validator: Aspect.AttributeTypeValidator, manager?: VersionedObjectManager) {
-  let reporter = new Reporter();
-  value = validator.validate(reporter, path, value, manager!);
-  if (reporter.diagnostics.length > 0)
-    throw new Error(`attribute ${path} value is invalid: ${JSON.stringify(reporter.diagnostics, null, 2)}`);
+function validateValue(value, at: PathReporter, validator: Aspect.TypeValidator): any;
+function validateValue(value, at: PathReporter, validator: Aspect.AttributeTypeValidator, manager: VersionedObjectManager): any;
+function validateValue(value, at: PathReporter, validator: Aspect.AttributeTypeValidator, manager?: VersionedObjectManager) {
+  value = validator.validate(at, value, manager!);
+  if (at.reporter.diagnostics.length > 0)
+    throw new Error(`attribute ${at} value is invalid: ${JSON.stringify(at.reporter.diagnostics, null, 2)}`);
   return value;
 }
 

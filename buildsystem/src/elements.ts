@@ -1,9 +1,9 @@
-import { Element, AttributePath, ElementDefinition, ProviderMap, Reporter } from '@openmicrostep/msbuildsystem.core';
+import { Element, PathReporter, ElementDefinition, ProviderMap, Reporter } from '@openmicrostep/msbuildsystem.core';
 
 export const elementFactories = Element.createElementFactoriesProviderMap('aspects');
 
 export const GroupElement = Element.DynGroupElement(Element);
-elementFactories.registerSimple('group', (reporter: Reporter, name: string, definition: ElementDefinition, attrPath: AttributePath, parent: Element) => {
+elementFactories.registerSimple('group', (at: PathReporter, name: string, definition: ElementDefinition, parent: Element) => {
   return new GroupElement('group', name, parent);
 });
 
@@ -27,7 +27,7 @@ function embedType(condition: boolean, prefix: [string, string], type: string, s
   return condition ? `${prefix[0]}${type}${suffix[0]}` : `${prefix[1]}${type}${suffix[1]}`;
 }
 
-elementFactories.registerSimple('type', (reporter, name, definition, attrPath, parent: AspectBaseElement) => {
+elementFactories.registerSimple('type', (at, name, definition, parent: AspectBaseElement) => {
   return new TypeElement('type', name, parent);
 });
 export class TypeElement extends Element {
@@ -78,7 +78,7 @@ export class TypeElement extends Element {
   }
 }
 
-elementFactories.registerSimple('class', (reporter, name, definition, attrPath, parent: AspectBaseElement) => {
+elementFactories.registerSimple('class', (at, name, definition, parent: AspectBaseElement) => {
   let ret = new ClassElement('class', name, parent);
   parent.__root().__classes.push(ret);
   return ret;
@@ -183,7 +183,7 @@ export namespace ${this.name} {
   }
 }
 
-elementFactories.registerSimple('attribute', (reporter, name, definition, attrPath, parent) => {
+elementFactories.registerSimple('attribute', (at, name, definition, parent) => {
   return new AttributeElement('attribute', name, parent);
 });
 export class AttributeElement extends Element {
@@ -191,8 +191,8 @@ export class AttributeElement extends Element {
   relation?: string;
   is_sub_object: boolean = false;
 
-  __resolveWithPath(reporter: Reporter, attrPath: AttributePath) {
-    super.__resolveWithPath(reporter, attrPath);
+  __resolveWithPath(at: PathReporter) {
+    super.__resolveWithPath(at);
     if (this.relation && this.type.type === 'array')
       this.type.type = 'set';
   }
@@ -208,7 +208,7 @@ export class AttributeElement extends Element {
   }
 }
 
-elementFactories.registerSimple('query', (reporter, name, definition, attrPath, parent) => {
+elementFactories.registerSimple('query', (at, name, definition, parent) => {
   return new QueryElement('query', name, parent);
 });
 export class QueryElement extends Element {
@@ -225,10 +225,10 @@ export class QueryElement extends Element {
   }
 }
 
-elementFactories.registerSimple('category', (reporter, name, definition, attrPath, parent) => {
+elementFactories.registerSimple('category', (at, name, definition, parent) => {
   return new CategoryElement('category', name, parent);
 });
-elementFactories.registerSimple('farCategory', (reporter, name, definition, attrPath, parent) => {
+elementFactories.registerSimple('farCategory', (at, name, definition, parent) => {
   return new CategoryElement('farCategory', name, parent);
 });
 export class CategoryElement extends Element {
@@ -285,7 +285,7 @@ export class CategoryElement extends Element {
   }
 }
 
-elementFactories.registerSimple('method', (reporter, name, definition, attrPath, parent) => {
+elementFactories.registerSimple('method', (at, name, definition, parent) => {
   return new MethodElement('method', name, parent);
 });
 export class MethodElement extends Element {
@@ -312,7 +312,7 @@ export class MethodElement extends Element {
   }
 }
 
-elementFactories.registerSimple('aspect', (reporter, name, definition, attrPath, parent) => {
+elementFactories.registerSimple('aspect', (at, name, definition, parent) => {
   return new AspectElement('aspect', name, parent);
 });
 export class AspectElement extends Element {

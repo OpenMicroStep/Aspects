@@ -1,5 +1,5 @@
 import { Aspect, Result, ControlCenterContext } from './core';
-import { Reporter, AttributePath } from '@openmicrostep/msbuildsystem.shared';
+import { Reporter, PathReporter } from '@openmicrostep/msbuildsystem.shared';
 
 export namespace Invocation {
   export function farEvent<A0, R>(invokable: Aspect.Invokable<A0, R>, a0: A0, eventName: string, onObject?: Object) {
@@ -38,7 +38,7 @@ export namespace Invocation {
         }
         if (hasResult && farMethod && farMethod.returnValidator) {
           let nb = reporter.diagnostics.length;
-          ret = farMethod.returnValidator.validate(reporter, new AttributePath(farMethod.name, ":return"), ret);
+          ret = farMethod.returnValidator.validate(new PathReporter(reporter, farMethod.name, ":return"), ret);
           hasResult = nb === reporter.diagnostics.length; // no new diagnostic
         }
         let items: Result.Item[] = reporter.diagnostics;
@@ -53,7 +53,7 @@ export namespace Invocation {
         reporter.diagnostic({ is: "error", msg: `method ${method} doesn't exists on ${manager.classname()}` });
       else {
         let argValidator = farMethod.argumentValidators[0];
-        let arg = argValidator ? argValidator.validate(reporter, new AttributePath(farMethod.name, ":", 0), a0) : undefined;
+        let arg = argValidator ? argValidator.validate(new PathReporter(reporter, farMethod.name, ":", 0), a0) : undefined;
         if (!reporter.failed) {
 
           farMethod.transport.remoteCall({ context:{ ccc,...ccc.controlCenter().defaultContext() } }, receiver, method, argValidator ? [arg] : [])

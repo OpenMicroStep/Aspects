@@ -1,4 +1,4 @@
-import {Element, AttributePath, ElementDefinition, ProviderMap, Reporter} from '@openmicrostep/msbuildsystem.shared';
+import {Element, PathReporter, ElementDefinition, ProviderMap, Reporter} from '@openmicrostep/msbuildsystem.shared';
 import {Aspect, DataSource, VersionedObject, VersionedObjectManager, Identifier, ControlCenter, DataSourceInternal, VersionedObjectConstructor} from '@openmicrostep/aspects';
 import ObjectSet = DataSourceInternal.ObjectSet;
 import ConstraintType = DataSourceInternal.ConstraintType;
@@ -12,7 +12,7 @@ export function loadSqlMappers(definition) : { [s: string]: SqlMappedObject } {
   return ret;
 }
 
-elementFactories.registerSimple('sql-insert', (reporter, name, definition, attrPath, parent: Element) => {
+elementFactories.registerSimple('sql-insert', (at, name, definition, parent: Element) => {
   return new SqlInsert('sql-insert', name, parent);
 });
 export class SqlInsert extends Element {
@@ -20,7 +20,7 @@ export class SqlInsert extends Element {
   values: SqlValue[] = [];
 }
 
-elementFactories.registerSimple('sql-value', (reporter, name, definition, attrPath, parent: Element) => {
+elementFactories.registerSimple('sql-value', (at, name, definition, parent: Element) => {
   return new SqlValue('sql-value', name, parent);
 });
 export class SqlValue extends Element {
@@ -31,7 +31,7 @@ export class SqlValue extends Element {
 
 function pass(v) { return v; }
 
-elementFactories.registerSimple('sql-path', (reporter, name, definition, attrPath, parent: Element) => {
+elementFactories.registerSimple('sql-path', (at, name, definition, parent: Element) => {
   return new SqlPath('sql-path', name, parent);
 });
 export class SqlPath extends Element {
@@ -48,7 +48,7 @@ export class SqlPath extends Element {
   }
 }
 
-elementFactories.registerSimple('sql-mapped-attribute', (reporter, name, definition, attrPath, parent: Element) => {
+elementFactories.registerSimple('sql-mapped-attribute', (at, name, definition, parent: Element) => {
   return new SqlMappedAttribute('sql-mapped-attribute', name, parent);
 });
 export class SqlMappedAttribute extends Element {
@@ -64,7 +64,7 @@ export class SqlMappedAttribute extends Element {
   }
 }
 
-elementFactories.registerSimple('sql-mapped-object', (reporter, name, definition, attrPath, parent: Element) => {
+elementFactories.registerSimple('sql-mapped-object', (at, name, definition, parent: Element) => {
   return new SqlMappedObject('sql-mapped-object', name, parent);
 });
 export class SqlMappedObject extends Element {
