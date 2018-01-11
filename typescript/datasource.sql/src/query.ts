@@ -633,13 +633,13 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   sql_column(attribute: Aspect.InstalledAttribute, required: boolean = true): SqlBinding | undefined {
 
 
-    if (attribute.type.type === "virtual") {
-      if (attribute.type.operator === "$is_last") {
+    if (attribute.isVirtualValue()) {
+      if ((attribute.type as Aspect.TypeVirtual).operator === "$is_last") {
         let sql_select_count: SqlBinding = this.sql_sub_count_virtual(this.set,attribute,ConstraintType.Equal,0);
         return sql_select_count;
         //let b = this.ctx.maker.op_bind(sql_select_count,(value === true) ? ConstraintType.Equal : ConstraintType.NotEqual, 0);
       } else {
-        throw new Error(`virtual operator ${attribute.type.operator} is not implemented`);
+        throw new Error(`virtual operator ${(attribute.type as Aspect.TypeVirtual).operator} is not implemented`);
       }
     }
 
@@ -710,7 +710,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         let scope_type = this.set.scope[aspect.classname];
         let scope_path = scope_type ? scope_type['.'] : [];
         for (let a of scope_path)
-          if (Aspect.typeIsSingleValue(a.type))
+          if (a.isMonoValue())
             monoAttributes.add(a);
       }
     }
@@ -905,7 +905,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   mapSingleValue(attribute: Aspect.InstalledAttribute, value) {
     let finalValue;
     let hasFinalValue = false;
-    if (attribute.type.type === "virtual"){
+    if (attribute.isVirtualValue()){
       finalValue = value;
       hasFinalValue = true;
     } else
@@ -996,10 +996,10 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       version = mapper.attribute_version().fromDb(version);
       snapshot.setAttributeValueFast(Aspect.attribute_version, version);
       for (let a of scope_path) {
-        if (Aspect.typeIsSingleValue(a.type)) {
+        if (a.isMonoValue()) {
           let k = a.name;
           let v = row[prefix + k];
-          if (a.type.type != "virtual") {
+          if (!a.isVirtualValue()) {
             v = mapper.get(k)!.fromDb(v);
             v = this.loadValue(ccc, a.type, v);
             snapshot.setAttributeValueFast(a, v);

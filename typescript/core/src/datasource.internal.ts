@@ -427,7 +427,7 @@ export namespace DataSourceInternal {
     for (let [name, attr] of attributes) {
       let f_attr = aspect.attributes.get(name);
       if (
-        (attr.type.type !== "virtual") && // TODO: deeper check for virtual
+        (!attr.isVirtualValue()) &&
         (!f_attr || !Aspect.typesAreComparable(f_attr.type, attr.type)) &&
         (name !== "_id" || !Aspect.typesAreComparable(aspect.attribute_ref.type, attr.type))
       )
@@ -831,13 +831,13 @@ export namespace DataSourceInternal {
     return false;
   }
   function validate_var_is_value(at: PathReporter, v: VarPath, side: string): boolean {
-    let ret = Aspect.typeIsSingleValue(v.attribute.type);
+    let ret = v.attribute.isMonoValue();
     if (!ret)
       at.diagnostic({ is: "error", msg: `${side} operand must be a single value, ${JSON.stringify(v.attribute.type)} was found` });
     return ret;
   }
   function validate_var_is_set(at: PathReporter, v: VarPath, side: string): boolean {
-    let ret = Aspect.typeIsMultValue(v.attribute.type);
+    let ret = v.attribute.isMultValue();
     if (!ret)
       at.diagnostic({ is: "error", msg: `${side} operand must be a set of values, ${JSON.stringify(v.attribute.type)} was found` });
     return ret;

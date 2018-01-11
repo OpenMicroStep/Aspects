@@ -98,7 +98,7 @@ export class SqlDataSource extends DataSource {
 
     let map = (attribute: Aspect.InstalledAttribute, mapped_attribute: SqlMappedAttribute, modified: any, saved: any | undefined) => {
       let last = mapped_attribute.last();
-      let is_single_value = Aspect.typeIsSingleValue(attribute.type);
+      let is_single_value = attribute.isMonoValue();
       if (isNew && mapped_attribute.insert) { // insert syntax
         let insert = inserts.get(mapped_attribute.insert);
         if (!insert)

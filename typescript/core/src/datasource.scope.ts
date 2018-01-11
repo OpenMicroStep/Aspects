@@ -113,7 +113,7 @@ function parseScopeAttr(ctx: ParseScopeContext,
   }
 
   if (sort_match && cnt === ctx.safe_aspect_path_cnt) {
-    if (!Aspect.typeIsSingleValue(safe_attribute.type))
+    if (!safe_attribute.isMonoValue())
       throw new Error(`cannot sort on '${safe_attribute.name}' (it is not a single value)`);
 
     let idx = ctx.safe_aspect_path_idx + ctx.safe_aspect_path_cnt;
