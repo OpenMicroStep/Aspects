@@ -407,6 +407,21 @@ export namespace Aspect {
     }
   }
 
+  export const attribute_id = new Aspect.InstalledMonoAttribute(
+    "_id",
+    0,
+    { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
+    Validation.validateId,
+    undefined,
+  );
+  export const attribute_version = new Aspect.InstalledMonoAttribute(
+    "_version",
+    1,
+    { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
+    Validation.validateVersion,
+    undefined,
+  );
+
   const voAttributes = new Map<string, Aspect.InstalledAttribute>();
   voAttributes.set("_id", Aspect.attribute_id);
   voAttributes.set("_version", Aspect.attribute_version);
@@ -472,19 +487,4 @@ export namespace Aspect {
   }
   export type Invokable<A0, R> = { to: VersionedObject, method: string, _check?: { _a0: A0, _r: R } };
   export type FarImplementation<P extends VersionedObject, A, R> = ((this: P, ctx: FarContext, arg: A) => R | Result<R> | Promise<R | Result<R>>);
-
-  export const attribute_id = new Aspect.InstalledMonoAttribute(
-    "_id",
-    0,
-    { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
-    Validation.validateId,
-    undefined,
-  );
-  export const attribute_version = new Aspect.InstalledMonoAttribute(
-    "_version",
-    1,
-    { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
-    Validation.validateVersion,
-    undefined,
-  );
 }
