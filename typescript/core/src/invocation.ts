@@ -21,6 +21,7 @@ export namespace Invocation {
   export function farPromise<A0, R>(ccc: ControlCenterContext, invokable: Aspect.Invokable<A0, R>, a0: A0) : Promise<Result<R>> {
     return new Promise((resolve) => {
       const reporter = new Reporter();
+      let code_ctx = new Aspect.Type.Context(ccc, Aspect.Type.ModeLocation.Parameter);
       let { to: receiver, method } = invokable;
       let hasResult = false;
       let ret: any = undefined;
@@ -31,15 +32,29 @@ export namespace Invocation {
 
       const exit = () => {
         let result: Result | undefined = undefined;
-        if (ret instanceof Result) {
-          result = ret;
-          hasResult = ret.hasValues();
-          ret = ret.hasOneValue() ? ret.value() : ret.values();
-        }
-        if (hasResult && farMethod && farMethod.returnValidator) {
-          let nb = reporter.diagnostics.length;
-          ret = farMethod.returnValidator.validate(new PathReporter(reporter, farMethod.name, ":return"), ret);
-          hasResult = nb === reporter.diagnostics.length; // no new diagnostic
+        if (farMethod) {
+          let at = new PathReporter(reporter, farMethod.name, ":return");
+          if (hasResult && farMethod.returnType && !farMethod.transport.manual_coding) {
+            let s = reporter.snapshot();
+            let resultType = new Aspect.Type.ResultType(farMethod.returnType);
+            code_ctx.location = Aspect.Type.ModeLocation.Return;
+            if (resultType.canDecode(ret))
+              ret = resultType.decode(at, code_ctx, ret);
+            else
+              ret = farMethod.returnType.validate(at, ret);
+            // TODO: async finalize decode
+            hasResult = !reporter.hasChanged(s);
+          }
+          if (ret instanceof Result) {
+            result = ret;
+            hasResult = ret.hasValues();
+            ret = ret.hasOneValue() ? ret.value() : ret.values();
+          }
+          if (hasResult && farMethod.returnType) {
+            let s = reporter.snapshot();
+            farMethod.returnType.validate(at, ret);
+            hasResult = !reporter.hasChanged(s);
+          }
         }
         let items: Result.Item[] = reporter.diagnostics;
         if (!reporter.failed && result) // if reporter failed, we can't trust result items
@@ -52,14 +67,23 @@ export namespace Invocation {
       if (!farMethod)
         reporter.diagnostic({ is: "error", msg: `method ${method} doesn't exists on ${manager.classname()}` });
       else {
-        let argValidator = farMethod.argumentValidators[0];
-        let arg = argValidator ? argValidator.validate(new PathReporter(reporter, farMethod.name, ":", 0), a0) : undefined;
+        let args: any[] = [];
+        if (farMethod.argumentTypes.length > 0) {
+          let argValidator = farMethod.argumentTypes[0];
+          let at = new PathReporter(reporter, farMethod.name, ":", 0);
+          argValidator.validate(at, a0);
+          if (!farMethod.transport.manual_coding) {
+            code_ctx.location = Aspect.Type.ModeLocation.Parameter;
+            a0 = argValidator.encode(at, code_ctx, a0);
+          }
+          args.push(a0);
+        }
         if (!reporter.failed) {
-
-          farMethod.transport.remoteCall({ context:{ ccc,...ccc.controlCenter().defaultContext() } }, receiver, method, argValidator ? [arg] : [])
+          let ctx = { context: { ccc, ...ccc.controlCenter().defaultContext() } };
+          farMethod.transport.remoteCall(ctx, receiver, farMethod, args)
             .then(
               (result) => { hasResult = true; ret = result; exit(); },
-                (err) => {
+              (err) => {
                 if (err)
                   reporter.error(err);
                 else

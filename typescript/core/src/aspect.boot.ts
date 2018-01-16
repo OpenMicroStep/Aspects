@@ -1,8 +1,9 @@
 import {
   ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
-  Validation, Result, Aspect, FarTransport, PublicTransport,
-  ImmutableList, ImmutableMap, ImmutableSet
+  Result, Aspect, FarTransport, PublicTransport,
+  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal
 } from './core';
+import {Type} from './aspect.type';
 import { Reporter, PathReporter, Validate as V } from '@openmicrostep/msbuildsystem.shared';
 
 export interface VersionedObjectConstructorCache extends VersionedObjectConstructor {
@@ -35,6 +36,8 @@ export class AspectSelection {
   }
 }
 export class AspectConfiguration {
+  private readonly _custom_classes = new Map<string, Function>();
+  private readonly _vo_classes = new Map<string, Function>();
   private readonly _aspects = new Map<string, VersionedObjectConstructorCache>();
   private readonly _cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
   /** @internal */ readonly _initDefaultContext: ((ccc: ControlCenterContext) => { [name: string]: VersionedObject }) | undefined;
@@ -43,6 +46,7 @@ export class AspectConfiguration {
     farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
     defaultFarTransport?: FarTransport,
     initDefaultContext?: (ccc: ControlCenterContext) => { [name: string]: VersionedObject },
+    customClasses?: { [s: string]: Function },
   })
   constructor(selection: AspectSelection)
   constructor(options: AspectSelection | {
@@ -50,9 +54,16 @@ export class AspectConfiguration {
     farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
     defaultFarTransport?: FarTransport,
     initDefaultContext?: (ccc: ControlCenterContext) => { [name: string]: VersionedObject },
+    customClasses?: { [s: string]: Function },
   }) {
+    this._custom_classes.set("ObjectSet", DataSourceInternal.ObjectSet);
+    this._custom_classes.set("ResolvedScope", DataSourceInternal.ResolvedScope);
+    this._vo_classes.set("VersionedObject", VersionedObject);
     if (options instanceof AspectSelection)
       options = { selection: options };
+    if (options.customClasses) for (let classname in options.customClasses) {
+      this._custom_classes.set(classname, options.customClasses[classname]);
+    }
     let { selection, farTransports, defaultFarTransport, initDefaultContext } = options;
 
     this._initDefaultContext = initDefaultContext;
@@ -72,6 +83,7 @@ export class AspectConfiguration {
         );
       });
       this._aspects.set(name, aspect_cstor);
+      this._vo_classes.set(name, cstor);
     }
 
     let installed_attributes = new Set<VersionedObjectConstructorCache>();
@@ -154,8 +166,8 @@ export class AspectConfiguration {
     return tmp;
   }
 
-  private buildMethodList(categoryName: string, from: VersionedObjectConstructor, map = new Map<string, Aspect.Method>()): ['far' | 'local' | undefined, Map<string, Aspect.Method>] {
-    let r: ['far' | 'local' | undefined, Map<string, Aspect.Method>];
+  private buildMethodList(categoryName: string, from: VersionedObjectConstructor, map = new Map<string, Aspect.Definition.Method>()): ['far' | 'local' | undefined, Map<string, Aspect.Definition.Method>] {
+    let r: ['far' | 'local' | undefined, Map<string, Aspect.Definition.Method>];
     r = from.parent ? this.buildMethodList(categoryName, from.parent, map) : [undefined, map];
     let definition = from.definition;
     let category = (definition.categories || []).find(cel => cel.name === categoryName) || (definition.farCategories || []).find(cel => cel.name === categoryName);
@@ -175,12 +187,12 @@ export class AspectConfiguration {
     let list = this.buildMethodList(categoryName, from);
     let isFar = list[0] === "far";
     list[1].forEach(method => {
-      let farMethod = Object.assign({}, method, {
-        argumentValidators: method.argumentTypes.map(t => this.createValidator(false, t)),
-        returnValidator: method.returnType.type !== "void" ? this.createValidator(false, method.returnType) : undefined,
+      ret.set(method.name, {
+        name: method.name,
+        argumentTypes: method.argumentTypes.map(t => this.createType(t, false, false)),
+        returnType: method.returnType.type !== "void" ? this.createType(method.returnType, false, false) : undefined,
         transport: isFar ? Aspect.farTransportStub : undefined
       });
-      ret.set(method.name, farMethod);
     });
     return ret;
   }
@@ -195,7 +207,8 @@ export class AspectConfiguration {
       if (local_method.transport) {
         (aspect_cstor.aspect.farMethods as Map<string, Aspect.InstalledMethod>).set(category_name, Object.assign({}, local_method, {
           transport: {
-            remoteCall(ctx, to: VersionedObject, method: string, args: any[]): Promise<any> {
+            manual_coding: true,
+            remoteCall(ctx, to, method, args) {
               return fastSafeCall(ctx, localImpl, to, args[0]);
             }
           } as FarTransport
@@ -244,6 +257,7 @@ export class AspectConfiguration {
         cstor = cstor.parent;
       }
       for (cstor of will_install) {
+        this._vo_classes.set(cstor.definition.name, cstor);
         for (let attribute of cstor.definition.attributes || []) {
           const data = this.install_attribute(aspect_cstor, attribute, attributes_by_index.length, pending_relations);
           (attributes_by_index as Aspect.InstalledAttribute[]).push(data);
@@ -256,31 +270,34 @@ export class AspectConfiguration {
 
   private install_attribute(
     aspect_cstor: VersionedObjectConstructorCache,
-    attribute_definition: Aspect.Attribute,
+    attribute_definition: Aspect.Definition.Attribute,
     index: number,
     pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
   ) {
-    let contains_types = Aspect.typeToAspectNames(attribute_definition.type);
-    let cstor = typeToInstalledAttributeCstor(attribute_definition.type);
+    let type = this.createType(attribute_definition.type, true, true);
+    let is_sub_object = attribute_definition.is_sub_object === true;
+    let contained_aspects = new Set<Aspect.Installed>();
+    for (let classname of type.classnames()) {
+      let contained_aspect_cstor = this._aspects.get(classname);
+      if (!contained_aspect_cstor)
+        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${attribute_definition.name} requires class ${classname} to work`);
+      let contained_aspect = contained_aspect_cstor.aspect;
+      if (is_sub_object && !contained_aspect.is_sub_object)
+        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${attribute_definition.name} is marked as sub object while ${classname} is not`);
+      contained_aspects.add(contained_aspect);
+    }
+    let cstor = type.attribute_cstor();
     const attribute = new cstor(
       attribute_definition.name as keyof VersionedObject,
       index,
-      attribute_definition.type,
-      attribute_definition.validator || this.createValidator(true, attribute_definition.type),
+      type,
       undefined,
-      contains_types.length > 0,
+      contained_aspects,
       attribute_definition.is_sub_object === true,
     );
-    for (let name of contains_types) {
-      let sub_aspect_cstor = this._aspects.get(name);
-      if (!sub_aspect_cstor)
-        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${attribute.name} requires class ${name} to work`);
-      let sub_aspect = sub_aspect_cstor.aspect;
-      if (attribute.is_sub_object && !sub_aspect.is_sub_object)
-        throw new Error(`attribute ${aspect_cstor.aspect.classname}.${attribute.name} is marked as sub object while ${name} is not`);
-      (sub_aspect.references as Aspect.Reference[]).push({ class: aspect_cstor.aspect, attribute: attribute });
+    for (let contained_aspect of contained_aspects) {
+      (contained_aspect.references as Aspect.Reference[]).push({ class: aspect_cstor.aspect, attribute: attribute });
     }
-
     Object.defineProperty(aspect_cstor.prototype, attribute.name, {
       enumerable: true,
       get(this: VersionedObject) {
@@ -288,7 +305,10 @@ export class AspectConfiguration {
       },
       set(this: VersionedObject, value) {
         let manager = this.__manager;
-        value = validateValue(value, new PathReporter(new Reporter(), manager._aspect.classname, manager.id(), '.', attribute.name), attribute.validator, manager);
+        let at = new PathReporter(new Reporter(), manager._aspect.classname, manager.id(), '.', attribute.name);
+        type.validate(at, value);
+        if (at.reporter.failed)
+          throw new Error(`${at} value is invalid: ${JSON.stringify(at.reporter.diagnostics, null, 2)}`);
         manager.setAttributeValueFast(attribute, value);
       }
     });
@@ -300,10 +320,9 @@ export class AspectConfiguration {
 
   private install_attribute_relations(pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]) {
     for (let [aspect, attribute, relation] of pending_relations) {
-      let contains_types = Aspect.typeToAspectNames(attribute.type);
-      if (contains_types.length !== 1)
+      let relation_aspect = attribute.containedVersionedObjectIfAlone();
+      if (!relation_aspect)
         throw new Error(`attribute ${aspect.classname}.${attribute.name} type of a relation must be a class, an array of classes or a set of classes`);
-      let relation_aspect = this._aspects.get(contains_types[0])!.aspect;
       let relation_attribute = relation_aspect.attributes.get(relation);
       if (!relation_attribute)
         throw new Error(`attribute ${aspect.classname}.${attribute.name} contains a relation to an unknown attribute ${relation_aspect.classname}.${relation}`);
@@ -321,94 +340,65 @@ export class AspectConfiguration {
     }
   }
 
-  private arrayValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*'): Aspect.TypeValidator {
-    let validateItem = this.createValidator(forAttribute, itemType, lvl + 1);
-    return {
-      validate: function validateArray(at: PathReporter, value: any) {
-        if (Array.isArray(value)) {
-          if (forAttribute)
-            value = [...value];
-          return validate(at, value, validateItem, min, max);
+  private createType(type: Aspect.Definition.Type, forAttribute: boolean, encodable: boolean): Aspect.Type {
+    const mktype = (type: Aspect.Definition.Type, lvl: number) => {
+      if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class" && type.type !== "or")
+        throw new Error(`cannot create deep type validator for attribute`);
+      switch (type.type) {
+        case "primitive": return forAttribute && lvl === 0
+          ? primitiveLevel0Validators[type.name]
+          : primitiveValidators[type.name];
+        case "class": {
+          let cstor = this._vo_classes.get(type.name);
+          if (!cstor && !encodable)
+            cstor = this._custom_classes.get(type.name);
+          if (!cstor)
+            throw new Error(`cannot find class ${type.name}`);
+          return new Type.VersionedObjectType(type.name, cstor);
         }
-        else
-          at.diagnostic({ is: "warning", msg: `attribute must be an array` });
-        return undefined;
-      }
-    };
-  }
-  private setValidator(forAttribute: boolean, lvl: number, itemType: Aspect.Type, min: number, max: number | '*'): Aspect.TypeValidator {
-    let validateItem = this.createValidator(forAttribute, itemType, lvl + 1);
-    return {
-      validate: function validateSet(at: PathReporter, value: any) {
-        if (value instanceof Set) {
-          if (forAttribute)
-            value = new Set(value);
-          return validate(at, value, validateItem, min, max);
+        case "array": return new Type.ArrayType(type.min, type.max === '*' ? Type.ArrayType.INFINITE : type.max, mktype(type.itemType, lvl + 1));
+        case "set": return new Type.SetType(type.min, type.max === '*' ? Type.SetType.INFINITE : type.max, mktype(type.itemType, lvl + 1));
+        case "dictionary": {
+          let keys = new Map<string, Aspect.Type>();
+          let otherKeyType: Aspect.Type | undefined = undefined;
+          for (let [k, v] of Object.entries(type.properties)) {
+            let type = mktype(v, lvl  + 1);
+            if (k === '*')
+              otherKeyType = type;
+            else
+              keys.set(k, type);
+          }
+          return new Type.DictionaryType(keys, otherKeyType);
         }
-        else
-          at.diagnostic({ is: "warning", msg: `attribute must be a set` });
-        return undefined;
+        case "or": return new Type.OrType(type.types.map(t => mktype(t, lvl + 1)));
       }
-    };
-  }
-  private propertiesValidator(forAttribute: boolean, lvl: number, properties: { [s: string]: Aspect.Type }): Aspect.TypeValidator {
-    let extensions: V.Extensions<any, VersionedObjectManager> = {};
-    let objectForKeyValidator: Aspect.TypeValidator = V.validateAnyToUndefined;
-    for (let k in properties) {
-      if (k === '*')
-        objectForKeyValidator = this.createValidator(forAttribute, properties[k], lvl + 1);
-      else
-        extensions[k] = this.createValidator(forAttribute, properties[k], lvl + 1);
+      throw new Error(`cannot create ${type.type} type validator`);
     }
-    return V.objectValidator(extensions, objectForKeyValidator) as Aspect.TypeValidator;
-  }
-  private createValidator(forAttribute: boolean, type: Aspect.Type, lvl = 0): Aspect.TypeValidator {
-    if (forAttribute && lvl > 0 && type.type !== "primitive" && type.type !== "class" && type.type !== "or")
-      throw new Error(`cannot create deep type validator for attribute`);
-    switch (type.type) {
-      case "primitive": return forAttribute && lvl === 0 ? Validation.primitiveLevel0Validators[type.name] : Validation.primitiveValidators[type.name];
-      case "class": return forAttribute ? Validation.classValidator(type.name, forAttribute && lvl === 0) : V.validateAny;
-      case "array": return this.arrayValidator(forAttribute, lvl, type.itemType, type.min, type.max);
-      case "set": return this.setValidator(forAttribute, lvl, type.itemType, type.min, type.max);
-      case "dictionary": return this.propertiesValidator(forAttribute, lvl, type.properties);
-      case "or": return V.oneOf(...type.types.map(t => this.createValidator(forAttribute, t, lvl)));
-    }
-    throw new Error(`cannot create ${type.type} type validator`);
+    return mktype(type, 0);
   }
 }
 
-function findReferences(type: Aspect.Type, apply: (ref: string) => void) {
-  switch (type.type) {
-    case 'array': findReferences(type.itemType, apply); break;
-    case 'set': findReferences(type.itemType, apply); break;
-    case 'class': apply(type.name); break;
-    case 'dictionary': Object.keys(type.properties).forEach(k => findReferences(type.properties[k], apply)); break;
+const primitiveValidators: {[s in Aspect.Definition.PrimaryType]: Aspect.Type } = {
+  'identifier': Type.identifierType,
+  'array': Type.arrayType,
+  'any': Type.anyType,
+  'string': Type.stringType,
+  'integer': Type.integerType,
+  'decimal': Type.decimalType,
+  'boolean': Type.booleanType,
+  'binary': Type.binaryType,
+  'dictionary': Type.dictionaryType,
+  'date': Type.dateType,
+  'localdate': Type.dateType,
+  'undefined': Type.undefinedType,
+}
+const primitiveLevel0Validators: {[s in Aspect.Definition.PrimaryType]: Aspect.Type } = (function () {
+  let ret: any = {};
+  for (let k in primitiveValidators) {
+    ret[k] = new Type.OrType([primitiveValidators[k], Type.undefinedType]);
   }
-}
-
-function validate(
-  at: PathReporter,
-  collection: any, validateItem: Aspect.TypeValidator,
-  min: number, max: number | '*'
-) {
-  at.pushArray();
-  if (collection.size < min)
-    at.diagnostic({ is: "warning", msg: `attribute must contains at least ${min} elements` });
-  if (max !== '*' && collection.size > max)
-    at.diagnostic({ is: "warning", msg: `attribute must contains at most ${max} elements` });
-  let i = 0;
-  collection.forEach((v) => validateItem.validate(at.setArrayKey(i++), v));
-  at.popArray();
-  return collection;
-}
-function validateValue(value, at: PathReporter, validator: Aspect.TypeValidator): any;
-function validateValue(value, at: PathReporter, validator: Aspect.AttributeTypeValidator, manager: VersionedObjectManager): any;
-function validateValue(value, at: PathReporter, validator: Aspect.AttributeTypeValidator, manager?: VersionedObjectManager) {
-  value = validator.validate(at, value, manager!);
-  if (at.reporter.diagnostics.length > 0)
-    throw new Error(`attribute ${at} value is invalid: ${JSON.stringify(at.reporter.diagnostics, null, 2)}`);
-  return value;
-}
+  return ret;
+})();
 
 function fastSafeCall(ctx: Aspect.FarContext, farImpl: Aspect.FarImplementation<VersionedObject, any, any>, self, arg0): Promise<any> {
   try {
@@ -416,12 +406,4 @@ function fastSafeCall(ctx: Aspect.FarContext, farImpl: Aspect.FarImplementation<
   } catch (e) {
     return Promise.reject(e);
   }
-}
-
-function typeToInstalledAttributeCstor(type: Aspect.Type) {
-  if (Aspect.typeIsArrayValue(type))
-    return Aspect.InstalledArrayAttribute;
-  if (Aspect.typeIsSetValue(type))
-    return Aspect.InstalledSetAttribute;
-  return Aspect.InstalledMonoAttribute;
 }

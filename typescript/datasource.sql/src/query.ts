@@ -11,9 +11,8 @@ import ConstraintTree = DataSourceInternal.ConstraintTree;
 import ConstraintValue = DataSourceInternal.ConstraintValue;
 import ConstraintVariable = DataSourceInternal.ConstraintVariable;
 import ConstraintSub = DataSourceInternal.ConstraintSub;
-import scope_at_type_path = DataSourceInternal.ResolvedScope.scope_at_type_path;
 
-const $is = Aspect.create_virtual_attribute("$is", { is: "type", type: "virtual", operator:"$is", group_by: [], sort: [] });
+const $is = Aspect.create_virtual_attribute("$is", new Aspect.Type.VirtualType(Aspect.Type.stringType, { operator: "$is", sort: [], group_by: [] }));
 
 export function mapValue(ctx: { mappers: { [s: string]: SqlMappedObject }  }, mapper: SqlMappedObject, attribute: SqlMappedAttribute, value) {
   if (value instanceof VersionedObject) {
@@ -179,9 +178,7 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     let ret =  this.set.attributesAndCompatibleAspects(this.ctx.controlCenter);
     if (this.set.scope) {
       for (let aspect of ret.compatibleAspects) {
-        let scope_type = this.set.scope[aspect.classname];
-        let scope_path = scope_type ? scope_type['.'] : [];
-        for (let a of scope_path)
+        for (let a of this.set.scope.attributes(aspect.classname, '.'))
           ret.attributes.set(a.name, a);
       }
     }
@@ -198,14 +195,15 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     if (!sql_column) {
       sql_column = this.sql_column(attribute, false);
       if (!sql_column) {
+        // TODO: remove this code and use informations from the mapper
         let type: SqlMaker.NullType = undefined;
         let atype = attribute.type;
-        if (atype.type === "set" || atype.type === "array")
-          atype = atype.itemType;
-        if (attribute.type.type === "class")
+        if (atype instanceof Aspect.Type.ArrayType || atype instanceof Aspect.Type.SetType)
+          atype = atype.type;
+        if (attribute.containsVersionedObject())
           type = "integer";
-        else if (attribute.type.type === "primitive")
-          type = attribute.type.name as SqlMaker.NullType;
+        else
+          type = attribute.type.asPrimitive() as SqlMaker.NullType;
         if (type === "date")
           type = "integer";
         sql_column = this.ctx.maker.value_null_typed(type);
@@ -388,16 +386,16 @@ export abstract class SqlQuery<SharedContext extends SqlQuerySharedContext<Share
     let p: Aspect.InstalledAttribute;
     while (i < last) {
       p = path[i++];
-      let types = Aspect.typeToAspectNames(p.type);
+      let types = p.contained_aspects;
       let q_r = new this.ctx.cstor(this.ctx, new ObjectSet(p.name));
-      if (types.length === 1) {
-        q_r.setInitialType(types[0], false);
+      if (types.size === 1) {
+        q_r.setInitialType([...types][0].classname, false);
       }
       else {
         let queries: SqlQuery<SharedContext>[] = [];
         for (let type of types) {
           let q_rt = new this.ctx.cstor(this.ctx, new ObjectSet(p.name));
-          q_rt.setInitialType(type, false);
+          q_rt.setInitialType(type.classname, false);
           q_rt.addConstraint(this.ctx.maker.compare(q_rt.sql_column(Aspect.attribute_id), ConstraintType.Equal, q.sql_column(p)));
           queries.push(q_rt);
         }
@@ -634,12 +632,13 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
 
 
     if (attribute.isVirtualValue()) {
-      if ((attribute.type as Aspect.TypeVirtual).operator === "$is_last") {
+      let metadata = (attribute.type as Aspect.Type.VirtualType).metadata;
+      if (metadata.operator === "$is_last") {
         let sql_select_count: SqlBinding = this.sql_sub_count_virtual(this.set,attribute,ConstraintType.Equal,0);
         return sql_select_count;
         //let b = this.ctx.maker.op_bind(sql_select_count,(value === true) ? ConstraintType.Equal : ConstraintType.NotEqual, 0);
       } else {
-        throw new Error(`virtual operator ${(attribute.type as Aspect.TypeVirtual).operator} is not implemented`);
+        throw new Error(`virtual operator ${metadata.operator} is not implemented`);
       }
     }
 
@@ -707,9 +706,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
     let monoAttributes = new Set<Aspect.InstalledAttribute>();
     if (this.set.scope) {
       for (let aspect of aspects) {
-        let scope_type = this.set.scope[aspect.classname];
-        let scope_path = scope_type ? scope_type['.'] : [];
-        for (let a of scope_path)
+        for (let a of this.set.scope.attributes(aspect.classname, '.'))
           if (a.isMonoValue())
             monoAttributes.add(a);
       }
@@ -729,7 +726,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       for (let mapper of this.mappers) {
         let aspect = this.aspect(mapper.name);
         for (let a of aspect.attributes.values()) {
-          if (a.type.type === "primitive" && !attr.has(a.name)) {
+          if (a.type.asPrimitive() && !attr.has(a.name)) {
             attr.add(a.name);
             constraints.push(this.ctx.maker.op(this.buildVariable(var_set, var_attribute), operator, value));
           }
@@ -839,7 +836,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
 
   sql_sub_count_virtual(var_set: DataSourceInternal.ObjectSet, var_attribute: Aspect.InstalledAttribute,op:DataSourceInternal.ConstraintBetweenValueAndValue,value:number) {
 
-    let type = var_attribute.type as Aspect.TypeVirtual;
+    let metadata = (var_attribute.type as Aspect.Type.VirtualType).metadata;
     let lvar_query = this.ctx.queries.get(var_set)!;
     let cases = new Map<string, SqlBinding>();
 
@@ -849,7 +846,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       this.ctx.queries.set(lsub_var_set, lsub_var_query);
       lsub_var_query.setInitialType(lmapper.name, false);
 
-      type.group_by.map(g => {
+      metadata.group_by.map(g => {
         lsub_var_query.addConstraint(this.ctx.maker.compare(
           lsub_var_query.sql_column(g),
           ConstraintType.Equal,
@@ -860,7 +857,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       let prev: SqlBinding[]=[];
       let done: SqlBinding[]=[];
 
-      type.sort.map(s => {
+      metadata.sort.map(s => {
 
         let cur = this.ctx.maker.compare(
           lsub_var_query.sql_column(s.attribute),
@@ -975,7 +972,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       if (!type || !db_id)
         return;
       let mapper = this.ctx.mappers[type]!;
-      let scope_path = scope_at_type_path(this.set.scope, type, path);
+      let scope_path = this.set.scope!.attributes(type, path);
       let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(db_id));
       let version = row[prefix + "_version"];
       let vo = ccc.findOrCreate(id, type);
@@ -1001,7 +998,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           let v = row[prefix + k];
           if (!a.isVirtualValue()) {
             v = mapper.get(k)!.fromDb(v);
-            v = this.loadValue(ccc, a.type, v);
+            v = this.loadValue(ccc, a, v);
             snapshot.setAttributeValueFast(a, v);
           } else {
             vo.manager().setVirtualAttributeValue(a.name, v);
@@ -1016,24 +1013,24 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           if (!objects)
             m_attrs.set(a, objects = new Set());
           objects.add(id);
-          snapshot.setAttributeValueFast(a, a.type.type === "set" ? new Set() : []);
+          snapshot.setAttributeValueFast(a, a.defaultValue());
         }
       }
     }
     const loadMultRows = async (mult_items: Map<Aspect.Installed, Map<Aspect.InstalledAttribute, Set<Identifier>>>, path: string) => {
       for (let [aspect, m_attrs] of mult_items) {
         for (let [attribute, ids] of m_attrs) {
-          let types = Aspect.typeToAspectNames(attribute.type);
+          let types = attribute.contained_aspects;
           let attribute_path = `${path}${attribute.name}.`;
-          if (types.length > 0) {
+          if (types.size > 0) {
             for (let type_r of types) {
-              let scope_path = scope_at_type_path(this.set.scope, type_r, attribute_path);
+              let scope_path = this.set.scope!.attributes(type_r.classname, attribute_path);
               let s_m = new ObjectSet(aspect.classname);
               let q_m = new SqlMappedQuery(this.ctx, s_m);
-              let s_r = new ObjectSet(type_r);
+              let s_r = new ObjectSet(type_r.classname);
               let q_r = new SqlMappedQuery(this.ctx, s_r);
               this.ctx.queries.set(s_r, q_r);
-              q_r.setInitialType(type_r, false);
+              q_r.setInitialType(type_r.classname, false);
               q_r.addAttribute(Aspect.attribute_id);
               q_r.addAttribute(Aspect.attribute_version);
               for (let a of scope_path)
@@ -1050,7 +1047,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
               sql_columns.push(maker.column_alias(maker.value(attribute.name), `__rname`));
               sql_columns.push(maker.column_alias(q_m.sql_column(Aspect.attribute_id), `__rid`));
 
-              await doQuery(q_r, sql_columns, [type_r], attribute_path, attribute_path);
+              await doQuery(q_r, sql_columns, [type_r.classname], attribute_path);
             }
           }
           else { // array/set of primitive values
@@ -1072,26 +1069,25 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         }
       }
     };
-    const doQuery = async (query: SqlMappedQuery, sql_columns: (string | SqlBinding)[], types: string[], path: string, mult_path: string) => {
+    const doQuery = async (query: SqlMappedQuery, sql_columns: (string | SqlBinding)[], types: string[], path: string) => {
       // add 1:1 relations
       let relation_11_paths: string[] = [];
       for (let type of types) {
-        let scope_path = scope_at_type_path(this.set.scope, type, path);
+        let scope_path = this.set.scope!.attributes(type, path);
         for (let a of scope_path) {
-          if (a.type.type === "class" || a.type.type === "or") { // 1:1 relation
-            let path_r = `${mult_path}${a.name}.`;
-            let types_r = Aspect.typeToAspectNames(a.type);
-            for (let type_r of types_r) {
-              let scope_path_r = scope_at_type_path(this.set.scope, type_r, path_r);
+          if (a.isMonoVersionedObjectValue()) { // 1:1 relation
+            let path_r = `${path}${a.name}.`;
+            for (let type_r of a.contained_aspects) {
+              let scope_path_r = this.set.scope!.attributes(type_r.classname, path_r);
               if (scope_path_r.size > 0) { // 1:1 relation with attributes requested
                 // TODO: reuse existing variable if possible
-                let s_r = new ObjectSet(type_r);
+                let s_r = new ObjectSet(type_r.classname);
                 let q_r = new SqlMappedQuery(this.ctx, s_r);
                 let relation_idx = relation_11_paths.length;
                 relation_11_paths.push(path_r);
-                q_r.setInitialType(type_r, false, { query: query, attribute: a });
+                q_r.setInitialType(type_r.classname, false, { query: query, attribute: a });
                 query.variables.add(q_r);
-                sql_columns.push(maker.column_alias(maker.value(type_r), `${relation_idx}:$is`));
+                sql_columns.push(maker.column_alias(maker.value(type_r.classname), `${relation_idx}:$is`));
                 sql_columns.push(maker.column_alias(q_r.sql_column(Aspect.attribute_id), `${relation_idx}:_id`));
                 sql_columns.push(maker.column_alias(q_r.sql_column(Aspect.attribute_version), `${relation_idx}:_version`));
                 for (let a of scope_path_r)
@@ -1118,20 +1114,20 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
         for (let [idx, path] of relation_11_paths.entries())
           loadMonoRow(row, `${idx}:`, path, mult_items[idx + 1]);
       }
-      await loadMultRows(mult_items[0], mult_path);
+      await loadMultRows(mult_items[0], path);
       for (let [idx, path] of relation_11_paths.entries())
         await loadMultRows(mult_items[idx + 1], path);
     };
-    await doQuery(this, this.sql_columns(), [...this.mappers].map(m => m.name), '.', '');
+    await doQuery(this, this.sql_columns(), [...this.mappers].map(m => m.name), '.');
     this.mergeSnapshots(snapshots);
     return ret;
   }
 
-  private loadValue(ccc: ControlCenterContext, type: Aspect.Type, value) {
+  private loadValue(ccc: ControlCenterContext, attribute: Aspect.InstalledAttribute, value) {
     if (value === null)
       value = undefined;
-    else if (type.type === "class" && value !== undefined) {
-      let classname = type.name;
+    else if (attribute.type instanceof Aspect.Type.VersionedObjectType && value !== undefined) {
+      let classname = attribute.type.classname;
       let mapper = this.ctx.mappers[classname];
       let subid = mapper.fromDbKey(value);
       value = ccc.findOrCreate(subid, classname);

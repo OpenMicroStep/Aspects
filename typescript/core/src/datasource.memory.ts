@@ -26,36 +26,27 @@ export class InMemoryDataSource extends DataSource {
     ccc: ControlCenterContext, ds: InMemoryDataSource.DataStoreCRUD,
     scope: DataSourceInternal.ResolvedScope, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
-    this._load(ccc, ds, scope, '.', '', lObject, dObject);
+    this._load(ccc, ds, scope, '.', lObject, dObject);
   }
 
   private _load(
     ccc: ControlCenterContext, ds: InMemoryDataSource.DataStoreCRUD,
-    scope: DataSourceInternal.ResolvedScope, path: string, npath: string, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
+    scope: DataSourceInternal.ResolvedScope, path: string, lObject: VersionedObject, dObject: InMemoryDataSource.DataStoreObject
   ) {
     let lManager = lObject.manager();
     let aspect = lManager.aspect();
     let snapshot = new VersionedObjectSnapshot(aspect, lManager.id());
-    function *attributes(aspect: Aspect.Installed, scope: DataSourceInternal.ResolvedScope, path: string): IterableIterator<Aspect.InstalledAttribute> {
-      let cls_scope = scope[aspect.classname];
-      if (!cls_scope)
-        return;
-      let attributes = cls_scope[path] || cls_scope['_'];
-      if (!attributes)
-        return;
-      yield* attributes;
-    }
     const load = (a: Aspect.InstalledAttribute, v) => {
       if (v instanceof InMemoryDataSource.DataStoreObject) {
         let dObject = v;
         let lId = this.ds.fromDSId(dObject.get(Aspect.attribute_id));
         let lObject = ccc.findOrCreate(lId, dObject.is);
-        let spath = `${npath}${a.name}.`;
-        this._load(ccc, ds, scope, spath, spath, lObject, dObject);
+        let spath = `${path}${a.name}.`;
+        this._load(ccc, ds, scope, spath, lObject, dObject);
       }
     };
     snapshot.setAttributeValueFast(Aspect.attribute_version, dObject.get(Aspect.attribute_version));
-    for (let attribute of attributes(aspect, scope, path)) {
+    for (let attribute of scope.attributes(aspect.classname, path)) {
       let v = dObject.get(attribute);
       if (v instanceof Set || v instanceof Array) {
         for (let vi of v)
@@ -85,8 +76,8 @@ export class InMemoryDataSource extends DataSource {
           return ds.get(this.ds.toDSId(value));
         return ds.toDSValue(value);
       },
-      sort: (a, b, type) => {
-        if (Aspect.typeIsClass(type)) {
+      sort: (a, b, attribute) => {
+        if (attribute.isMonoVersionedObjectValue()) {
           a = a.id;
           b = b.id;
         }
@@ -167,7 +158,7 @@ export class InMemoryDataSource extends DataSource {
             let aspect = lObject.controlCenter().aspectChecked(dObject.is);
             for (let idx = 2; idx < aspect.attributes_by_index.length; idx++) {
               let attribute = aspect.attributes_by_index[idx];
-              if (attribute.contains_vo) {
+              if (attribute.containsVersionedObject()) {
                 for (let dValue of attribute.traverseValue<InMemoryDataSource.DataStoreObject>(dObject.get(attribute))) {
                   if (pending_deletion_objects.has(dValue))
                     diags.push({ is: "error", msg: `cannot delete ${lObject.id()}: object is reference by '${dObject.get(Aspect.attribute_id)}.${attribute.name}'` });

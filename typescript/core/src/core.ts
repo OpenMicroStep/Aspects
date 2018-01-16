@@ -1,9 +1,8 @@
-export * from './validation';
 export * from './deepEqual';
 export * from './notificationCenter';
+export * from './versionedObject';
 export * from './aspect';
 export * from './aspect.boot';
-export * from './versionedObject';
 export * from './traverse';
 export * from './controlCenter';
 export * from './invocation';
@@ -12,9 +11,8 @@ export * from './datasource';
 export * from './datasource.transport';
 export * from './datasource.internal';
 export * from './datasource.memory';
-export * from './transport';
 export * from './pool';
-export {Diagnostic, Reporter} from '@openmicrostep/msbuildsystem.shared';
+export {Diagnostic, Reporter, PathReporter} from '@openmicrostep/msbuildsystem.shared';
 
 export interface ImmutableList<T> extends ReadonlyArray<T> {
 

@@ -1,12 +1,14 @@
 import {
   ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
-  Validation, Result,
+  Result,
   ImmutableList, ImmutableMap, ImmutableSet
 } from './core';
+import * as T from './aspect.type';
 import {Reporter, PathReporter, Validate as V} from '@openmicrostep/msbuildsystem.shared';
 
 export interface FarTransport {
-  remoteCall(ctx: Aspect.FarContext, to: VersionedObject, method: string, args: any[]): Promise<any>;
+  manual_coding?: boolean;
+  remoteCall(ctx: Aspect.FarContext, to: VersionedObject, farMethod: Aspect.InstalledFarMethod, args: any[]): Promise<any>;
 }
 
 export interface PublicTransport {
@@ -23,158 +25,15 @@ export interface Aspect {
   farCategories: string[];
 };
 export namespace Aspect {
+  export import Type = T.Type;
+  export import VirtualType = Type.VirtualType;
   export type FarContext = { context: { ccc: ControlCenterContext, [s: string]: VersionedObject | ControlCenterContext} };
   export const farTransportStub: FarTransport = {
-    remoteCall(ctx: FarContext, to: VersionedObject, method: string, args: any[]): Promise<any> {
+    manual_coding: false,
+    remoteCall(ctx, to, method, args) {
       return Promise.reject(new Error(`transport not installed`));
-    }
+    },
   };
-
-  function type_is_or(type: Type, v: (type: Type) => boolean) : boolean {
-    if (type.type === "or") {
-      for (let t of type.types) {
-        if (!v(t))
-          return false;
-      }
-      return type.types.length > 0;
-    }
-    return false;
-  }
-  export function typeIsSingleValue(type: Type) : boolean {
-    if (type.type === "class" || type.type === "primitive" || type.type === "virtual")
-      return true;
-    return type_is_or(type, typeIsSingleValue);
-  }
-  export function typeIsMultValue(type: Type) : boolean {
-    if (type.type === "set" || type.type === "array")
-      return true;
-    return type_is_or(type, typeIsMultValue);
-  }
-  export function typeIsArrayValue(type: Type) : boolean {
-    if (type.type === "array")
-      return true;
-    return type_is_or(type, typeIsArrayValue);
-  }
-  export function typeIsSetValue(type: Type) : boolean {
-    if (type.type === "set")
-      return true;
-    return type_is_or(type, typeIsArrayValue);
-  }
-
-  export function typeIsClass(type: Type) : boolean {
-    if (type.type === "class")
-      return true;
-
-    if (type.type === "array" || type.type === "set")
-      return typeIsClass(type.itemType);
-    return type_is_or(type, typeIsClass);
-  }
-
-  export function typeToAspectNames(type: Type) : string[] {
-    if (type.type === "class")
-      return [type.name];
-
-    if (type.type === "array" || type.type === "set")
-      return typeToAspectNames(type.itemType);
-
-    if (type.type === "or") {
-      let ret: string[] = [];
-      for (let t of type.types) {
-        if (t.type !== "class")
-          return [];
-        ret.push(t.name);
-      }
-      return ret;
-    }
-
-    return [];
-  }
-
-  export function typeToString(a: Aspect.Type) {
-    switch (a.type) {
-      case 'class':
-      case 'primitive':
-        return `${a.type}:${a.name}`;
-      case 'set':
-        return `<${typeToString(a.itemType)}>`;
-      case 'array':
-        return `[${typeToString(a.itemType)}]`;
-      case 'or':
-        return `(${a.types.map(t => typeToString(t)).join(',')})`;
-      case 'dictionary':
-        return `{${Object.keys(a.properties).map(k => `${k}=${typeToString(a.properties[k])}`).join(',')})`;
-    }
-    return 'void';
-  }
-
-  export function typesAreComparable(a: Type, b: Type) : boolean {
-    if (a === b)
-      return true;
-    if (b.type === 'or') {
-      for (let bi of b.types)
-        if (typesAreComparable(a, bi))
-          return true;
-      return false;
-    }
-    switch (a.type) {
-      case 'array':
-        return b.type === 'array' && typesAreComparable(a.itemType, b.itemType);
-      case 'set':
-        return b.type === 'set' && typesAreComparable(a.itemType, b.itemType);
-      case 'class':
-        return b.type === 'class' && a.name === b.name;
-      case 'primitive':
-        return b.type === 'primitive' && a.name === b.name;
-      case 'dictionary':
-        return typesAreEquals(a, b);
-      case 'or':
-        for (let ai of a.types)
-          if (typesAreComparable(ai, b))
-            return true;
-        return false;
-    }
-    return false;
-  }
-
-  function typesCompare(a: Type, b: Type): number {
-    if (a.type < b.type)
-      return -1;
-    if (a.type < b.type)
-      return +1;
-    switch (a.type) {
-      case 'set':
-      case 'array':
-        return typesCompare(a.itemType, (b as TypeArray | TypeSet).itemType);
-      case 'class':
-      case 'primitive':
-        if (a.name < (b as TypeClass | TypePrimitive).name)
-          return -1;
-        if (a.name > (b as TypeClass | TypePrimitive).name)
-          return +1;
-        return 0;
-      case 'dictionary':
-        throw new Error('typesCompare is not implemented for dictionary');
-      case 'or': {
-        var i = 0;
-        while (i < a.types.length && i < (b as TypeOr).types.length) {
-          let ret = typesCompare(a.types[i], (b as TypeOr).types[i]);
-          if (ret !== 0)
-            return ret;
-          i++;
-        }
-        if (i < a.types.length)
-          return -1;
-        if (i < (b as TypeOr).types.length)
-          return +1;
-        return 0;
-      }
-    }
-    return 0;
-  }
-
-  export function typesAreEquals(a: Type, b: Type) : boolean {
-    return typesCompare(a, b) === 0;
-  }
 
   export function disabled_aspect<T extends VersionedObject>(name: string, aspect: string, impl: string) : Aspect.FastConfiguration<T> {
     function throw_disabled(): any {
@@ -189,54 +48,52 @@ export namespace Aspect {
     };
   }
 
-  export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'object' | 'boolean';
-  export type TypeVoid = { is: 'type', type: 'void' };
-  export type TypePrimitive = { is: 'type', type: 'primitive', name: PrimaryType };
-  export type TypeClass = { is: 'type', type: 'class', name: string };
-  export type TypeArray = { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" };
-  export type TypeSet = { is: 'type', type: 'set', itemType: Type, min: number, max: number | "*" };
-  export type TypeDictionary = { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
-  export type TypeOr = { is: 'type', type: 'or', types: Type[] }
-  export type TypeVirtual = { is: 'type', type: 'virtual', operator: string, sort: { asc: boolean, attribute: Aspect.InstalledAttribute }[], group_by: InstalledAttribute[] };
-  export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr | TypeVirtual;
-
-  export type TypeValidator = V.Validator0<any>;
-  export type AttributeTypeValidator = V.Validator<any, VersionedObjectManager<VersionedObject>>;
   export interface Definition {
     is: string;
     name: string;
     version: number;
     is_sub_object?: boolean;
     queries?: never[];
-    attributes?: Attribute[];
-    categories?: Category[];
-    farCategories?: Category[];
+    attributes?: Definition.Attribute[];
+    categories?: Definition.Category[];
+    farCategories?: Definition.Category[];
     aspects: Aspect[];
   }
   export namespace Definition {
+    export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'boolean' | 'undefined' | 'binary';
+    export type TypeVoid = { is: 'type', type: 'void' };
+    export type TypePrimitive = { is: 'type', type: 'primitive', name: PrimaryType };
+    export type TypeClass = { is: 'type', type: 'class', name: string };
+    export type TypeArray = { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" };
+    export type TypeSet = { is: 'type', type: 'set', itemType: Type, min: number, max: number | "*" };
+    export type TypeDictionary = { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
+    export type TypeOr = { is: 'type', type: 'or', types: Type[] }
+    export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr ;
+
+    export interface Attribute {
+      is: string;
+      name: string;
+      type: Type;
+      relation?: string;
+      is_sub_object?: boolean;
+    };
+    export interface Category {
+      is: string;
+      name: string;
+      methods: Method[];
+    };
+    export interface Method {
+      is: string;
+      name: string;
+      argumentTypes: Type[];
+      returnType: Type;
+    };
   }
-  export interface Attribute {
-    is: string;
-    name: string;
-    type: Type;
-    validator?: AttributeTypeValidator;
-    relation?: string;
-    is_sub_object?: boolean;
-  };
-  export interface Category {
-    is: string;
-    name: string;
-    methods: Method[];
-  };
-  export interface Method {
-    is: string;
+
+  export interface InstalledMethod {
     name: string;
     argumentTypes: Type[];
-    returnType: Type;
-  };
-  export interface InstalledMethod extends Method {
-    argumentValidators: TypeValidator[];
-    returnValidator: TypeValidator | undefined;
+    returnType: Type | undefined;
     transport: FarTransport | undefined;
   };
   export interface InstalledFarMethod extends InstalledMethod {
@@ -251,13 +108,21 @@ export namespace Aspect {
       public readonly name: string,
       public readonly index: number,
       public readonly type: Type,
-      public readonly validator: AttributeTypeValidator,
       public readonly relation: Reference | undefined = undefined,
-      public readonly contains_vo: boolean = false,
+      public readonly contained_aspects: ImmutableSet<Aspect.Installed> = new Set(),
       public readonly is_sub_object: boolean = false,
     ) {}
 
     abstract defaultValue(): any;
+    containsVersionedObject(): boolean {
+      return this.contained_aspects.size > 0;
+    }
+    containedVersionedObjectIfAlone(): Aspect.Installed | undefined {
+      return this.contained_aspects.size === 1 ? this.contained_aspects.values().next().value : undefined;
+    }
+    isMonoVersionedObjectValue(): boolean {
+      return this.isMonoValue() && this.contained_aspects.size > 0;
+    }
     abstract isMonoValue(): boolean;
     abstract isMultValue(): boolean;
     abstract isArrayValue(): boolean;
@@ -269,8 +134,8 @@ export namespace Aspect {
     abstract subobjectChanges<T extends VersionedObject>(newV: any, oldV: any): IterableIterator<[-1 | 0 | 1, T]>;
   }
 
-  export function create_virtual_attribute(name: string, type: TypeVirtual) : Aspect.InstalledAttribute {
-    return new InstalledVirtualAttribute(name, -1, type, V.validateAny);
+  export function create_virtual_attribute(name: string, type: Type.VirtualType) : Aspect.InstalledAttribute {
+    return new InstalledVirtualAttribute(name, -1, type);
   }
 
   export class InstalledMonoAttribute extends InstalledAttribute {
@@ -410,20 +275,16 @@ export namespace Aspect {
   export const attribute_id = new Aspect.InstalledMonoAttribute(
     "_id",
     0,
-    { is: "type", type: "primitive", name: "identifier" as Aspect.PrimaryType },
-    Validation.validateId,
-    undefined,
+    Type.identifierType,
   );
   export const attribute_version = new Aspect.InstalledMonoAttribute(
     "_version",
     1,
-    { is: "type", type: "primitive", name: "number" as Aspect.PrimaryType },
-    Validation.validateVersion,
-    undefined,
+    Type.versionType,
   );
 
   const voAttributes = new Map<string, Aspect.InstalledAttribute>();
-  voAttributes.set("_id", Aspect.attribute_id);
+  voAttributes.set("_id", attribute_id);
   voAttributes.set("_version", Aspect.attribute_version);
 
   export class Installed {
@@ -451,8 +312,7 @@ export namespace Aspect {
       this.attribute_ref = new Aspect.InstalledMonoAttribute(
         "_id",
         0,
-        { is: "type", type: "class", name: classname },
-        Validation.validateId,
+        new Type.VersionedObjectType(classname, implementation),
         undefined,
       );
       this.attributes = new Map(voAttributes);

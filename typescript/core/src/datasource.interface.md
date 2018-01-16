@@ -7,8 +7,8 @@ Sous-classable.
 
 ### category initServer
 
-#### setQueries(queries: DataSourceQueries): void
-#### setSafeValidators(validators: SafeValidators): void
+#### setQueries(queries: any): void
+#### setSafeValidators(validators: any): void
 
 ### category local
 
@@ -31,11 +31,11 @@ Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes imp
 
 Partie accessible depuis l'exterieur de la DataSource
 
-#### distantQuery(q: { id: string, *: any }): { e: VersionedObjectCoder.EncodedVersionedObjects, results: { * :[0, *, string | integer] } }
+#### distantQuery(q: { id: string, *: any }): { e: [0, *, any], results: { * :[0, *, string | integer] } }
 
-#### distantLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): VersionedObjectCoder.EncodedVersionedObjects
+#### distantLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, any]
 
-#### distantSave(objects: VersionedObjectCoder.EncodedVersionedObjects): VersionedObjectCoder.EncodedVersionedObjects
+#### distantSave(objects: [0, *, any]): [0, *, any]
 
 ### farCategory safe
 
@@ -78,23 +78,23 @@ Appelle `implSave` pour réaliser effectivement l'enregistrement sur la liste fi
 
 Méthodes à implémenter par les dataSources.
 
-#### implBeginTransaction(): DataSourceTransaction
+#### implBeginTransaction(): any
 
 Démarre une transaction
 
->#### implLock(a: { tr: DataSourceTransaction, on: [0, *, string] }): void
+>#### implLock(a: { tr: any, on: [0, *, string] }): void
 
 Vérouille la datasource sur le tuple `on`. Tant que `implEndTransaction` n'a pas été appelée et que l'application tourne, personne ne peut prendre le véroux si le tuple `on`.
 
-#### implQuery(a: { tr: DataSourceOptionalTransaction, sets: [0, *, ObjectSet] }): { * :[0, *, VersionedObject]}
+#### implQuery(a: { tr: any | undefined, sets: [0, *, ObjectSet] }): { * :[0, *, VersionedObject]}
 
 Effectue une requête et retourne le résultat
 
-#### implLoad(a: { tr: DataSourceOptionalTransaction, objects: [0, *, VersionedObject], scope: ResolvedScope }): [0, *, VersionedObject]
+#### implLoad(a: { tr: any | undefined, objects: [0, *, VersionedObject], scope: ResolvedScope }): [0, *, VersionedObject]
 
 Charge les attributs de `objects` et retourne les objets.
 
-#### implSave(a: { tr: DataSourceTransaction, objects: [0, *, VersionedObject] }): void
+#### implSave(a: { tr: any, objects: [0, *, VersionedObject] }): void
 
 Enregistre la liste d'objets fournis et retourne la forme en base des objets.
 Tous les objets ont des modifications en attentes.
@@ -102,7 +102,7 @@ Tous les objets ont des modifications en attentes.
 Les valeurs locales en attente d'enregistrement sont passé en valeurs version courante que si tous les objets sont sauvés avec succès.
 En cas de conflits, rien n'est sauvé et les informations sur les conflits sont passés aux objets.
 
-#### implEndTransaction(a: { tr: DataSourceTransaction, commit: boolean }): void
+#### implEndTransaction(a: { tr: any, commit: boolean }): void
 
 Valide une transaction si `commit` est vrai, sinon annule la transaction.
 

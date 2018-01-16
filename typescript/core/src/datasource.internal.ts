@@ -1,7 +1,7 @@
 import {
   ControlCenter, VersionedObject,
   areEquals,
-  Aspect, Validation, Result, traverseAllScope,
+  Aspect, Result, traverseAllScope,
 } from './core';
 import * as DataSourceScope from './datasource.scope';
 import { AttributeTypes as V, PathReporter, Reporter } from '@openmicrostep/msbuildsystem.shared';
@@ -23,15 +23,15 @@ export namespace DataSourceInternal {
     has(object: T, attribute: Aspect.InstalledAttribute): boolean;
     get(object: T, attribute: Aspect.InstalledAttribute): any;
     todb(object: T, attribute: Aspect.InstalledAttribute, value): any;
-    sort(a, b, type: Aspect.Type): number;
+    sort(a, b, attribute: Aspect.InstalledAttribute): number;
   };
   export const versionedObjectMapper: Mapper<VersionedObject> = {
     aspect(vo: VersionedObject) { return vo.manager().aspect(); },
     has(vo: VersionedObject, attribute: Aspect.InstalledAttribute) { return vo.manager().hasAttributeValueFast(attribute); },
     get(vo: VersionedObject, attribute:  Aspect.InstalledAttribute) { return vo.manager().attributeValueFast(attribute); },
     todb(vo: VersionedObject, attribute: Aspect.InstalledAttribute, value) { return value; },
-    sort(a, b, type: Aspect.Type) {
-      if (Aspect.typeIsClass(type)) {
+    sort(a, b, attribute: Aspect.InstalledAttribute) {
+      if (attribute.isMonoVersionedObjectValue()) {
         a = a.id();
         b = b.id();
       }
@@ -242,7 +242,7 @@ export namespace DataSourceInternal {
         for (let s of set.sort!) {
           let va = this.valueAtPath(a, s.path);
           let vb = this.valueAtPath(b, s.path);
-          r = this.mapper.sort(va, vb, s.path[s.path.length - 1].type);
+          r = this.mapper.sort(va, vb, s.path[s.path.length - 1]);
           if (r !== 0)
             return s.asc ? +r : -r;
         }
@@ -428,8 +428,8 @@ export namespace DataSourceInternal {
       let f_attr = aspect.attributes.get(name);
       if (
         (!attr.isVirtualValue()) &&
-        (!f_attr || !Aspect.typesAreComparable(f_attr.type, attr.type)) &&
-        (name !== "_id" || !Aspect.typesAreComparable(aspect.attribute_ref.type, attr.type))
+        (!f_attr || !Aspect.Type.areComparable(f_attr.type, attr.type)) &&
+        (name !== "_id" || !Aspect.Type.areComparable(aspect.attribute_ref.type, attr.type))
       )
        return false;
     }
@@ -855,15 +855,16 @@ export namespace DataSourceInternal {
     return ret;
   }
   function validate_are_comparable(at: PathReporter, a: Aspect.Type, b: Aspect.Type) {
-    let ret = Aspect.typesAreComparable(a, b);
-    if (!ret)
+    let ret = Aspect.Type.areComparable(a, b);
+    if (!ret) {
       at.diagnostic({ is: "error",
-        msg: `operands are incompatible, ${Aspect.typeToString(a)} !== ${Aspect.typeToString(b)}`
+        msg: `operands are incompatible, ${a} !== ${b}`
       });
+    }
     return ret;
   }
   function subtype(a: Aspect.Type) : Aspect.Type {
-    return (a as Aspect.TypeArray | Aspect.TypeSet).itemType;
+    return (a as any).type; // TODO: better typings
   }
   const a_op_b: OperatorValidation = function a_op_b(at, left_var, right_var, right_fixed) {
     if (left_var.attribute === Aspect.attribute_id && !right_fixed)
@@ -1108,17 +1109,13 @@ export namespace DataSourceInternal {
           s = this.createSet(k);
           let attr = this.aspectAttribute(at, set, parts[i]);
           if (attr) {
-            let type = attr.type;
-            if (type.type === "class") {
-              s.addType({ type: ConstraintType.InstanceOf, value: this.aspect(type.name) });
-              decl(k, s, c_var(ConstraintType.Equal, set._name, attr, k, Aspect.attribute_id));
-            }
-            else if ((type.type === "set" || type.type === "array") && type.itemType.type === "class") {
-              s.addType({ type: ConstraintType.InstanceOf, value: this.aspect(type.itemType.name) });
+            let aspect = attr.containedVersionedObjectIfAlone();
+            if (aspect) {
+              s.addType({ type: ConstraintType.InstanceOf, value: aspect });
               decl(k, s, c_var(ConstraintType.Equal, set._name, attr, k, Aspect.attribute_id));
             }
             else {
-              at.diagnostic({ is: "error", msg: `invalid constraint attribute type ${attr.type.type} on ${parts[i]}` });
+              at.diagnostic({ is: "error", msg: `invalid constraint attribute type ${attr.type} on ${parts[i]}` });
             }
           }
         }

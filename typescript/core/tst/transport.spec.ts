@@ -1,4 +1,4 @@
-import {ControlCenterContext, ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, Transport, AspectConfiguration, AspectSelection,Aspect, VersionedObjectManager} from '@openmicrostep/aspects';
+import { ControlCenterContext, ControlCenter, VersionedObject, DataSource, DataSourceQuery, InMemoryDataSource, Invocation, Result, AspectConfiguration, AspectSelection, Aspect, VersionedObjectManager, FarTransport, Reporter, PathReporter } from '@openmicrostep/aspects';
 import {assert} from 'chai';
 import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
@@ -19,13 +19,10 @@ function add_common_objects<T>(ccc: ControlCenterContext) {
 }
 
 function createContext_C1(publicTransport: (json: string) => Promise<string>) {
-  let coder = new Transport.JSONCoder();
-  let default_transport = {
-    async remoteCall({ context: { ccc } }: Aspect.FarContext, to: VersionedObject, method: string, args: any[]): Promise<any> {
-      let req = { to: to.id(), method: method, args: args };
-      let res = await coder.encode_transport_decode(ccc, req, publicTransport);
-      let inv = new Result(res);
-      return inv;
+  let default_transport: FarTransport = {
+    async remoteCall({ context: { ccc } }, to, method, args): Promise<any> {
+      let req = { to: to.id(), method: method.name, args: args };
+      return JSON.parse(await publicTransport(JSON.stringify(req)));
     }
   };
 
@@ -54,14 +51,19 @@ function createContext_C1(publicTransport: (json: string) => Promise<string>) {
 }
 
 function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string, DataSourceQuery>) {
-  let coder = new Transport.JSONCoder();
   let publicTransport = async (json: string) => {
-    let p1 = createContext_S1(ds, queries);
-    let res = cc.safe(ccc => coder.decode_handle_encode(ccc, json, (request) => p1.cc.safe(async ccc_p1 => {
-      let to = ccc_p1.findChecked(request.to);
-      let inv = await Invocation.farPromise(ccc_p1, { to: to, method: request.method }, request.args[0]);
-      return inv.items();
-    })));
+    let { cc } = createContext_S1(ds, queries);
+    let res = cc.safe(async ccc => {
+      let { to, method, args } = JSON.parse(json);
+      let code_ctx = new Aspect.Type.Context(ccc, Aspect.Type.ModeLocation.Parameter);
+      let vo = ccc.findChecked(to);
+      let farMethod = vo.manager().aspect().farMethods.get(method)!;
+      let at = new PathReporter(new Reporter(), farMethod.name, ":", 0);
+      let returnType = new Aspect.Type.ResultType(farMethod.returnType || Aspect.Type.voidType);
+      let decoded_args = farMethod.argumentTypes.map((t, i) => t.decode(at.set(i), code_ctx, args[i]));
+      let inv = await Invocation.farPromise(ccc, { to: vo, method: farMethod.name }, decoded_args[0]);
+      return JSON.stringify(returnType.encode(at.set('return'), code_ctx, inv));
+    });
     return res;
   };
 
@@ -177,24 +179,24 @@ async function manual_server_save(flux) {
   ];
   let data_res = [
     { is: "Car", v: [[3, "_localid:300095", "memory:1"], [2, 0, 0],
-      [2, 0, "Renault"], [2, 0, "Clio 4"  ], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set", v: ["toto"] }]
+      [2, 0, "Renault"], [2, 0, "Clio 4"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set", v: ["toto"] }]
     ]},
     { is: "Car", v: [[3, "_localid:300088", "memory:2"], [2, 0, 0],
-      [2, 0, "Renault"], [2, 0, "Clio 3"  ], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+      [2, 0, "Renault"], [2, 0, "Clio 3"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
     { is: "Car", v: [[3, "_localid:300089", "memory:3"], [2, 0, 0],
-      [2, 0, "Renault"], [2, 0, "Clio 2"  ], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+      [2, 0, "Renault"], [2, 0, "Clio 2"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
     { is: "Car", v: [[3, "_localid:300090", "memory:4"], [2, 0, 0],
-      [2, 0, "Peugeot"], [2, 0, "3008 DKR"], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+      [2, 0, "Peugeot"], [2, 0, "3008 DKR"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
     { is: "Car", v: [[3, "_localid:300091", "memory:5"], [2, 0, 0],
-      [2, 0, "Peugeot"], [2, 0, "4008 DKR"], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+      [2, 0, "Peugeot"], [2, 0, "4008 DKR"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
     { is: "People", v: [[3, "_localid:300092", "memory:6"], [2, 0, 0],
       [2, 0, "Lisa Simpsons" ], [2, 0, "Lisa" ], [2, 0, "Simpsons"],
       [2, 0, { is: "vo", v: ["People", "memory:7"] }], // _father
-      [2, 0, null], // _mother
+      [2, 0, undefined], // _mother
       [2, 0, { is: "set" }], // _childrens_by_father
       [2, 0, { is: "set" }], // _childrens_by_mother
       [2, 0, { is: "set" }], // _cars
@@ -204,7 +206,7 @@ async function manual_server_save(flux) {
     { is: "People", v: [[3, "_localid:300093", "memory:8"], [2, 0, 0],
       [2, 0, "Bart Simpsons" ], [2, 0, "Bart" ], [2, 0, "Simpsons"],
       [2, 0, { is: "vo", v: ["People", "memory:7"] }], // _father
-      [2, 0, null], // _mother
+      [2, 0, undefined], // _mother
       [2, 0, { is: "set" }], // _childrens_by_father
       [2, 0, { is: "set" }], // _childrens_by_mother
       [2, 0, { is: "set" }], // _cars
@@ -213,8 +215,8 @@ async function manual_server_save(flux) {
     ] },
     { is: "People", v: [[3, "_localid:300094", "memory:7"], [2, 0, 0],
       [2, 0, "Homer Simpsons"], [2, 0, "Homer"], [2, 0, "Simpsons"],
-      [2, 0, null], // _father
-      [2, 0, null], // _mother
+      [2, 0, undefined], // _father
+      [2, 0, undefined], // _mother
       [2, 0, { is: "set", v: [
         { is: "vo", v: ["People", "memory:6"] },
         { is: "vo", v: ["People", "memory:8"] }]

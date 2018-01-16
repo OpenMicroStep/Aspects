@@ -11,20 +11,17 @@ export type WillResolveScope = {
     [s: string]: string[]
   }
 };
-export type ResolvedScope = {
-  [s: string]: {
-    [s: string]: Set<Aspect.InstalledAttribute>
+
+const emptySet: ImmutableSet<Aspect.InstalledAttribute> = new Set();
+export class ResolvedScope {
+  scope = new Map<string, Map<string, Set<Aspect.InstalledAttribute>>>();
+
+  attributes(classname: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {
+    let scope_type = this.scope.get(classname);
+    if (!scope_type) return emptySet;
+    return scope_type.get(path) || scope_type.get('_') || emptySet;
   }
 };
-export namespace ResolvedScope {
-  const emptySet = new Set();
-  export function scope_at_type_path(scope: ResolvedScope | undefined, type: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {
-    if (!scope) return emptySet;
-    let scope_type = scope[type];
-    if (!scope_type) return emptySet;
-    return scope_type[path] || emptySet;
-  }
-}
 
 export type ResolvedSort = { asc: boolean, path: Aspect.InstalledAttribute[] }[];
 
@@ -44,7 +41,7 @@ type ParseScopeContext = {
 
 
 export function attribute_name_type_are_equals(ai: Aspect.InstalledAttribute, bi: Aspect.InstalledAttribute) : boolean {
-  return ai === bi || (ai.name === bi.name && Aspect.typesAreComparable(ai.type, bi.type));
+  return ai === bi || (ai.name === bi.name && Aspect.Type.areComparable(ai.type, bi.type));
 }
 
 export function attributes_name_type_are_equals(a: Aspect.InstalledAttribute[], b: Aspect.InstalledAttribute[]) {
@@ -67,7 +64,7 @@ function parseScopeAttr(ctx: ParseScopeContext,
     if (!is_absolute)
       throw new Error(`sort is forbidden on '_' paths`);
     if (!allow_sort)
-      throw new Error(`sort is forbidden on '${safe_path}' path`);
+      throw new Error(`sort is forbidden on '${safe_path.substring(1)}' path`);
     unsafe_attribute = unsafe_attribute.substring(sort_match[0].length);
   }
 
@@ -85,9 +82,9 @@ function parseScopeAttr(ctx: ParseScopeContext,
     safe_attributes.add(safe_attribute);
 
   let cnt = ctx.safe_aspect_path_cnt;
-  let types = Aspect.typeToAspectNames(safe_attribute.type);
-  if (types.length) {
-    let path_a = `${safe_path.length === 1 ? '' : safe_path}${safe_attribute.name}.`;
+  let types = safe_attribute.contained_aspects;
+  if (types.size) {
+    let path_a = `${safe_path}${safe_attribute.name}.`;
     let go_deeper = is_absolute || path_a.length <= ctx.max_path_len;
     if (!go_deeper) {
       go_deeper = ctx.safe_aspect_path.indexOf(safe_attribute, ctx.safe_aspect_path_abs) === -1;
@@ -135,13 +132,13 @@ function parseScopeAttr(ctx: ParseScopeContext,
 }
 
 function get_safe_attributes(ctx: ParseScopeContext, aspect: Aspect.Installed, safe_path: string) {
-  let safe_scope_type = ctx.scope[aspect.classname];
+  let safe_scope_type = ctx.scope.scope.get(aspect.classname);
   if (!safe_scope_type)
-    ctx.scope[aspect.classname] = safe_scope_type = {};
-  let safe_attributes = safe_scope_type[safe_path];
+    ctx.scope.scope.set(aspect.classname, safe_scope_type = new Map());
+  let safe_attributes = safe_scope_type.get(safe_path);
   if (!safe_attributes) {
     ctx.safe_path_count++;
-    safe_attributes = safe_scope_type[safe_path] = new Set<Aspect.InstalledAttribute>();
+    safe_scope_type.set(safe_path, safe_attributes = new Set<Aspect.InstalledAttribute>());
   }
   return safe_attributes;
 }
@@ -151,7 +148,7 @@ function parseScopeType(ctx: ParseScopeContext,
   aspect: Aspect.Installed, unsafe_scope_type: { [s: string]: string[] },
   allow_sort: boolean,
 ) {
-  let unsafe_attributes = unsafe_scope_type[safe_path];
+  let unsafe_attributes = unsafe_scope_type[safe_path.length > 1 ? safe_path.substring(1) : safe_path];
   let unsafe_attributes_ = unsafe_scope_type["_"];
   if (!unsafe_attributes && !unsafe_attributes_)
     return;
@@ -204,7 +201,7 @@ export function parseScope(
     safe_aspect_path_cnt: 0,
     safe_aspect_path: [],
     max_path_len: 0,
-    scope: {},
+    scope: new ResolvedScope(),
     sort: [],
     aspectsForType: aspectsForType,
   };
@@ -230,10 +227,10 @@ function _traverseScope(
   for_each: (manager: VersionedObjectManager, path: string, attributes: ImmutableSet<Aspect.InstalledAttribute>) => void
 ) {
   let manager = object.manager();
-  let attributes = ResolvedScope.scope_at_type_path(scope, manager.classname(), path);
+  let attributes = scope.attributes(manager.classname(), path);
   for_each(manager, path, attributes);
   for (let attribute of attributes) {
-    if (Aspect.typeIsClass(attribute.type)) {
+    if (attribute.containsVersionedObject()) {
       let s_path = `${n_path}${attribute.name}.`;
       let data = manager._attribute_data[attribute.index];
       for (let value of attribute.traverseValue<VersionedObject>(data.modified))
@@ -260,16 +257,14 @@ function* iterParseRootTypes(ctx: ParseScopeContext, safe_path: string) {
   }
 }
 
-function* iterParseTypes(ctx: ParseScopeContext, safe_path: string, types: Iterable<string>, allow_sort: boolean) {
-  for (let unsafe_type of types) {
-    let unsafe_scope_type = ctx.unsafe_scope[unsafe_type];
+function* iterParseTypes(ctx: ParseScopeContext, safe_path: string, types: ImmutableSet<Aspect.Installed>, allow_sort: boolean) {
+  for (let aspect of types) {
+    let unsafe_scope_type = ctx.unsafe_scope[aspect.classname];
     let unsafe_scope_type_ = ctx.unsafe_scope["_"];
-    for (let aspect of ctx.aspectsForType(unsafe_type)) {
-      if (unsafe_scope_type)
-        yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type, allow_sort);
-      if (unsafe_scope_type_)
-        yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type_, allow_sort);
-    }
+    if (unsafe_scope_type)
+      yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type, allow_sort);
+    if (unsafe_scope_type_)
+      yield parseScopeType(ctx, safe_path, aspect, unsafe_scope_type_, allow_sort);
   }
 }
 
@@ -280,21 +275,23 @@ export function parse_virtual_attribute(at: PathReporter, aspect: Aspect.Install
     let m = name.match(RX);
     if (m) {
       let [_, op, sort, groupby] = m;
-      let type: Aspect.TypeVirtual = { is: "type", type: "virtual", operator: op, sort: [], group_by: [] };
+
+      let metadata = { operator: op, sort: [] as any[], group_by: [] as any[] };
       for (let a of sort.split(',')) {
         let attribute = aspect.attributes.get(a.substring(1));
         if (attribute)
-          type.sort.push({ asc: a[0] === '+', attribute: attribute });
+          metadata.sort.push({ asc: a[0] === '+', attribute: attribute });
         else
           at.diagnostic({ is: "error", msg: `attribute ${a.substring(1)} not found` });
       }
       for (let a of groupby.split(',')) {
         let attribute = aspect.attributes.get(a);
         if (attribute)
-          type.group_by.push(attribute);
+          metadata.group_by.push(attribute);
         else
           at.diagnostic({ is: "error", msg: `attribute ${a} not found` });
       }
+      let type = new Aspect.VirtualType(Aspect.Type.booleanType, metadata);
       a = Aspect.create_virtual_attribute(name, type);
       aspect.virtual_attributes.set(name, a);
     }

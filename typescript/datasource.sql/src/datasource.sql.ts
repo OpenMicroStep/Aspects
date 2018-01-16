@@ -224,7 +224,7 @@ export class SqlDataSource extends DataSource {
             await this.save(tr, reporter, objects, sub_object, action === -1);
           }
         }
-        else if (attribute.contains_vo) {
+        else if (attribute.containsVersionedObject()) {
           for (let [position, sub_object] of attribute.diffValue<VersionedObject>(modified, saved)) {
             if (position !== -1 && sub_object.manager().isNew()) {
               if (!objects.has(sub_object))

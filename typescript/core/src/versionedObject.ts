@@ -216,7 +216,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (data.flags & SAVED)
       return data.saved;
     if (this.isNew())
-      return this._missingValue(attribute);
+      return attribute.defaultValue();
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is not loaded`);
   }
 
@@ -237,7 +237,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (data.flags & SAVED)
       return data.saved;
     if (this.isNew())
-      return this._missingValue(attribute);
+      return attribute.defaultValue();
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is not loaded`);
   }
 
@@ -287,7 +287,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     if (!attribute)
       at.diagnostic({ is: "error", msg: `attribute doesn't exists` });
     else
-      attribute.validator.validate(at, value, this);
+      attribute.type.validate(at, value);
     return reporter.diagnostics;
   }
 
@@ -401,7 +401,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           }
           else if (is_new) {
             let attribute = this._aspect.attributes_by_index[idx];
-            this._setAttributeSavedValue(attribute, data, this._missingValue(attribute));
+            this._setAttributeSavedValue(attribute, data, attribute.defaultValue());
           }
         }
       }
@@ -442,8 +442,8 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         at.set(attribute.name);
         if (merge_data) {
           let merge_value = merge_data.value;
-          attribute.validator.validate(at, merge_value, this);
-          if (attribute.contains_vo) {
+          attribute.type.validate(at, merge_value);
+          if (attribute.containsVersionedObject()) {
             for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
               let sub_object_manager = sub_object.manager();
               this._assert_same_cc(sub_object_manager);
@@ -610,14 +610,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     data.saved = undefined;
   }
 
-  private _missingValue(attribute: Aspect.InstalledAttribute) {
-    if (attribute.type.type === "array")
-      return [];
-    if (attribute.type.type === "set")
-      return new Set();
-    return undefined;
-  }
-
   private _assert_same_cc(sub_object_manager: VersionedObjectManager) {
     if (sub_object_manager.controlCenter() !== this.controlCenter())
       throw new Error(`you can't mix objects of different control centers`);
@@ -682,7 +674,7 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   private _updateAttribute(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, delta: -1 | 0 | 1, value, oldValue, is_relation: boolean) {
     let sub_delta = 0;
-    if (attribute.contains_vo && !is_relation) {
+    if (attribute.containsVersionedObject() && !is_relation) {
       let diffs = attribute.diffValue<VersionedObject>(value, oldValue);
       for (let [position, sub_object] of diffs) {
         let sub_object_manager = sub_object.manager();
@@ -704,10 +696,15 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           let relation = attribute.relation.attribute;
           if (sub_object_manager.hasAttributeValueFast(relation)) {
             let v = sub_object_manager.attributeValueFast(relation);
-            switch (relation.type.type) {
-              case 'set':   v = new Set<VersionedObject>(v); v[is_add ? 'add' : 'delete'](this._object); break;
-              case 'class': v = is_add ? this._object : undefined; break;
-              default: throw new Error(`unsupported relation destination type ${relation.type.type}`);
+            if (relation.isMonoValue()) {
+              v = is_add ? this._object : undefined;
+            }
+            else if (relation.isSetValue()) {
+              v = new Set<VersionedObject>(v);
+              v[is_add ? 'add' : 'delete'](this._object);
+            }
+            else {
+              throw new Error(`unsupported relation destination type ${relation.type}`);
             }
             sub_object_manager._setAttributeValueFast(relation, v, true);
           }
@@ -842,8 +839,8 @@ export class VersionedObject {
       methods: [
         { is: "method",
           name: "validate",
-          argumentTypes: [{ is: "type", type: "class", name: "Reporter"} as Aspect.Type],
-          returnType: { is: "type", type: "void" } as Aspect.Type,
+          argumentTypes: [{ is: "type", type: "class", name: "Reporter" } as Aspect.Definition.Type],
+          returnType: { is: "type", type: "void" } as Aspect.Definition.Type,
         },
       ]
     }],

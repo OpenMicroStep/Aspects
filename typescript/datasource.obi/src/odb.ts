@@ -54,13 +54,13 @@ export class OuiDB {
     NextOidLib: "next oid",
     NextOidReserveSize: 10e3,
     mapTypes: {
-      STR : { is: "type", type: "primitive", name: "string"  } as Aspect.Type,
-      INT : { is: "type", type: "primitive", name: "integer" } as Aspect.Type,
-      BOOL: { is: "type", type: "primitive", name: "boolean" } as Aspect.Type,
-      GMT : { is: "type", type: "primitive", name: "integer" } as Aspect.Type,
-      DAT : { is: "type", type: "primitive", name: "integer" } as Aspect.Type,
-      DTM : { is: "type", type: "primitive", name: "integer" } as Aspect.Type,
-      DUR : { is: "type", type: "primitive", name: "integer" } as Aspect.Type,
+      STR : Aspect.Type.stringType,
+      INT : Aspect.Type.integerType,
+      BOOL: Aspect.Type.booleanType,
+      GMT : Aspect.Type.integerType,
+      DAT : Aspect.Type.integerType,
+      DTM : Aspect.Type.integerType,
+      DUR : Aspect.Type.integerType,
     }
   }
 
@@ -212,7 +212,6 @@ export class OuiDB {
         return tmp_obi;
 
       let cur_obi: ObiDefinition | undefined;
-      let attributesToAdd: Aspect.Attribute[] = []
       if (new_obi._id)
         cur_obi = cur_byId.get(new_obi._id);
       if (!cur_obi && new_obi.system_name)
@@ -275,12 +274,6 @@ export class OuiDB {
             }
           }
         }
-        /*attributesToAdd.push({
-          is: "attribute",
-          name: new_car.system_name!,
-          type: this.ouiTypeToAspectType(new_car, new_type.system_name!, new_car_domain_entity),
-          relation: isId ? "_id" : undefined
-        })*/
       }
       return tmp_obi;
     }

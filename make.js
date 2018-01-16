@@ -32,7 +32,7 @@ module.exports =  {
         "skipLibCheck": true,
         "noImplicitThis": true,
         "noImplicitReturns": true,
-        "lib": ["es6"]
+        "lib": ["es2017"]
     }
   },
   "test=": {

@@ -4,6 +4,7 @@ import './resource';
 import {Resource, Car, People} from '../../../generated/aspects.interfaces';
 import ConstraintType = DataSourceInternal.ConstraintType;
 import ObjectSet = DataSourceInternal.ObjectSet;
+import ResolvedScope = DataSourceInternal.ResolvedScope;
 
 const cc = new ControlCenter(new AspectConfiguration(new AspectSelection([
   Resource.Aspects.test1,
@@ -25,6 +26,18 @@ function serialize(s, map = new Map()) {
     if (!r) {
       if (s instanceof VersionedObject)
         s = `VersionedObject{${s.manager().classname()}/${s.id()}}`;
+      if (s instanceof ResolvedScope) {
+        let ret = {};
+        for (let [t, tv] of s.scope.entries()) {
+          let rv = ret[t] = {};
+          for (let [p, tp] of tv.entries())
+            rv[p] = [...tp];
+        }
+        s = ret;
+      }
+      if (s instanceof Aspect.InstalledAttribute) {
+        return s;
+      }
       if (s instanceof Map)
         s = [...s.entries()];
       if (s instanceof Set)
@@ -659,7 +672,7 @@ function persons_and_their_cars() {
         },
         Car: {
           ".": [aspect_attr("People", "_name")],
-          "_cars.": [aspect_attr("Car", "_owner")]
+          "._cars.": [aspect_attr("Car", "_owner")]
         }
       }
     })
@@ -922,7 +935,7 @@ function a_op_b(op, ct) {
   ]);
   test_a_op_b({ "=a._name": { [op]: "=a._birthDate" } }, [], [
     { is: "error", path: `.where.=a._name.${op}`,
-      msg: "operands are incompatible, primitive:string !== primitive:date" },
+      msg: "operands are incompatible, (string | undefined) !== (date | undefined)" },
   ]);
 }
 
@@ -1002,17 +1015,17 @@ let sets =
   assert.deepEqual(c.leftAttribute.name,"$is_last(+_name,-_model)/_name,_model");
   assert.deepEqual(c.leftAttribute.index,-1);
   //assert.instanceOf(c.leftAttribute.type,Aspect.TypeVirtual);
-  assert.deepEqual(c.leftAttribute.type.type,"virtual");
-  let type = (c.leftAttribute.type as Aspect.TypeVirtual);
-  assert.deepEqual(type.operator,"$is_last");
-  assert.deepEqual(type.sort[0].asc,true);
-  assert.deepEqual(type.sort[0].attribute.name,"_name");
+  assert.instanceOf(c.leftAttribute.type, Aspect.Type.VirtualType);
+  let metadata = (c.leftAttribute.type as Aspect.Type.VirtualType).metadata;
+  assert.deepEqual(metadata.operator,"$is_last");
+  assert.deepEqual(metadata.sort[0].asc,true);
+  assert.deepEqual(metadata.sort[0].attribute.name,"_name");
 
-  assert.deepEqual(type.sort[1].asc,false);
-  assert.deepEqual(type.sort[1].attribute.name,"_model");
+  assert.deepEqual(metadata.sort[1].asc,false);
+  assert.deepEqual(metadata.sort[1].attribute.name,"_model");
 
-  assert.deepEqual(type.group_by[0].name,"_name");
-  assert.deepEqual(type.group_by[1].name,"_model");
+  assert.deepEqual(metadata.group_by[0].name,"_name");
+  assert.deepEqual(metadata.group_by[1].name,"_model");
 }
 
 

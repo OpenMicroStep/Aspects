@@ -8,7 +8,6 @@ import ConstraintType = DataSourceInternal.ConstraintType;
 import {SqlBinding, SqlQuery, SqlQuerySharedContext, DBConnector} from '@openmicrostep/aspects.sql';
 import {ObiDefinition, SysObiDefinition, getOne, ObiDataSource} from './index.priv';
 import ConstraintValue = DataSourceInternal.ConstraintValue;
-import scope_at_type_path = DataSourceInternal.ResolvedScope.scope_at_type_path;
 
 export function mapValue(def: ObiDefinition, ctx: ObiSharedContext, value, isId: boolean) {
   if (value instanceof VersionedObject) {
@@ -373,15 +372,11 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         if (!snapshot) {
           snapshots.set(vo, snapshot = new VersionedObjectSnapshot(manager.aspect(), manager.id()));
           snapshot.setAttributeValueFast(Aspect.attribute_version, _version);
-          for (let a of scope_at_type_path(this.set.scope, manager.classname(), _path)) {
-            let d: undefined | Set<any> | any[] = undefined;
-            if (a.type.type === "set")
-              d = new Set();
-            else if (a.type.type === "array")
-              d = [];
-            for (let type of Aspect.typeToAspectNames(a.type)) {
+          for (let a of this.set.scope!.attributes(manager.classname(), _path)) {
+            let d: undefined | Set<any> | any[] = a.defaultValue();
+            for (let contained_aspect of a.contained_aspects) {
               let path_a = `${path_n}${a.name}.`;
-              let attributes = scope_at_type_path(this.set.scope, type, path_a);
+              let attributes = this.set.scope!.attributes(contained_aspect.classname, path_a);
               if (attributes.size) {
                 let sub_ids = subs.get(path_a);
                 if (!sub_ids)
@@ -416,11 +411,11 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let a = vo.manager().aspect().checkedAttribute((direct ? car2attr_d : car2attr_r).get(car)!);
         val = this.ctx.config.obiValue_to_aspectValue(val, a);
         val = this.loadValue(ccc, val, __is);
-        if (a.type.type === "set" || a.type.type === "array") {
+        if (a.isMultValue()) {
           let c = snapshot.attributeValueFast(a);
-          if (a.type.type === "set")
+          if (a.isSetValue())
             c.add(val);
-          else // array
+          else if (a.isArrayValue())
             c.push(val);
         }
         else {
@@ -432,7 +427,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       let tables = new Map<string, { dor: SqlBinding[], ror: SqlBinding[] }>();
       for (let [type, ids] of idsByType) {
         let cars_by_tables = new Map<string, { dcar_ids: number[], rcar_ids: number[]}>();
-        let attributes = scope_at_type_path(this.set.scope, type.classname, path);
+        let attributes = this.set.scope!.attributes(type.classname, path);
         for (let a of attributes) {
           let car_info = this.car_info(a.name);
           let cars = cars_by_tables.get(car_info.table);

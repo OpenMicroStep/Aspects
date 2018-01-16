@@ -18,11 +18,10 @@ function parseScope(unsafe_scope: DataSourceInternal.Scope | string[]): any {
       yield* cc.installedAspects();
   });
   let ret = {};
-  for (let t in scope.scope) {
-    let tv = scope.scope[t];
+  for (let [t, tv] of scope.scope.scope.entries()) {
     let rv = ret[t] = {};
-    for (let p in tv)
-      rv[p] = [...tv[p]];
+    for (let [p, tp] of tv.entries())
+      rv[p] = [...tp];
   }
   return { scope: ret, sort: scope.sort };
 }
@@ -83,7 +82,7 @@ function scope_A11_113_111() {
     },
     Car: {
       ".": [aspect_attr("People", "_name")],
-      "_cars.": [aspect_attr("Car", "_owner")]
+      "._cars.": [aspect_attr("Car", "_owner")]
     }
   });
   assert.deepEqual<any>(r.sort, []);
@@ -101,10 +100,10 @@ function scope_1A1_121() {
   assert.deepEqual<any>(r.scope, {
     People: {
       ".": [aspect_attr("People", "_cars")],
-      "_cars._owner.": [aspect_attr("People", "_cars")],
+      "._cars._owner.": [aspect_attr("People", "_cars")],
     },
     Car: {
-      "_cars.": [aspect_attr("Car", "_owner")],
+      "._cars.": [aspect_attr("Car", "_owner")],
     },
   });
   assert.deepEqual<any>(r.sort, []);
@@ -123,14 +122,14 @@ function scope_1A1_1A1() {
     People: {
       "_": [aspect_attr("People", "_cars")],
       ".": [aspect_attr("People", "_cars")],
-      "_owner.": [aspect_attr("People", "_cars")],
-      "_cars._owner.": [aspect_attr("People", "_cars")],
+      "._owner.": [aspect_attr("People", "_cars")],
+      "._cars._owner.": [aspect_attr("People", "_cars")],
     },
     Car: {
       "_": [aspect_attr("Car", "_owner")],
       ".": [aspect_attr("Car", "_owner")],
-      "_cars.": [aspect_attr("Car", "_owner")],
-      "_owner._cars.": [aspect_attr("Car", "_owner")],
+      "._cars.": [aspect_attr("Car", "_owner")],
+      "._owner._cars.": [aspect_attr("Car", "_owner")],
     },
   });
   assert.deepEqual<any>(r.sort, []);
@@ -151,7 +150,7 @@ function scope_1A1_1A1_nocycle() {
     },
     Car: {
       ".": [aspect_attr("Car", "_name")],
-      "_cars.": [aspect_attr("Car", "_name")],
+      "._cars.": [aspect_attr("Car", "_name")],
     },
   });
   assert.deepEqual<any>(r.sort, []);
@@ -214,7 +213,7 @@ function sort_112_112() {
       '.': [aspect_attr("Car", '_name'), aspect_attr("Car", '_owner')]
     },
     People: {
-      '_owner.': [aspect_attr("People", '_name')]
+      '._owner.': [aspect_attr("People", '_name')]
     },
   });
   assert.deepEqual<any>(r.sort, [

@@ -75,7 +75,7 @@ function traverse_attribute(ctx: TraverseContext, manager: VersionedObjectManage
   let attribute = manager.aspect().checkedAttribute(attribute_name);
   for (let traverse_value of ctx.traverse_value) {
     let values = traverse_value(manager, attribute);
-    if (values && Aspect.typeIsClass(attribute.type)) {
+    if (values && attribute.containsVersionedObject()) {
       let s_path = `${prefix}${attribute_name}.`;
       for (let value of attribute.traverseValue<VersionedObject>(values))
         traverse_object(ctx, value, s_path, s_path);
