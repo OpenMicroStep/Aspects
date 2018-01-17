@@ -12,7 +12,7 @@ export class XHRTransport implements FarTransport {
         }
       };
       if (!isVoid) {
-        xhr.setRequestHeader('Content-Type', 'application/json+mste');
+        xhr.setRequestHeader('Content-Type', 'application/json');
         xhr.send(JSON.stringify(args[0]));
       }
       else
