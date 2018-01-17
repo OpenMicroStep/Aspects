@@ -1,7 +1,7 @@
 import {
   ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
-  Result,
-  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal
+  Result, DataSource,
+  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal, AspectConfiguration
 } from './core';
 import * as T from './aspect.type';
 import {Reporter, PathReporter, Validate as V} from '@openmicrostep/msbuildsystem.shared';
@@ -27,7 +27,7 @@ export interface Aspect {
 export namespace Aspect {
   export import Type = T.Type;
   export import VirtualType = Type.VirtualType;
-  export type FarContext = { context: { ccc: ControlCenterContext, [s: string]: VersionedObject | ControlCenterContext} };
+  export type FarContext = { context: { ccc: ControlCenterContext, defaultDataSource?: DataSource.Categories.Public, [name: string]: VersionedObject | ControlCenterContext | undefined } };
   export const farTransportStub: FarTransport = {
     manual_coding: false,
     remoteCall(ctx, to, method, args) {

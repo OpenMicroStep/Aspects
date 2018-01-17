@@ -23,44 +23,15 @@ export namespace Invocation {
       const reporter = new Reporter();
       let code_ctx = new Aspect.Type.Context(ccc, Aspect.Type.ModeLocation.Parameter);
       let { to: receiver, method } = invokable;
-      let hasResult = false;
-      let ret: any = undefined;
       reporter.transform.push((d) => { d.is = "error"; return d; });
 
       let manager = receiver.manager();
       let farMethod = manager.aspect().farMethods.get(method);
 
-      const exit = () => {
-        let result: Result | undefined = undefined;
-        if (farMethod) {
-          let at = new PathReporter(reporter, farMethod.name, ":return");
-          if (hasResult && farMethod.returnType && !farMethod.transport.manual_coding) {
-            let s = reporter.snapshot();
-            let resultType = new Aspect.Type.ResultType(farMethod.returnType);
-            code_ctx.location = Aspect.Type.ModeLocation.Return;
-            if (resultType.canDecode(ret))
-              ret = resultType.decode(at, code_ctx, ret);
-            else
-              ret = farMethod.returnType.validate(at, ret);
-            // TODO: async finalize decode
-            hasResult = !reporter.hasChanged(s);
-          }
-          if (ret instanceof Result) {
-            result = ret;
-            hasResult = ret.hasValues();
-            ret = ret.hasOneValue() ? ret.value() : ret.values();
-          }
-          if (hasResult && farMethod.returnType) {
-            let s = reporter.snapshot();
-            farMethod.returnType.validate(at, ret);
-            hasResult = !reporter.hasChanged(s);
-          }
-        }
+      const exit = (result: Result | undefined = undefined) => {
         let items: Result.Item[] = reporter.diagnostics;
         if (!reporter.failed && result) // if reporter failed, we can't trust result items
           items.push(...result.items());
-        else if (!reporter.failed && hasResult)
-          items.push({ is: "value", value: ret });
         resolve(new Result<R>(items));
       };
 
@@ -80,17 +51,43 @@ export namespace Invocation {
         }
         if (!reporter.failed) {
           let ctx = { context: { ccc, ...ccc.controlCenter().defaultContext() } };
+          let far_method = farMethod;
           farMethod.transport.remoteCall(ctx, receiver, farMethod, args)
-            .then(
-              (result) => { hasResult = true; ret = result; exit(); },
-              (err) => {
-                if (err)
-                  reporter.error(err);
-                else
-                  reporter.diagnostic({ is: "error", msg: `unknown error` });
-                exit();
+            .then(async (result) : Promise<void> => {
+              let returnType = far_method.returnType || Aspect.Type.voidType;
+              let at = new PathReporter(reporter, farMethod!.name, ":return");
+              let ret: Result | undefined = undefined;
+              let s = reporter.snapshot();
+              if (!far_method.transport.manual_coding) {
+                let resultType = new Aspect.Type.ResultType(returnType);
+                code_ctx.location = Aspect.Type.ModeLocation.Return;
+                let retType = resultType.canDecode(result) ? resultType : returnType;
+                result = retType.decode(at, code_ctx, result);
+                if (Aspect.Type.mustFinalizeDecode(code_ctx))
+                  await Aspect.Type.finalizeDecode(code_ctx, ccc.controlCenter().defaultDataSource());
               }
-            );
+              if (!reporter.hasChanged(s)) {
+                if (result instanceof Result)
+                  ret = result;
+                else if (returnType !== Aspect.Type.voidType || result !== undefined)
+                  ret = Result.fromValue(result);
+                if (ret) {
+                  for (let value of ret.values()) {
+                    returnType.validate(at, value);
+                  }
+                }
+                if (reporter.hasChanged(s))
+                  ret = undefined;
+              }
+              exit(ret);
+            })
+            .catch((err) => {
+              if (err)
+                reporter.error(err);
+              else
+                reporter.diagnostic({ is: "error", msg: `unknown error` });
+              exit();
+            });
           return;
         }
       }

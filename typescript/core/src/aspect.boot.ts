@@ -35,17 +35,20 @@ export class AspectSelection {
     return this._classes;
   }
 }
+export namespace AspectConfiguration {
+  export type DefaultContext = { defaultDataSource?: DataSource.Categories.Public, [name: string]: VersionedObject | undefined };
+}
 export class AspectConfiguration {
   private readonly _custom_classes = new Map<string, Function>();
   private readonly _vo_classes = new Map<string, Function>();
   private readonly _aspects = new Map<string, VersionedObjectConstructorCache>();
   private readonly _cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
-  /** @internal */ readonly _initDefaultContext: ((ccc: ControlCenterContext) => { [name: string]: VersionedObject }) | undefined;
+  /** @internal */ readonly _initDefaultContext: ((ccc: ControlCenterContext) => AspectConfiguration.DefaultContext) | undefined;
   constructor(options: {
     selection: AspectSelection,
     farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
     defaultFarTransport?: FarTransport,
-    initDefaultContext?: (ccc: ControlCenterContext) => { [name: string]: VersionedObject },
+    initDefaultContext?: (ccc: ControlCenterContext) => AspectConfiguration.DefaultContext,
     customClasses?: { [s: string]: Function },
   })
   constructor(selection: AspectSelection)
@@ -53,7 +56,7 @@ export class AspectConfiguration {
     selection: AspectSelection,
     farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
     defaultFarTransport?: FarTransport,
-    initDefaultContext?: (ccc: ControlCenterContext) => { [name: string]: VersionedObject },
+    initDefaultContext?: (ccc: ControlCenterContext) => AspectConfiguration.DefaultContext,
     customClasses?: { [s: string]: Function },
   }) {
     this._custom_classes.set("ObjectSet", DataSourceInternal.ObjectSet);

@@ -1,6 +1,6 @@
 import {
   VersionedObject, VersionedObjectManager, NotificationCenter, Result, Invocation,
-  Aspect, AspectConfiguration, ImmutableSet
+  Aspect, AspectConfiguration, ImmutableSet, DataSource
 } from './core';
 
 export type Identifier = string | number;
@@ -141,7 +141,7 @@ export class ControlCenter {
   /** @internal */ readonly _objects = new Map<Identifier, VersionedObject>();
   /** @internal */ readonly _components = new Map<AComponent, ControlCenterContext>();
   /** @internal */ readonly _configuration: AspectConfiguration;
-  /** @internal */ readonly _defaultContext: { [name: string]: VersionedObject };
+  /** @internal */ readonly _defaultContext: { defaultDataSource?: DataSource.Categories.Public, [name: string]: VersionedObject | undefined };
 
   constructor(configuration: AspectConfiguration) {
     this._configuration = configuration;
@@ -154,8 +154,15 @@ export class ControlCenter {
     }
   }
 
-  defaultContext() {
+  defaultContext(): AspectConfiguration.DefaultContext {
     return this._defaultContext;
+  }
+
+  defaultDataSource(): DataSource.Categories.Public {
+    let defaultDataSource = this._defaultContext.defaultDataSource
+    if (!defaultDataSource)
+      throw new Error(`no default data source in this controlcenter`);
+    return defaultDataSource;
   }
 
   /// events

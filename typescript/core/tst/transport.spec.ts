@@ -234,7 +234,7 @@ async function manual_server_save(flux) {
   let ds = new InMemoryDataSource.DataStore();
   let s1 = createContext_S1(ds, new Map());
   let c1 = createContext_C1(s1.publicTransport);
-  let res = await s1.publicTransport(JSON.stringify({ to: c1.cc.defaultContext().db.id(), method: "distantSave", args: [data_out] }));
+  let res = await s1.publicTransport(JSON.stringify({ to: c1.cc.defaultContext().db!.id(), method: "publicSave", args: [data_out] }));
   assert.deepEqual(JSON.parse(res), { is: "result", v: [{ is: "value", value: data_res}] } as any);
   flux.continue();
 }

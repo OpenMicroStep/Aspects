@@ -38,12 +38,16 @@ export abstract class Type<Value = Type.Value, Data = Type.Data>{
     return ret;
   }
 
-  async finalizeDecode(ctx: Type.Context, dataSource: DataSource.Categories.server) {
-    if (ctx.missings_grouped && ctx.missings_grouped.size) {
-      let missings_grouped = ctx.missings_grouped;
+  static mustFinalizeDecode(ctx: Type.Context) : boolean {
+    return ctx.missings_grouped !== undefined && ctx.missings_grouped.size > 0;
+  }
+
+  static async finalizeDecode(ctx: Type.Context, dataSource: DataSource.Categories.Public) {
+    if (Type.mustFinalizeDecode(ctx)) {
+      let missings_grouped = ctx.missings_grouped!;
       ctx.missings_grouped = undefined;
       await Promise.all([...missings_grouped.values()]
-        .map(g => ctx.ccc.farPromise(dataSource.distantLoad, { objects: g.objects, scope: g.attributes })));
+        .map(g => ctx.ccc.farPromise(dataSource.publicLoad, { objects: g.objects, scope: g.attributes })));
     }
   }
 
