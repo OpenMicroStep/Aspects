@@ -21,17 +21,17 @@ before_script:
    - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
    - msbuildsystem build -w dist/gitlab/ --target build --env gitlab --no-progress
 
-build-6:
-  <<: *build_tpl
-  image: node:6-alpine
-
 build-8:
   <<: *build_tpl
   image: node:8-alpine
 
+build-latest:
+  <<: *build_tpl
+  image: node:alpine
+
 deploy:
   stage: deploy
-  image: node:6-alpine
+  image: node:8-alpine
   only:
     - tags
   script:
