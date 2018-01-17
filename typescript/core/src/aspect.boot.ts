@@ -379,7 +379,7 @@ export class AspectConfiguration {
               dynamic_scope = new Type.ResolvedDynamicScope(resolved_scope);
           }
           let t = new Type.VersionedObjectType(type.name, cstor, dynamic_scope);
-          return forAttribute ? new Type.OrType([t, Type.undefinedType]) : t;
+          return forAttribute ? new Type.OrUndefinedType(t) : t;
         }
         case "array": return new Type.ArrayType(type.min, type.max === '*' ? Type.ArrayType.INFINITE : type.max, mktype(type.itemType, lvl + 1));
         case "set": return new Type.SetType(type.min, type.max === '*' ? Type.SetType.INFINITE : type.max, mktype(type.itemType, lvl + 1));
@@ -420,7 +420,7 @@ const primitiveValidators: {[s in Aspect.Definition.PrimaryType]: Aspect.Type } 
 const primitiveLevel0Validators: {[s in Aspect.Definition.PrimaryType]: Aspect.Type } = (function () {
   let ret: any = {};
   for (let k in primitiveValidators) {
-    ret[k] = new Type.OrType([primitiveValidators[k], Type.undefinedType]);
+    ret[k] = new Type.OrUndefinedType(primitiveValidators[k]);
   }
   return ret;
 })();

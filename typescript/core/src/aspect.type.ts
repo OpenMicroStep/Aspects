@@ -307,6 +307,9 @@ export namespace Type {
       if (!(value instanceof Date))
         at.diagnostic({ is: "error", msg: `must be a Date, got ${this._describe(value)}` });
     }
+    asPrimitive() {
+      return "date";
+    }
     signature() {
       return "date";
     }
@@ -406,6 +409,9 @@ export namespace Type {
     validate(at: PathReporter, value: Type.Value) {
       if (!this.canEncode(value))
         at.diagnostic({ is: "error", msg: `must be a binary, got ${this._describe(value)}` });
+    }
+    asPrimitive() {
+      return "binary";
     }
     signature() {
       return "binary";
@@ -893,6 +899,18 @@ export namespace Type {
       for (let t of this.oneOf)
         yield* t.classnames();
     }
+    asPrimitive() {
+      let p: string | undefined = undefined;
+      for (let t of this.oneOf) {
+        let tp = t.asPrimitive();
+        if (tp && tp !== p) {
+          if (p)
+            return undefined;
+          p = tp;
+        }
+      }
+      return p;
+    }
     signature() {
       return `(${this.oneOf.map(t => t.toString()).sort().join(' | ')})`;
     }
@@ -927,6 +945,15 @@ export namespace Type {
     }
     toString() {
       return `any`;
+    }
+  }
+
+  export class OrUndefinedType extends OrType {
+    constructor(type: Type) {
+      super([type, undefinedType]);
+    }
+    asPrimitive() {
+      return this.oneOf[0].asPrimitive();
     }
   }
 
