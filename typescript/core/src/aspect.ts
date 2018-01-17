@@ -1,7 +1,7 @@
 import {
   ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
   Result,
-  ImmutableList, ImmutableMap, ImmutableSet
+  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal
 } from './core';
 import * as T from './aspect.type';
 import {Reporter, PathReporter, Validate as V} from '@openmicrostep/msbuildsystem.shared';
@@ -63,12 +63,13 @@ export namespace Aspect {
     export type PrimaryType = 'integer' | 'decimal' | 'date' | 'localdate' | 'string' | 'array' | 'dictionary' | 'identifier' | 'any' | 'boolean' | 'undefined' | 'binary';
     export type TypeVoid = { is: 'type', type: 'void' };
     export type TypePrimitive = { is: 'type', type: 'primitive', name: PrimaryType };
-    export type TypeClass = { is: 'type', type: 'class', name: string };
+    export type TypeClass = { is: 'type', type: 'class', name: string, scopes?: Scope[] };
     export type TypeArray = { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" };
     export type TypeSet = { is: 'type', type: 'set', itemType: Type, min: number, max: number | "*" };
     export type TypeDictionary = { is: 'type', type: 'dictionary', properties: { [s: string]: Type } };
     export type TypeOr = { is: 'type', type: 'or', types: Type[] }
-    export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr ;
+    export type Type = TypeVoid | TypePrimitive | TypeClass | TypeArray | TypeSet | TypeDictionary | TypeOr;
+    export type Scope = { is: 'scope', name: string, scope?: DataSourceInternal.Scope };
 
     export interface Attribute {
       is: string;

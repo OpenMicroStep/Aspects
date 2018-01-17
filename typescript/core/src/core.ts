@@ -8,7 +8,6 @@ export * from './controlCenter';
 export * from './invocation';
 export * from './result';
 export * from './datasource';
-export * from './datasource.transport';
 export * from './datasource.internal';
 export * from './datasource.memory';
 export * from './pool';

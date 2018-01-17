@@ -1,7 +1,7 @@
 import {
   ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
   Result, Aspect, FarTransport, PublicTransport,
-  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal
+  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal, DataSource
 } from './core';
 import {Type} from './aspect.type';
 import { Reporter, PathReporter, Validate as V } from '@openmicrostep/msbuildsystem.shared';
@@ -354,7 +354,32 @@ export class AspectConfiguration {
             cstor = this._custom_classes.get(type.name);
           if (!cstor)
             throw new Error(`cannot find class ${type.name}`);
-          return new Type.VersionedObjectType(type.name, cstor);
+
+          let dynamic_scope: Type.DynamicScope | undefined = undefined;
+          if (type.scopes) {
+            let resolved_scope = new DataSourceInternal.ResolvedScope();
+            let cfg = this;
+            let types = function* (type): IterableIterator<Aspect.Installed> {
+              if (type === '_')
+                yield* cfg.aspects();
+              else
+                yield cfg.aspectChecked(type);
+            };
+            for (let scope of type.scopes) {
+              if (scope.scope)
+                DataSourceInternal.parseScopeExtension(resolved_scope, scope.scope, types);
+              else if (scope.name === "LoadedScope")
+                dynamic_scope = Type.loadedScope;
+              else
+                throw new Error(`no scope found for ${scope.name}`);
+            }
+            if (dynamic_scope && type.scopes.length !== 1)
+              throw new Error(`LoadedScope cannot be combined with other scopes`);
+            if (!dynamic_scope)
+              dynamic_scope = new Type.ResolvedDynamicScope(resolved_scope);
+          }
+          let t = new Type.VersionedObjectType(type.name, cstor, dynamic_scope);
+          return forAttribute ? new Type.OrType([t, Type.undefinedType]) : t;
         }
         case "array": return new Type.ArrayType(type.min, type.max === '*' ? Type.ArrayType.INFINITE : type.max, mktype(type.itemType, lvl + 1));
         case "set": return new Type.SetType(type.min, type.max === '*' ? Type.SetType.INFINITE : type.max, mktype(type.itemType, lvl + 1));

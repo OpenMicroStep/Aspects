@@ -18,6 +18,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
 
   do_build(step: Step<{}>) {
     let root = new AspectRootElement('root', 'root', null);
+    Element.load(step.context.reporter, { "LoadedScope=": { is: "scope" } } as any, root, elementFactories);
     step.setFirstElements([
       this.inputFiles.map(inputFile => (step: Step<{}>) => {
         inputFile.readUtf8File((err, content) => {
@@ -33,7 +34,7 @@ export class ParseAspectInterfaceTask extends InOutTask {
             let ret = parseInterface(step.context.reporter, content);
             step.context.reporter.transform.pop();
             if (!step.context.reporter.failed)
-              Element.load(step.context.reporter, ret as ElementDefinition,  root, elementFactories);
+              Element.load(step.context.reporter, ret as ElementDefinition, root, elementFactories);
             step.continue();
           }
         });

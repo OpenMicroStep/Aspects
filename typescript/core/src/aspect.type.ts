@@ -1,5 +1,5 @@
 import { Reporter, PathReporter } from '@openmicrostep/msbuildsystem.shared';
-import { DataSource,  Aspect, Identifier, VersionedObject, VersionedObjectConstructor, DataSourceInternal, VersionedObjectManager, ControlCenterContext, VersionedObjectSnapshot, AspectConfiguration, Result } from './core';
+import { DataSource,  Aspect, Identifier, VersionedObject, VersionedObjectConstructor, DataSourceInternal, VersionedObjectManager, ControlCenterContext, VersionedObjectSnapshot, AspectConfiguration, Result, ImmutableSet } from './core';
 import { ResolvedScope } from './datasource.scope';
 
 export enum Mode {
@@ -17,8 +17,10 @@ export abstract class Type<Value = Type.Value, Data = Type.Data>{
     }
   }
   encode(at: PathReporter, ctx: Type.Context, value: Type.Value): Type.Data | undefined {
-    if (this.canEncode(value))
-      return this._encode(at, ctx, value);
+    if (this.canEncode(value)) {
+      let ret = this._encode(at, ctx, value);
+      return ret;
+    }
     at.diagnostic({ is: "error", msg: `cannot encode ${this._describe(value)}` });
     return undefined;
   }
@@ -97,15 +99,80 @@ export namespace Type {
     Parameter,
     Return,
   }
+  let allow_object = true;
+  export const loadedScope: DynamicScope = {
+    beginObject(aspect: Aspect.Installed): boolean {
+      return allow_object;
+    },
+    beginAttribute(attribute: Aspect.InstalledAttribute): boolean {
+      allow_object = attribute.is_sub_object;
+      return true;
+    },
+    isAttributeRequired(): boolean {
+      return false;
+    },
+    endAttribute() {
+      allow_object = true;
+    },
+    endObject() {}
+  };
+  export const emptyScope: DynamicScope = {
+    beginObject(aspect: Aspect.Installed): boolean {
+      return false;
+    },
+    beginAttribute(attribute: Aspect.InstalledAttribute): boolean {
+      return false;
+    },
+    isAttributeRequired(): boolean {
+      return false;
+    },
+    endAttribute() { },
+    endObject() { }
+  };
+  const emptySet: ImmutableSet<Aspect.InstalledAttribute> = new Set();
+  export class ResolvedDynamicScope {
+    private path_stack: string[] = ['.'];
+    private attributes: ImmutableSet<Aspect.InstalledAttribute> = emptySet;
+    private path_stack_top() : string {
+      return this.path_stack[this.path_stack.length - 1];
+    }
 
+    constructor(public scope: ResolvedScope) {}
+    beginObject(aspect: Aspect.Installed): boolean {
+      this.attributes = this.scope.attributes(aspect.classname, this.path_stack_top());
+      return true;
+    }
+    beginAttribute(attribute: Aspect.InstalledAttribute): boolean {
+      if (this.attributes.has(attribute)) {
+        this.path_stack.push(`${this.path_stack_top()}${attribute.name}.`);
+        return true;
+      }
+      return false;
+    }
+    isAttributeRequired(): boolean {
+      return true;
+    }
+    endAttribute(): void {
+      this.path_stack.pop();
+    }
+    endObject(): void {
+      this.attributes = emptySet;
+    }
+  }
+  export interface DynamicScope {
+    beginObject(aspect: Aspect.Installed): boolean;
+    beginAttribute(attribute: Aspect.InstalledAttribute): boolean;
+    isAttributeRequired(): boolean;
+    endAttribute(): void;
+    endObject(): void;
+  }
   export class Context {
     constructor(
       public ccc: ControlCenterContext,
       public location: ModeLocation,
     ) {}
-    scope_path: string = "";
-    scope: ResolvedScope | undefined = undefined;
-    encodedWithLocalId = new Map<Identifier, [VersionedObject, ClassType.DataAttribute[]]>();
+    scope: DynamicScope = emptyScope;
+    encodedWithLocalId = new Map<Identifier, [VersionedObject, VersionedObjectType.DataAttribute[]]>();
     decodedWithLocalId = new Map<VersionedObject, Identifier>();
     missings_grouped: Map<string, { aspect: string, objects: VersionedObject[], attributes: string[] }> | undefined = new Map();
     missings_by_vo = new Map<VersionedObject, Mergeable>();
@@ -217,18 +284,24 @@ export namespace Type {
   }
 
   //date
-  export class DateType extends Type<Date, number> {
-    canEncode(value: Type.Value): value is Date {
+  //                              YYYY -MM    -DD     THH     :MM     [:SS     [.ss   ] ]( +  HH     :MM     |Z)
+  const ISO8601_SIMPLIFIED_RX = /^\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d(:[0-5]\d(\.\d+)?)?([+-][0-2]\d:[0-5]\d|Z)$/;
+  export namespace DateType {
+    export type Value = Date;
+    export type Data = { is: "date", v: string };
+  }
+  export class DateType extends Type<DateType.Value, DateType.Data> {
+    canEncode(value: Type.Value): value is DateType.Value {
       return value instanceof Date;
     }
-    canDecode(data: Type.Data): data is number {
-      return typeof data === "number" && Number.isInteger(data);
+    canDecode(data: Type.Data): data is DateType.Data {
+      return data instanceof Object && data.is === "date" && typeof data.v === "string" && ISO8601_SIMPLIFIED_RX.test(data.v);
     }
-    _encode(at: PathReporter, ctx: Type.Context, value: Date): number {
-      return value.getTime()
+    _encode(at: PathReporter, ctx: Type.Context, value: DateType.Value): DateType.Data {
+      return { is: "date", v: value.toISOString() }
     }
-    _decode(at: PathReporter, ctx: Type.Context, data: number): Date {
-      return new Date(data);
+    _decode(at: PathReporter, ctx: Type.Context, data: DateType.Data): DateType.Value {
+      return new Date(data.v);
     }
     validate(at: PathReporter, value: Type.Value) {
       if (!(value instanceof Date))
@@ -346,6 +419,14 @@ export namespace Type {
       public type: Type
     ) { super(); }
 
+    protected *_code(mode: Mode, at: PathReporter, ctx: Type.Context | undefined, iterator: IterableIterator<[string | number, any]>) {
+      at.pushArray();
+      for (let [i, v] of iterator) {
+        yield this.type.code(mode, at.setArrayKey(i), ctx, v);
+      }
+      at.popArray();
+    }
+
     /** @internal */
     classnames(): IterableIterator<string> {
       return this.type.classnames();
@@ -365,22 +446,12 @@ export namespace Type {
       return data instanceof Array;
     }
 
-    private _code(mode: Mode, at: PathReporter, ctx: Type.Context | undefined, value: any[]) {
-      let ret = new Array(value.length);
-      at.pushArray();
-      for (let [i, v] of value.entries()) {
-        ret[i] = this.type.code(mode, at.setArrayKey(i), ctx, v);
-      }
-      at.popArray();
-      return ret;
-    }
-
     _encode(at: PathReporter, ctx: Type.Context, value: Type.Value[]): Type.Data[] {
-      return this._code(Mode.Encode, at, ctx, value);
+      return [...this._code(Mode.Encode, at, ctx, value.entries())];
     }
 
     _decode(at: PathReporter, ctx: Type.Context, data: Type.Data[]): Type.Value[] {
-      return this._code(Mode.Decode, at, ctx, data);
+      return [...this._code(Mode.Decode, at, ctx, data.entries())];
     }
     validate(at: PathReporter, value: Type.Value) {
       if (!Array.isArray(value)) {
@@ -411,27 +482,27 @@ export namespace Type {
   //set
   export namespace SetType {
     export type Value = Set<Type.Value>;
-    export type Data = { is: "set", v: Type.Data[] };
+    export type Data = { is: "set", v?: Type.Data[] };
   }
+  function *set_entries (value: SetType.Value): IterableIterator<["", any]> {
+    for (let v of value)
+      yield ["", v];
+  };
   export class SetType extends ListType<SetType.Value, SetType.Data> {
     canEncode(value: Type.Value): value is SetType.Value {
       return value instanceof Set;
     }
     canDecode(data: Type.Data): data is SetType.Data {
-      return data instanceof Object && data.is === "set" && data.v instanceof Array;
+      return data instanceof Object && data.is === "set" && (data.v === undefined || data.v instanceof Array);
     }
 
     _encode(at: PathReporter, ctx: Type.Context, value: SetType.Value): SetType.Data {
-      let ret = [] as any[];
-      at.pushArray();
-      for (let v of value) {
-        ret.push(this.type.encode(at, ctx, v));
-      }
-      at.popArray();
-      return { is: "set", v: ret };
+      if (value.size > 0)
+        return { is: "set", v: [...this._code(Mode.Encode, at, ctx, set_entries(value))] };
+      return { is: "set" }
     }
     _decode(at: PathReporter, ctx: Type.Context, data: SetType.Data): SetType.Value {
-      return new Set(data.v.map(v => this.decode(at, ctx, v)));
+      return data.v ? new Set(this._code(Mode.Decode, at, ctx, data.v.entries())) : new Set();
     }
     validate(at: PathReporter, value: Type.Value) {
       if (!(value instanceof Set)) {
@@ -533,32 +604,33 @@ export namespace Type {
   const NO_VALUE = 0;
 
   //nom d'une classe
-  export namespace ClassType {
+  export namespace VersionedObjectType {
     export type Value = VersionedObject;
     export type Data = { is: "vo", cls: string, v: Identifier | (DataAttribute[]) };
     export type DataAttribute = ([/** flags */ number, /** modified */ Type.Data, /** saved */ Type.Data] | 0);
   }
-  export class VersionedObjectType extends Type<ClassType.Value, ClassType.Data> {
+  export class VersionedObjectType extends Type<VersionedObjectType.Value, VersionedObjectType.Data> {
     constructor(
       public classname: string,
       public cstor: Function,
-      public scope?: ResolvedScope,
+      public scope?: Type.DynamicScope,
     ) { super(); }
-    canEncode(value: Type.Value): value is ClassType.Value {
+    canEncode(value: Type.Value): value is VersionedObjectType.Value {
       return value instanceof this.cstor;
     }
-    canDecode(data: Type.Data): data is ClassType.Data {
+    canDecode(data: Type.Data): data is VersionedObjectType.Data {
       return data instanceof Object &&
         data.is === "vo" &&
         typeof data.cls === "string" &&
-        (is_identifier(data.id) || Array.isArray(data.v));
+        (is_identifier(data.v) || Array.isArray(data.v));
     }
-    _encode(at: PathReporter, ctx: Type.Context, vo: ClassType.Value): ClassType.Data {
+    _encode(at: PathReporter, ctx: Type.Context, vo: VersionedObjectType.Value): VersionedObjectType.Data {
       let m = vo.manager();
       let id = m.id();
-      let ret: ClassType.Data = { is: "vo", cls: m.classname(), v: id };
+      let local_id = ctx.decodedWithLocalId.get(vo);
+      let ret: VersionedObjectType.Data = { is: "vo", cls: m.classname(), v: local_id || id };
       let push_scope = this._push_scope(ctx);
-      if (ctx.scope) {
+      if (ctx.scope.beginObject(m.aspect())) {
         let found = ctx.encodedWithLocalId.get(id);
         let is_new = !found;
         if (!found) {
@@ -566,7 +638,6 @@ export namespace Type {
           ctx.encodedWithLocalId.set(id, found = [vo, attributes]);
         }
         let attributes = found[1];
-        let scope = ctx.scope.attributes(m.classname(), ctx.scope_path);
         let modified_id = ctx.decodedWithLocalId.get(vo) || id;
         if (is_new) {
           let pending_deletion = m.isPendingDeletion() ? PENDING_DELETION : 0;
@@ -580,10 +651,8 @@ export namespace Type {
             continue;
 
           let attribute = attributes_by_index[i];
-          let v: ClassType.DataAttribute = NO_VALUE;
-          if (scope.has(attribute)) {
-            let scope_path = ctx.scope_path;
-            ctx.scope_path = `${scope_path}${attribute.name}.`;
+          let v: VersionedObjectType.DataAttribute = NO_VALUE;
+          if (ctx.scope.beginAttribute(attribute)) {
             let flags = 0;
             let vm: any = NO_VALUE, vs: any = NO_VALUE;
             if (m.isAttributeModifiedFast(attribute)) {
@@ -596,12 +665,15 @@ export namespace Type {
             }
             if (flags > 0)
               v = [flags, vm, vs];
-            ctx.scope_path = scope_path;
+            else if (ctx.scope.isAttributeRequired())
+              at.diagnostic({ is: "error", msg: `attribute ${attribute.name} is required by scope` })
+            ctx.scope.endAttribute();
           }
           attributes[i] = v;
         }
         if (is_new)
           ret.v = attributes;
+        ctx.scope.endObject();
       }
 
       this._pop_scope(ctx, push_scope);
@@ -610,27 +682,22 @@ export namespace Type {
     }
 
     private _push_scope(ctx: Type.Context) {
-      let push_scope = !!this.scope && !ctx.scope;
-      if (push_scope) {
+      let previous_scope = ctx.scope;
+      if (this.scope)
         ctx.scope = this.scope;
-        ctx.scope_path = '.';
-      }
-      return push_scope;
+      return previous_scope;
     }
 
-    private _pop_scope(ctx: Type.Context, push_scope: boolean) {
-      if (push_scope) {
-        ctx.scope = undefined;
-        ctx.scope_path = '.';
-      }
+    private _pop_scope(ctx: Type.Context, previous_scope: Type.DynamicScope) {
+      ctx.scope = previous_scope;
     }
 
-    _decode(at: PathReporter, ctx: Type.Context, data: ClassType.Data): ClassType.Value | undefined {
+    _decode(at: PathReporter, ctx: Type.Context, data: VersionedObjectType.Data): VersionedObjectType.Value | undefined {
       let push_scope = this._push_scope(ctx);
       let vo: VersionedObject | undefined = undefined;
       let allow_modified = ctx.location === Type.ModeLocation.Parameter;
       if (Array.isArray(data.v)) {
-        if (!ctx.scope) {
+        if (!ctx.scope.beginObject(ctx.ccc.controlCenter().aspectChecked(data.cls))) {
           at.diagnostic({ is: "error", msg: "unexpected versioned object with data" });
         }
         else {
@@ -638,24 +705,24 @@ export namespace Type {
           let v_0 = attributes[0]!;
           let real_id = v_0[IDX_SAVED];
           let local_id = v_0[IDX_MODIFIED];
-          let is_local = VersionedObjectManager.isLocalId(real_id);
+          let is_saved = !VersionedObjectManager.isLocalId(real_id);
 
           // Phase 1: findOrCreate in ccc
           let found = ctx.encodedWithLocalId.get(local_id);
           vo = found ? found[0] : undefined;
-          if (!vo && !is_local) {
+          if (!vo && is_saved) {
             vo = ctx.ccc.find(real_id);
             if (vo && allow_modified) {
-              at.diagnostic({ is: "error", msg: "reference to existing before decode object is not allow in this context" });
+              at.diagnostic({ is: "error", msg: "reference to existing before decode object is not allowed in this context" });
               return undefined;
             }
           }
           if (!vo) {
             vo = ctx.ccc.create(data.cls);
-            if (!is_local)
+            if (is_saved)
               vo.manager().setSavedIdVersion(real_id, VersionedObjectManager.UndefinedVersion);
             else if (ctx.location === Type.ModeLocation.Parameter) {
-              ctx.encodedWithLocalId.set(real_id, [vo, attributes]);
+              ctx.encodedWithLocalId.set(real_id, [vo, []]);
               ctx.decodedWithLocalId.set(vo, real_id);
             }
             else {
@@ -664,25 +731,43 @@ export namespace Type {
             }
           }
           else {
-            ctx.encodedWithLocalId.set(real_id, [vo, attributes]);
+            ctx.encodedWithLocalId.set(real_id, [vo, []]);
           }
           if (v_0[IDX_FLAGS] & PENDING_DELETION)
             vo.manager().setPendingDeletion(true);
 
           // Phase 2: merge attributes
           let m = vo.manager();
-          let scope = ctx.scope.attributes(m.classname(), ctx.scope_path);
-          if (!is_local) {
-            let aspect = m.aspect();
-            let attributes_by_index = aspect.attributes_by_index;
-            let mergeable = ctx.missings_by_vo.get(vo);
-            let snapshot = mergeable ? mergeable.snapshot : new VersionedObjectSnapshot(m.aspect(), real_id);
-            for (let attribute of m.attributes()) {
-              let v = attributes[attribute.index];
-              if (v && (v[IDX_FLAGS] & SAVED))
+          let aspect = m.aspect();
+          let attributes_by_index = aspect.attributes_by_index;
+          let mergeable = ctx.missings_by_vo.get(vo);
+          let snapshot = mergeable ? mergeable.snapshot : new VersionedObjectSnapshot(m.aspect(), real_id);
+          let reporter_snapshot = at.reporter.snapshot();
+          {
+            let attribute = Aspect.attribute_version;
+            let v = attributes[attribute.index];
+            if (v && (v[IDX_FLAGS] & SAVED))
+              snapshot.setAttributeValueFast(attribute, attribute.type.decode(at, ctx, v[IDX_SAVED]));
+            else
+              at.diagnostic({ is: "warning", msg: `attribute version is always required` });
+          }
+
+          for (let attribute of m.attributes()) {
+            let v = attributes[attribute.index];
+            if (ctx.scope.beginAttribute(attribute)) {
+              if (is_saved && v && (v[IDX_FLAGS] & SAVED))
                 snapshot.setAttributeValueFast(attribute, attribute.type.decode(at, ctx, v[IDX_SAVED]));
+              else if (ctx.scope.isAttributeRequired() && (!allow_modified || (v && (v[IDX_FLAGS] & MODIFIED) === 0)))
+                at.diagnostic({ is: "warning", msg: `attribute ${attribute.name} is required by scope` });
+              ctx.scope.endAttribute();
             }
-            let missings = m.computeMissingAttributes(snapshot);
+            else if (v && v[IDX_FLAGS] > 0) {
+              at.diagnostic({ is: "warning", msg: `attribute ${attribute.name} is forbidden by scope` })
+            }
+          }
+          let missings = m.computeMissingAttributes(snapshot);
+          let snapshot_ok = !at.reporter.hasChanged(reporter_snapshot);
+          if (snapshot_ok) {
             if (!allow_modified && ctx.missings_grouped && missings.length) {
               let k = m.classname() + ':' + missings.sort().join(',');
               let g = ctx.missings_grouped!.get(k);
@@ -693,21 +778,44 @@ export namespace Type {
               ctx.missings_by_vo.set(vo, mergeable);
             }
             else {
-              m.mergeSavedAttributes(snapshot);
+              if (is_saved)
+                m.mergeSavedAttributes(snapshot);
               if (allow_modified) {
                 for (let attribute of m.attributes()) {
-                  let v = attributes[attribute.index];
-                  if (v && (v[IDX_FLAGS] & MODIFIED))
-                    m.setAttributeValueFast(attribute, attribute.type.decode(at, ctx, v[IDX_MODIFIED]));
+                  if (ctx.scope.beginAttribute(attribute)) {
+                    let v = attributes[attribute.index];
+                    if (v && (v[IDX_FLAGS] & MODIFIED)) {
+                      let s = at.reporter.snapshot();
+                      let modified_value = attribute.type.decode(at, ctx, v[IDX_MODIFIED]);
+                      if (!at.reporter.hasChanged(s))
+                        m.setAttributeValueFast(attribute, modified_value);
+                    }
+                    ctx.scope.endAttribute();
+                  }
                 }
               }
             }
           }
+          ctx.scope.endObject();
         }
       }
       else {
         let found = ctx.encodedWithLocalId.get(data.v);
-        vo = found ? found[0] : ctx.ccc.findOrCreate(data.v, data.is);
+        vo = found ? found[0] : ctx.ccc.find(data.v);
+        if (!vo) {
+          vo = ctx.ccc.create(data.cls);
+          let is_saved = !VersionedObjectManager.isLocalId(data.v);
+          if (is_saved)
+            vo.manager().setSavedIdVersion(data.v, VersionedObjectManager.UndefinedVersion);
+          else if (ctx.location === Type.ModeLocation.Parameter) {
+            // Local object can be created
+            ctx.encodedWithLocalId.set(data.v, [vo, []]);
+            ctx.decodedWithLocalId.set(vo, data.v);
+          }
+          else {
+            at.diagnostic({ is: "error", msg: `locally identified object ${data.v} must have been previously encoded` })
+          }
+        }
       }
       this._pop_scope(ctx, push_scope);
 
@@ -716,7 +824,7 @@ export namespace Type {
 
     validate(at: PathReporter, value: Type.Value) {
       if (!(value instanceof this.cstor)) {
-        at.diagnostic({ is: "warning", msg: `attribute must be a ${this.classname}, got ${this._describe(value)}` });
+        at.diagnostic({ is: "error", msg: `must be a ${this.classname}, got ${this._describe(value)}` });
       }
     }
     /** @internal */
@@ -743,10 +851,10 @@ export namespace Type {
     constructor(
       public oneOf: Type[],
     ) { super(); }
-    canEncode(value: Type.Value): value is ClassType.Value {
+    canEncode(value: Type.Value): value is VersionedObjectType.Value {
       return true;
     }
-    canDecode(data: Type.Data): data is ClassType.Data {
+    canDecode(data: Type.Data): data is VersionedObjectType.Data {
       return true;
     }
     _encode(at: PathReporter, ctx, value: Type.Value): Type.Data {
@@ -800,6 +908,7 @@ export namespace Type {
         decimalType,
         stringType,
         binaryType,
+        dateType,
         anyVersionedObjectType,
         new ResultType(this),
         new ArrayType(0, ArrayType.INFINITE, this),
@@ -915,7 +1024,7 @@ export namespace Type {
   export const integerType: Type<number, number> = new IntegerType();
   export const identifierType: Type<Identifier, Identifier> = new IdentifierType();
   export const versionType: Type<number, number> = new VersionType();
-  export const dateType: Type<Date, number> = new DateType();
+  export const dateType = new DateType();
   export const stringType: Type<string, string> = new StringType();
   export const binaryType = new BinaryType();
   export const anyVersionedObjectType: Type<VersionedObject, any> = new AnyVersionedObjectType();

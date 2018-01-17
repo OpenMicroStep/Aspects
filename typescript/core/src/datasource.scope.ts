@@ -188,7 +188,23 @@ function parseScopePath(ctx: ParseScopeContext, iter: IterableIterator<void>) {
 
 export function parseScope(
   unsafe_scope: Scope,
-  aspectsForType: (type: string | "_") => Iterable<Aspect.Installed>
+  aspectsForType: (type: string | "_") => Iterable<Aspect.Installed>,
+): { scope: ResolvedScope, sort: ResolvedSort } {
+  return _parseScope(new ResolvedScope(), unsafe_scope, aspectsForType);
+}
+
+export function parseScopeExtension(
+  scope: ResolvedScope,
+  unsafe_scope: Scope,
+  aspectsForType: (type: string | "_") => Iterable<Aspect.Installed>,
+) {
+  return _parseScope(scope, unsafe_scope, aspectsForType);
+}
+
+function _parseScope(
+  scope: ResolvedScope,
+  unsafe_scope: Scope,
+  aspectsForType: (type: string | "_") => Iterable<Aspect.Installed>,
 ) : { scope: ResolvedScope, sort: ResolvedSort } {
   if (Array.isArray(unsafe_scope))
     unsafe_scope = { _: { '.' : unsafe_scope }};
@@ -201,7 +217,7 @@ export function parseScope(
     safe_aspect_path_cnt: 0,
     safe_aspect_path: [],
     max_path_len: 0,
-    scope: new ResolvedScope(),
+    scope: scope,
     sort: [],
     aspectsForType: aspectsForType,
   };

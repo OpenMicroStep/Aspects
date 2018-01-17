@@ -61,8 +61,13 @@ function createContext_S1(ds: InMemoryDataSource.DataStore, queries: Map<string,
       let at = new PathReporter(new Reporter(), farMethod.name, ":", 0);
       let returnType = new Aspect.Type.ResultType(farMethod.returnType || Aspect.Type.voidType);
       let decoded_args = farMethod.argumentTypes.map((t, i) => t.decode(at.set(i), code_ctx, args[i]));
-      let inv = await Invocation.farPromise(ccc, { to: vo, method: farMethod.name }, decoded_args[0]);
-      return JSON.stringify(returnType.encode(at.set('return'), code_ctx, inv));
+      if (!at.reporter.failed) {
+        let inv = await Invocation.farPromise(ccc, { to: vo, method: farMethod.name }, decoded_args[0]);
+        return JSON.stringify(returnType.encode(at.set('return'), code_ctx, inv));
+      }
+      else {
+        return JSON.stringify({ is: "result", v: at.reporter.diagnostics });
+      }
     });
     return res;
   };
@@ -142,84 +147,84 @@ async function client_to_server_query(flux) {
 
 async function manual_server_save(flux) {
   let data_out = [
-    { is: "Car", v: [[3, "_localid:300095", "_localid:300095"], [2, 0, -1],
+    { is: "vo", cls: "Car", v: [[3, "_localid:300095", "_localid:300095"], [2, 0, -1],
       [1, "Renault", 0], [1, "Clio 4", 0], 0, 0, [1, { is: "set", v: ["toto"] }, 0]
     ] },
-    { is: "Car", v: [[3, "_localid:300088", "_localid:300088"], [2, 0, -1],
+    { is: "vo", cls: "Car", v: [[3, "_localid:300088", "_localid:300088"], [2, 0, -1],
       [1, "Renault", 0], [1, "Clio 3", 0], 0, 0, 0
     ] },
-    { is: "Car", v: [[3, "_localid:300089", "_localid:300089"], [2, 0, -1],
+    { is: "vo", cls: "Car", v: [[3, "_localid:300089", "_localid:300089"], [2, 0, -1],
       [1, "Renault", 0], [1, "Clio 2", 0], 0, 0, 0
     ] },
-    { is: "Car", v: [[3, "_localid:300090", "_localid:300090"], [2, 0, -1],
+    { is: "vo", cls: "Car", v: [[3, "_localid:300090", "_localid:300090"], [2, 0, -1],
       [1, "Peugeot", 0], [1, "3008 DKR", 0], 0, 0, 0
     ] },
-    { is: "Car", v: [[3, "_localid:300091", "_localid:300091"], [2, 0, -1],
+    { is: "vo", cls: "Car", v: [[3, "_localid:300091", "_localid:300091"], [2, 0, -1],
       [1, "Peugeot", 0], [1, "4008 DKR", 0], 0, 0, 0
     ] },
-    { is: "People", v: [[3, "_localid:300092", "_localid:300092"], [2, 0, -1],
+    { is: "vo", cls: "People", v: [[3, "_localid:300092", "_localid:300092"], [2, 0, -1],
       [1, "Lisa Simpsons" , 0], [1, "Lisa" , 0], [1, "Simpsons", 0],
-      [1, { is: "vo", v: ["People", "_localid:300094"] }, 0],
+      [1, { is: "vo", cls: "People", v: "_localid:300094" }, 0],
       0,0,0,0,0,
       [1, { is: "date", v: "2017-09-26T15:31:54.422Z" }, 0],
     ] },
-    { is: "People", v: [[3, "_localid:300093", "_localid:300093"], [2, 0, -1],
+    { is: "vo", cls: "People", v: [[3, "_localid:300093", "_localid:300093"], [2, 0, -1],
       [1, "Bart Simpsons" , 0], [1, "Bart" , 0], [1, "Simpsons", 0],
-      [1, { is: "vo", v: ["People", "_localid:300094"] }, 0],
+      [1, { is: "vo", cls: "People", v: "_localid:300094" }, 0],
       0,0,0,0,0,
       [1, { is: "date", v: "1970-01-01T00:00:00.000Z" }, 0],
     ] },
-    { is: "People", v: [[3, "_localid:300094", "_localid:300094"], [2, 0, -1],
+    { is: "vo", cls: "People", v: [[3, "_localid:300094", "_localid:300094"], [2, 0, -1],
       [1, "Homer Simpsons", 0], [1, "Homer", 0], [1, "Simpsons", 0],
       0,0,
-      [1, { is: "set", v: [{ is: "vo", v: ["People", "_localid:300092"] }, { is: "vo", v: ["People", "_localid:300093"] }] }, 0],
+      [1, { is: "set", v: [{ is: "vo", cls: "People", v: "_localid:300092" }, { is: "vo", cls: "People", v: "_localid:300093" }] }, 0],
       0,0,0,
       [1, { is: "date", v: "2017-09-26T15:31:54.422Z" }, 0],
     ] },
   ];
   let data_res = [
-    { is: "Car", v: [[3, "_localid:300095", "memory:1"], [2, 0, 0],
-      [2, 0, "Renault"], [2, 0, "Clio 4"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set", v: ["toto"] }]
+    { is: "vo", cls: "Car", v: [[3, "_localid:300095", "memory:1"], [2, 0, 0],
+      [2, 0, "Renault"], [2, 0, "Clio 4"], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set", v: ["toto"] }]
     ]},
-    { is: "Car", v: [[3, "_localid:300088", "memory:2"], [2, 0, 0],
-      [2, 0, "Renault"], [2, 0, "Clio 3"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+    { is: "vo", cls: "Car", v: [[3, "_localid:300088", "memory:2"], [2, 0, 0],
+      [2, 0, "Renault"], [2, 0, "Clio 3"], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
-    { is: "Car", v: [[3, "_localid:300089", "memory:3"], [2, 0, 0],
-      [2, 0, "Renault"], [2, 0, "Clio 2"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+    { is: "vo", cls: "Car", v: [[3, "_localid:300089", "memory:3"], [2, 0, 0],
+      [2, 0, "Renault"], [2, 0, "Clio 2"], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
-    { is: "Car", v: [[3, "_localid:300090", "memory:4"], [2, 0, 0],
-      [2, 0, "Peugeot"], [2, 0, "3008 DKR"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+    { is: "vo", cls: "Car", v: [[3, "_localid:300090", "memory:4"], [2, 0, 0],
+      [2, 0, "Peugeot"], [2, 0, "3008 DKR"], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
-    { is: "Car", v: [[3, "_localid:300091", "memory:5"], [2, 0, 0],
-      [2, 0, "Peugeot"], [2, 0, "4008 DKR"], [2, 0, undefined], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
+    { is: "vo", cls: "Car", v: [[3, "_localid:300091", "memory:5"], [2, 0, 0],
+      [2, 0, "Peugeot"], [2, 0, "4008 DKR"], [2, 0, null], [2, 0, { is: "set" }], [2, 0, { is: "set" }]
     ]},
-    { is: "People", v: [[3, "_localid:300092", "memory:6"], [2, 0, 0],
+    { is: "vo", cls: "People", v: [[3, "_localid:300092", "memory:6"], [2, 0, 0],
       [2, 0, "Lisa Simpsons" ], [2, 0, "Lisa" ], [2, 0, "Simpsons"],
-      [2, 0, { is: "vo", v: ["People", "memory:7"] }], // _father
-      [2, 0, undefined], // _mother
+      [2, 0, { is: "vo", cls: "People", v: "_localid:300094" }], // _father
+      [2, 0, null], // _mother
       [2, 0, { is: "set" }], // _childrens_by_father
       [2, 0, { is: "set" }], // _childrens_by_mother
       [2, 0, { is: "set" }], // _cars
       [2, 0, { is: "set" }], // _drivenCars
       [2, 0, { is: "date", v: "2017-09-26T15:31:54.422Z" }],
     ] },
-    { is: "People", v: [[3, "_localid:300093", "memory:8"], [2, 0, 0],
+    { is: "vo", cls: "People", v: [[3, "_localid:300093", "memory:8"], [2, 0, 0],
       [2, 0, "Bart Simpsons" ], [2, 0, "Bart" ], [2, 0, "Simpsons"],
-      [2, 0, { is: "vo", v: ["People", "memory:7"] }], // _father
-      [2, 0, undefined], // _mother
+      [2, 0, { is: "vo", cls: "People", v: "_localid:300094" }], // _father
+      [2, 0, null], // _mother
       [2, 0, { is: "set" }], // _childrens_by_father
       [2, 0, { is: "set" }], // _childrens_by_mother
       [2, 0, { is: "set" }], // _cars
       [2, 0, { is: "set" }], // _drivenCars
       [2, 0, { is: "date", v: "1970-01-01T00:00:00.000Z" }],
     ] },
-    { is: "People", v: [[3, "_localid:300094", "memory:7"], [2, 0, 0],
+    { is: "vo", cls: "People", v: [[3, "_localid:300094", "memory:7"], [2, 0, 0],
       [2, 0, "Homer Simpsons"], [2, 0, "Homer"], [2, 0, "Simpsons"],
-      [2, 0, undefined], // _father
-      [2, 0, undefined], // _mother
+      [2, 0, null], // _father
+      [2, 0, null], // _mother
       [2, 0, { is: "set", v: [
-        { is: "vo", v: ["People", "memory:6"] },
-        { is: "vo", v: ["People", "memory:8"] }]
+        { is: "vo", cls: "People", v: "_localid:300092" },
+        { is: "vo", cls: "People", v: "_localid:300093" }]
       }], // _childrens_by_father
       [2, 0, { is: "set" }], // _childrens_by_mother
       [2, 0, { is: "set" }], // _cars
@@ -229,14 +234,8 @@ async function manual_server_save(flux) {
   let ds = new InMemoryDataSource.DataStore();
   let s1 = createContext_S1(ds, new Map());
   let c1 = createContext_C1(s1.publicTransport);
-
-  await c1.cc.safe(async ccc => {
-    let defCtx = ccc.controlCenter().defaultContext()
-    let db = defCtx.db as  DataSource.Aspects.client;
-    let res = await ccc.farPromise(db.distantSave, data_out as any);
-    assert.deepEqual(res.diagnostics(), []);
-    assert.deepEqual(res.value(), data_res as any);
-  });
+  let res = await s1.publicTransport(JSON.stringify({ to: c1.cc.defaultContext().db.id(), method: "distantSave", args: [data_out] }));
+  assert.deepEqual(JSON.parse(res), { is: "result", v: [{ is: "value", value: data_res}] } as any);
   flux.continue();
 }
 

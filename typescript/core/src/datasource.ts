@@ -1,5 +1,5 @@
 import {
-  Identifier, VersionedObject, VersionedObjectManager, VersionedObjectCoder,
+  Identifier, VersionedObject, VersionedObjectManager,
   ControlCenter, ControlCenterContext, Result,
   DataSourceInternal,
   ImmutableSet, Aspect,
@@ -34,20 +34,10 @@ DataSource.category('initServer', <DataSource.ImplCategories.initServer<DataSour
 });
 
 DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.server>>{
-  async query({ context: { ccc } }, request: { id: string, [k: string]: any }) : Promise<Result<{ [s: string]: VersionedObject[] }>> {
-    let coder = new VersionedObjectCoder();
-    let res = await ccc.farPromise(this.distantQuery, request);
-    if (!res.hasOneValue())
-      return res as Result;
-
-    let v = res.value();
-    await coder.decodeEncodedVersionedObjectsClient(ccc, v.e, this);
-    let r = {};
-    for (let k of Object.keys(v.results))
-      r[k] = v.results[k].map(id => ccc.findChecked(id));
-    return Result.fromResultWithNewValue(res, r);
+  query({ context: { ccc } }, request: { id: string, [k: string]: any }) : Promise<Result<{ [s: string]: VersionedObject[] }>> {
+    return ccc.farPromise(this.distantQuery, request);
   },
-  async load({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObject[]>>  {
+  load({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObject[]>>  {
     let reporter = new Reporter();
     let saved: VersionedObject[] = [];
     for (let vo of w.objects) {
@@ -57,30 +47,19 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
         saved.push(vo);
     }
     if (reporter.diagnostics.length > 0)
-      return Result.fromDiagnosticsAndValue(reporter.diagnostics, w.objects);
+      return Promise.resolve(Result.fromDiagnosticsAndValue(reporter.diagnostics, w.objects));
     if (saved.length > 0) {
-      let res = await ccc.farPromise(this.distantLoad, { objects: saved, scope: w.scope });
-      if (res.hasOneValue()) {
-        let coder = new VersionedObjectCoder();
-        await coder.decodeEncodedVersionedObjectsClient(ccc, res.value(), this);
-      }
-      return Result.fromResultWithNewValue(res, w.objects);
+      return ccc.farPromise(this.distantLoad, { objects: saved, scope: w.scope });
     }
     return Promise.resolve(Result.fromValue(w.objects));
   },
   async save({ context: { ccc } }, objects: VersionedObject.Categories.validation[]) : Promise<Result<VersionedObject[]>> {
     let reporter = new Reporter();
-    let coder = new VersionedObjectCoder();
-    for (let vo of filterValidateChangedObjects(reporter, objects).ordered) {
-      coder.encode(vo);
-    }
+    let ordered = filterValidateChangedObjects(reporter, objects).ordered;
     if (reporter.diagnostics.length > 0)
       return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects);
-    let changed = coder.takeEncodedVersionedObjects();
-    if (changed.length > 0) {
-      let res = await ccc.farPromise(this.distantSave, changed);
-      if (res.hasOneValue())
-        await coder.decodeEncodedVersionedObjectsClient(ccc, res.value(), this);
+    if (ordered.length > 0) {
+      let res = await ccc.farPromise(this.distantSave, ordered);
       return Result.fromResultWithNewValue(res, objects);
     }
     return Result.fromValue(objects);
@@ -88,7 +67,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
 });
 
 DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.raw & DataSource.Categories.implementation & DataSource.Categories.safe & ExtDataSource>>{
-  async distantQuery({ context: { ccc } }, request) : Promise<Result<{ e: VersionedObjectCoder.EncodedVersionedObjects, results: { [s: string]: Identifier[] } }>> {
+  async distantQuery({ context: { ccc } }, request) : Promise<Result<{ [s: string]: VersionedObject[] }>> {
     let creator = this._queries && this._queries.get(request.id);
     if (!creator)
       return new Result([{ is: "error", msg: `request ${request.id} doesn't exists` }]);
@@ -97,42 +76,13 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
     let query = await creator(reporter, request, this.controlCenter());
     if (reporter.failed)
       return Result.fromDiagnostics(reporter.diagnostics);
-    let all = new Set();
-    let res = await safeQuery(ccc, this, all, query);
-    if (!res.hasOneValue())
-      return res as Result;
-
-    let v = res.value();
-    let r = {};
-    let coder = new VersionedObjectCoder();
-    for (let vo of all)
-      coder.encode(vo);
-    for (let k of Object.keys(v))
-      r[k] = v[k].map(vo => vo.id());
-    return Result.fromResultWithNewValue(res, { e: coder.takeEncodedVersionedObjects(), results: r });
+    return await safeQuery(ccc, this, new Set(), query);
   },
-  async distantLoad({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObjectCoder.EncodedVersionedObjects>> {
-    let all = new Set();
-    let res = await safeLoad(ccc, this, all, w);
-    if (!res.hasOneValue())
-      return res as Result;
-
-    let coder = new VersionedObjectCoder();
-    for (let vo of all)
-      coder.encode(vo);
-    return Result.fromResultWithNewValue(res, coder.takeEncodedVersionedObjects());
+  distantLoad({ context: { ccc } }, w): Promise<Result<VersionedObject[]>> {
+    return safeLoad(ccc, this, new Set(), w);
   },
-  async distantSave({ context: { ccc } }, data: VersionedObjectCoder.EncodedVersionedObjects) : Promise<Result<VersionedObjectCoder.EncodedVersionedObjects>> {
-    let coder = new VersionedObjectCoder();
-    this.controlCenter().registerComponent(coder);
-    let objects = coder.decodeEncodedVersionedObjectsWithModifiedValues(ccc, data);
-    let res = await ccc.farPromise(this.safeSave, objects);
-    if (!res.hasOneValue())
-      return res as Result;
-
-    for (let vo of res.value())
-      coder.encode(vo);
-    return Result.fromResultWithNewValue(res, coder.takeEncodedVersionedObjects());
+  distantSave({ context: { ccc } }, objects) : Promise<Result<VersionedObject[]>> {
+    return ccc.farPromise(this.safeSave, objects);
   }
 });
 

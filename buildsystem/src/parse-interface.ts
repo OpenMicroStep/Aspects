@@ -156,7 +156,7 @@ export function parseInterface(reporter: Reporter, data: string) : object {
 namespace Element {
   export type Type =
     { is: 'type', type: 'primitive', name: string } |
-    { is: 'type', type: 'class', name: string } |
+    { is: 'type', type: 'class', name: string, scopes?: string[] } |
     { is: 'type', type: 'array', itemType: Type, min: number, max: number | "*" } |
     { is: 'type', type: 'set', itemType: Type , min: number, max: number | "*"} |
     { is: 'type', type: 'dictionary', properties: { [s: string]: Type } } |
@@ -464,8 +464,23 @@ function _parseType(parser: Parser) : Element.Type {
       ret = { is: 'type', type: 'void' };
     else if (primitiveTypes.has(name))
       ret = { is: 'type', type: 'primitive', name: name };
-    else
-      ret = { is: 'type', type: 'class', name: name };
+    else {
+      parser.skip(Parser.isSpaceChar);
+      if (parser.test('{')) { // Scope
+        let scopes: string[] = [];
+        do {
+          parser.skip(Parser.isSpaceChar);
+          let scope = parseName(parser);
+          scopes.push(`=${scope}`);
+          parser.skip(Parser.isSpaceChar);
+        } while (parser.test(','));
+        parser.consume('}');
+        ret = { is: 'type', type: 'class', name: name, scopes: scopes };
+      }
+      else {
+        ret = { is: 'type', type: 'class', name: name };
+      }
+    }
   }
   return ret;
 }

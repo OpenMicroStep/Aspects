@@ -11,6 +11,7 @@ export namespace DataSourceInternal {
   export import ResolvedScope = DataSourceScope.ResolvedScope;
   export import ResolvedSort = DataSourceScope.ResolvedSort;
   export import parseScope = DataSourceScope.parseScope;
+  export import parseScopeExtension = DataSourceScope.parseScopeExtension;
   export import traverseScope = DataSourceScope.traverseScope;
 
   type VarDep = Map<ObjectSet, Set<ObjectSet>>;

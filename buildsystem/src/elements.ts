@@ -27,6 +27,15 @@ function embedType(condition: boolean, prefix: [string, string], type: string, s
   return condition ? `${prefix[0]}${type}${suffix[0]}` : `${prefix[1]}${type}${suffix[1]}`;
 }
 
+elementFactories.registerSimple('scope', (at, name, definition, parent: AspectBaseElement) => {
+  return new ScopeElement('scope', name, parent);
+});
+export class ScopeElement extends Element {
+  toJSON() {
+    return { is: this.is, name: this.name };
+  }
+}
+
 elementFactories.registerSimple('type', (at, name, definition, parent: AspectBaseElement) => {
   return new TypeElement('type', name, parent);
 });
@@ -37,6 +46,7 @@ export class TypeElement extends Element {
   types?: TypeElement[] = undefined;
   min?: number;
   max?: number | '*';
+  scopes?: ScopeElement[];
 
   __decl(isAttribute: boolean, allowUndefined: boolean = false, relation: boolean = false) {
     switch (this.type) {
@@ -66,7 +76,7 @@ export class TypeElement extends Element {
   }
 
   toJSON() {
-    let r: Partial<TypeElement> = { is: this.is };
+    let r: any = { is: this.is };
     if (this.name                    ) r.name = this.name;
     if (this.itemType !== undefined  ) r.itemType = this.itemType;
     if (this.types !== undefined     ) r.types = this.types;
@@ -74,6 +84,7 @@ export class TypeElement extends Element {
     if (this.type !== undefined      ) r.type = this.type;
     if (this.min !== undefined       ) r.min = this.min;
     if (this.max !== undefined       ) r.max = this.max;
+    if (this.scopes !== undefined) r.scopes = this.scopes.map(s => s.toJSON());
     return r;
   }
 }
