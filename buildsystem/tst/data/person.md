@@ -2,12 +2,12 @@
 Description de la classe
 
 ### attributes
-#### _firstName: string;
-#### _lastName:  string;
-#### _birthDate: date;
-#### _mother: Person;
-#### _father: Person;
-#### _cats: [0, *, Cat];
+#### _firstName: string
+#### _lastName:  string
+#### _birthDate: date
+#### _mother: Person
+#### _father: Person
+#### _cats: [0, *, Cat]
 _relation_: `_owner`
 
 ### queries
@@ -24,13 +24,13 @@ Les enfants de cette personne
     }
 
 ### category core [ts, objc]
-#### firstName() : string;
-#### lastName()  : string;
-#### fullName()  : string;
-#### birthDate() : date;
+#### firstName() : string
+#### lastName()  : string
+#### fullName()  : string
+#### birthDate() : date
 
 ### farCategory calculation [objc]
-#### age()       : integer;
+#### age()       : integer
 
 ## class Cat
 ### attributes

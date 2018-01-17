@@ -130,7 +130,7 @@ export function parseInterface(reporter: Reporter, data: string) : object {
           let ok = true;
           if (rule.parser) {
             sub.output = rule.parser(parser);
-            ok = sub.output !== undefined && parser.reporter.diagnostics.length === 0;
+            ok = sub.output !== undefined;
           }
           if (ok) {
             if (rule.gen)
@@ -224,6 +224,14 @@ function parseUntilNextLine(parser: Parser) : boolean {
   return !!(Parser.isLineChar(parser.ch) && parser.next());
 }
 
+function parseUntilNextLineExpectOnlySpaces(parser: Parser): boolean {
+  parser.skip(Parser.isSpaceChar);
+  let ignored = parser.while(Parser.isNotLineChar, 0);
+  if (ignored.length > 0)
+    parser.error(`unexpected characters: ${ignored}`);
+  return !!(Parser.isLineChar(parser.ch) && parser.next());
+}
+
 function _parseAttribute(parser: Parser, is: string) {
   let name = parseName(parser);
   parser.skip(Parser.isSpaceChar);
@@ -282,7 +290,7 @@ function _parseCategory<T>(parser: Parser, is: 'category' | 'farCategory') : T |
   if (!parser.test(is)) return undefined;
   parser.skip(Parser.isSpaceChar, 1);
   let name = parseName(parser);parser.skip(ch => ch !== '\n');
-  parseUntilNextLine(parser);
+  parseUntilNextLineExpectOnlySpaces(parser);
   return { is: is, name: name, methods: [] } as any;
 }
 
@@ -331,7 +339,7 @@ function parseMethod(parser: Parser) : Element.Method {
   parser.consume(':');
   parser.skip(Parser.isSpaceChar);
   ret = parseType(parser);
-  parseUntilNextLine(parser);
+  parseUntilNextLineExpectOnlySpaces(parser);
   return { is: 'method', name: name, arguments: args, return: ret };
 }
 
@@ -367,7 +375,7 @@ function parseClass(parser: Parser) : Element.Class | undefined {
     ret.superclass = parseName(parser);
     parser.skip(Parser.isSpaceChar);
   }
-  parseUntilNextLine(parser);
+  parseUntilNextLineExpectOnlySpaces(parser);
   parseOptions(parser, (parser) => {
     if (parseBooleanOption(parser, "sub object") === true)
       ret.is_sub_object = true;
