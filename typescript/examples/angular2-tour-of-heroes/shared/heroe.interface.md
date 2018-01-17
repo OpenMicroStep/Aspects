@@ -2,14 +2,14 @@
 Description de la classe
 
 ### attributes
-#### _name : string;
-#### _alias : string;
-#### _powers : [0,*,string];
+#### _name : string
+#### _alias : string
+#### _powers : [0,*,string]
 
 ### category core [ts, objc]
-#### name() : string;
-#### alias() : string;
-#### powers() : [0,*,string];
+#### name() : string
+#### alias() : string
+#### powers() : [0,*,string]
 
 
 ### aspect server

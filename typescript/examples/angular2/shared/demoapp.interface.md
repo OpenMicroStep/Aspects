@@ -2,12 +2,12 @@
 Description de la classe
 
 ### attributes
-#### _dataSource: DataSource;
-#### _lastName:  string;
-#### _birthDate: date;
+#### _dataSource: DataSource
+#### _lastName:  string
+#### _birthDate: date
 
 ### category core [ts]
-#### dataSource() : DataSource;
+#### dataSource() : DataSource
 
 ### farCategory far [ts]
 #### giveMeANumber(): decimal

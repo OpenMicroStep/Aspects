@@ -2,10 +2,10 @@
 Description de la classe
 
 ### attributes
-#### _dataSource: DataSource;
+#### _dataSource: DataSource
 
 ### category core [ts]
-#### dataSource() : DataSource;
+#### dataSource() : DataSource
 
 ### aspect server
 #### categories: core
