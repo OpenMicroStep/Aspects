@@ -917,6 +917,9 @@ export namespace Type {
       );
     }
     /** @internal */
+    *classnames(): IterableIterator<string> {
+    }
+    /** @internal */
     isComparableTo(other: Type): boolean {
       return Type.areEquals(this, other);
     }
