@@ -27,15 +27,15 @@ Point d'entrée coté client pour l'utilisation de DataSource, ces méthodes imp
 
 #### save(objects: [0, *, VersionedObject]): [0, *, VersionedObject]
 
-### farCategory server
+### farCategory Public
 
 Partie accessible depuis l'exterieur de la DataSource
 
-#### distantQuery(q: { id: string, *: any }):  { * :[0, *, VersionedObject{ LoadedScope }]}
+#### publicQuery(q: { id: string, *: any }):  { * :[0, *, VersionedObject{ LoadedScope }]}
 
-#### distantLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject{ LoadedScope }]
+#### publicLoad(l: {objects: [0, *, VersionedObject], scope: { *: { *: [0, *, string] } } | [0, *, string] }): [0, *, VersionedObject{ LoadedScope }]
 
-#### distantSave(objects: [0, *, VersionedObject{ LoadedScope }]): [0, *, VersionedObject{ LoadedScope }]
+#### publicSave(objects: [0, *, VersionedObject{ LoadedScope }]): [0, *, VersionedObject{ LoadedScope }]
 
 ### farCategory safe
 
@@ -109,7 +109,7 @@ Valide une transaction si `commit` est vrai, sinon annule la transaction.
 
 ### aspect client
 #### categories: local client
-#### farCategories: server
+#### farCategories: Public
 
 ### aspect server
-#### categories: local server safe raw implementation initServer
+#### categories: local Public safe raw implementation initServer

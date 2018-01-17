@@ -33,9 +33,9 @@ DataSource.category('initServer', <DataSource.ImplCategories.initServer<DataSour
   },
 });
 
-DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.server>>{
+DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categories.Public>>{
   query({ context: { ccc } }, request: { id: string, [k: string]: any }) : Promise<Result<{ [s: string]: VersionedObject[] }>> {
-    return ccc.farPromise(this.distantQuery, request);
+    return ccc.farPromise(this.publicQuery, request);
   },
   load({ context: { ccc } }, w: {objects: VersionedObject[], scope: DataSourceInternal.Scope }): Promise<Result<VersionedObject[]>>  {
     let reporter = new Reporter();
@@ -49,7 +49,7 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     if (reporter.diagnostics.length > 0)
       return Promise.resolve(Result.fromDiagnosticsAndValue(reporter.diagnostics, w.objects));
     if (saved.length > 0) {
-      return ccc.farPromise(this.distantLoad, { objects: saved, scope: w.scope });
+      return ccc.farPromise(this.publicLoad, { objects: saved, scope: w.scope });
     }
     return Promise.resolve(Result.fromValue(w.objects));
   },
@@ -59,15 +59,15 @@ DataSource.category('client', <DataSource.ImplCategories.client<DataSource.Categ
     if (reporter.diagnostics.length > 0)
       return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects);
     if (ordered.length > 0) {
-      let res = await ccc.farPromise(this.distantSave, ordered);
+      let res = await ccc.farPromise(this.publicSave, ordered);
       return Result.fromResultWithNewValue(res, objects);
     }
     return Result.fromValue(objects);
   }
 });
 
-DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categories.raw & DataSource.Categories.implementation & DataSource.Categories.safe & ExtDataSource>>{
-  async distantQuery({ context: { ccc } }, request) : Promise<Result<{ [s: string]: VersionedObject[] }>> {
+DataSource.category('Public', <DataSource.ImplCategories.Public<DataSource.Categories.raw & DataSource.Categories.implementation & DataSource.Categories.safe & ExtDataSource>>{
+  async publicQuery({ context: { ccc } }, request) : Promise<Result<{ [s: string]: VersionedObject[] }>> {
     let creator = this._queries && this._queries.get(request.id);
     if (!creator)
       return new Result([{ is: "error", msg: `request ${request.id} doesn't exists` }]);
@@ -78,10 +78,10 @@ DataSource.category('server', <DataSource.ImplCategories.server<DataSource.Categ
       return Result.fromDiagnostics(reporter.diagnostics);
     return await safeQuery(ccc, this, new Set(), query);
   },
-  distantLoad({ context: { ccc } }, w): Promise<Result<VersionedObject[]>> {
+  publicLoad({ context: { ccc } }, w): Promise<Result<VersionedObject[]>> {
     return safeLoad(ccc, this, new Set(), w);
   },
-  distantSave({ context: { ccc } }, objects) : Promise<Result<VersionedObject[]>> {
+  publicSave({ context: { ccc } }, objects) : Promise<Result<VersionedObject[]>> {
     return ccc.farPromise(this.safeSave, objects);
   }
 });
