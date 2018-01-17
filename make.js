@@ -126,7 +126,7 @@ module.exports =  {
         customHeader: `
           import {
             Aspect, ControlCenter, ControlCenterContext,
-            VersionedObject, VersionedObjectConstructor, VersionedObjectCoder,
+            VersionedObject, VersionedObjectConstructor,
             Result,
             DataSourceInternal, DataSourceQueries, DataSourceTransaction, DataSourceOptionalTransaction,
             ImmutableList, ImmutableSet, ImmutableObject,

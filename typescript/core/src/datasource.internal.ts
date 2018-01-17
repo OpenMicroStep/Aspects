@@ -462,7 +462,7 @@ export namespace DataSourceInternal {
     _name: string;
     typeConstraints: ConstraintOnType[] = [];
     name?: string = undefined;
-    scope?: ResolvedScope = undefined;
+    scope: ResolvedScope = ResolvedScope.EMPTY;
     sort?: ResolvedSort = undefined;
     constraints: Constraint[] = [];
     variables?: Map<string, ObjectSet> = undefined;

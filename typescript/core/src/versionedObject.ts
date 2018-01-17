@@ -432,17 +432,29 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     let ret = { changes: <string[]>[], conflicts: <string[]>[], missings: <string[]>[] };
     let version = snapshot.version();
     if (!this._setSpecialVersion(version)) {
-      let reporter = new Reporter();
-      let at = new PathReporter(reporter, this.classname(), '{id=', this.id(), '}.', '');
+      // Validate snapshot data validity
+      {
+        let at = new PathReporter(new Reporter(), this.classname(), '{id=', this.id(), '}.', '');
+        for (let idx = 2; idx < this._attribute_data.length; idx++) {
+          let merge_data = snapshot._attributes[idx];
+          if (merge_data) {
+            let merge_value = merge_data.value;
+            let attribute = this._aspect.attributes_by_index[idx];
+            attribute.type.validate(at.set(attribute.name), merge_value);
+          }
+        }
+        if (at.reporter.failed)
+          throw new Error(JSON.stringify(at.reporter.diagnostics, null, 2));
+      }
+
+      // Merge snapshot data
       for (let idx = 2; idx < this._attribute_data.length; idx++) {
         let data = this._attribute_data[idx];
         let attribute = this._aspect.attributes_by_index[idx];
         let merge_data = snapshot._attributes[idx];
         let data_is_saved = (data.flags & SAVED) > 0;
-        at.set(attribute.name);
         if (merge_data) {
           let merge_value = merge_data.value;
-          attribute.type.validate(at, merge_value);
           if (attribute.containsVersionedObject()) {
             for (let [position, sub_object] of attribute.traverseValueOrdered<VersionedObject>(merge_value)) {
               let sub_object_manager = sub_object.manager();
@@ -470,8 +482,6 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           ret.missings.push(attribute.name);
         }
       }
-      if (reporter.failed)
-        throw new Error(JSON.stringify(reporter.diagnostics, null, 2));
     }
 
     this._applyVersion(version);

@@ -14,6 +14,7 @@ export type WillResolveScope = {
 
 const emptySet: ImmutableSet<Aspect.InstalledAttribute> = new Set();
 export class ResolvedScope {
+  static readonly EMPTY = new ResolvedScope();
   scope = new Map<string, Map<string, Set<Aspect.InstalledAttribute>>>();
 
   attributes(classname: string, path: string): ImmutableSet<Aspect.InstalledAttribute> {

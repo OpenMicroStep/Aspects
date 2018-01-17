@@ -355,7 +355,6 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         let aname = this.ctx.config.obiEntity_to_aspectClassname(isname);
         let vo = ccc.findOrCreate(_id, aname);
         let manager = vo.manager();
-        let path_n = _path || "";
         _path = _path || ".";
         let idsByType = idsByPathType.get(_path);
         if (!idsByType)
@@ -372,11 +371,11 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
         if (!snapshot) {
           snapshots.set(vo, snapshot = new VersionedObjectSnapshot(manager.aspect(), manager.id()));
           snapshot.setAttributeValueFast(Aspect.attribute_version, _version);
-          for (let a of this.set.scope!.attributes(manager.classname(), _path)) {
+          for (let a of this.set.scope.attributes(manager.classname(), _path)) {
             let d: undefined | Set<any> | any[] = a.defaultValue();
             for (let contained_aspect of a.contained_aspects) {
-              let path_a = `${path_n}${a.name}.`;
-              let attributes = this.set.scope!.attributes(contained_aspect.classname, path_a);
+              let path_a = `${_path}${a.name}.`;
+              let attributes = this.set.scope.attributes(contained_aspect.classname, path_a);
               if (attributes.size) {
                 let sub_ids = subs.get(path_a);
                 if (!sub_ids)
@@ -427,7 +426,7 @@ export class ObiQuery extends SqlQuery<ObiSharedContext> {
       let tables = new Map<string, { dor: SqlBinding[], ror: SqlBinding[] }>();
       for (let [type, ids] of idsByType) {
         let cars_by_tables = new Map<string, { dcar_ids: number[], rcar_ids: number[]}>();
-        let attributes = this.set.scope!.attributes(type.classname, path);
+        let attributes = this.set.scope.attributes(type.classname, path);
         for (let a of attributes) {
           let car_info = this.car_info(a.name);
           let cars = cars_by_tables.get(car_info.table);

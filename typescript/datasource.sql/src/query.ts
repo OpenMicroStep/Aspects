@@ -972,7 +972,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       if (!type || !db_id)
         return;
       let mapper = this.ctx.mappers[type]!;
-      let scope_path = this.set.scope!.attributes(type, path);
+      let scope_path = this.set.scope.attributes(type, path);
       let id = mapper.fromDbKey(mapper.attribute_id().fromDbKey(db_id));
       let version = row[prefix + "_version"];
       let vo = ccc.findOrCreate(id, type);
@@ -1024,7 +1024,7 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
           let attribute_path = `${path}${attribute.name}.`;
           if (types.size > 0) {
             for (let type_r of types) {
-              let scope_path = this.set.scope!.attributes(type_r.classname, attribute_path);
+              let scope_path = this.set.scope.attributes(type_r.classname, attribute_path);
               let s_m = new ObjectSet(aspect.classname);
               let q_m = new SqlMappedQuery(this.ctx, s_m);
               let s_r = new ObjectSet(type_r.classname);
@@ -1073,12 +1073,12 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
       // add 1:1 relations
       let relation_11_paths: string[] = [];
       for (let type of types) {
-        let scope_path = this.set.scope!.attributes(type, path);
+        let scope_path = this.set.scope.attributes(type, path);
         for (let a of scope_path) {
           if (a.isMonoVersionedObjectValue()) { // 1:1 relation
             let path_r = `${path}${a.name}.`;
             for (let type_r of a.contained_aspects) {
-              let scope_path_r = this.set.scope!.attributes(type_r.classname, path_r);
+              let scope_path_r = this.set.scope.attributes(type_r.classname, path_r);
               if (scope_path_r.size > 0) { // 1:1 relation with attributes requested
                 // TODO: reuse existing variable if possible
                 let s_r = new ObjectSet(type_r.classname);
@@ -1126,8 +1126,9 @@ export class SqlMappedQuery extends SqlQuery<SqlMappedSharedContext> {
   private loadValue(ccc: ControlCenterContext, attribute: Aspect.InstalledAttribute, value) {
     if (value === null)
       value = undefined;
-    else if (attribute.type instanceof Aspect.Type.VersionedObjectType && value !== undefined) {
-      let classname = attribute.type.classname;
+    else if (attribute.isMonoVersionedObjectValue() && value !== undefined) {
+      // TODO: fix this limitation (ie. classname should not come for the attribute type)
+      let classname = attribute.containedVersionedObjectIfAlone()!.classname;
       let mapper = this.ctx.mappers[classname];
       let subid = mapper.fromDbKey(value);
       value = ccc.findOrCreate(subid, classname);

@@ -27,6 +27,8 @@ function serialize(s, map = new Map()) {
       if (s instanceof VersionedObject)
         s = `VersionedObject{${s.manager().classname()}/${s.id()}}`;
       if (s instanceof ResolvedScope) {
+        if (s === ResolvedScope.EMPTY)
+          return s;
         let ret = {};
         for (let [t, tv] of s.scope.entries()) {
           let rv = ret[t] = {};
