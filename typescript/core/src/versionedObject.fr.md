@@ -22,12 +22,12 @@ __!__: Lève une exception si l'attribut n'est pas chargé
 
 ### validation
 
-#### validate(reporter: Reporter)
-Validation de l'objet sans considération pour son entourage et report des diagnostics dans _reporter_.
+#### validate(at: PathReporter)
+Validation de l'objet sans considération pour son entourage et report des diagnostics dans _at.reporter_.
 
 ## class VersionedObjectManager
 
-Les méthodes ayant en paramètre un nom d'attribut existes aussi dans une version plus rapide avec le suffix `Fast`. Elles prennent directement les données Aspects de l'attribut évitant ainsi la résolution du nom sur une table de hashage. Ces méthodes ne sont pas décrite dans ce document par soucis de lisibilité.
+Les méthodes ayant en paramètre un nom d'attribut existes aussi dans une version plus rapide avec le suffix `Fast`. Elles prennent directement les données Aspects de l'attribut évitant ainsi la résolution du nom sur une table de hashage. Ces méthodes ne sont pas décrite dans ce document par soucis de lisibilité. Toutes les méthodes prenant en paramètre le nom de l'attribut peuvent levé une exception si le nom de l'attribut est invalide.
 
 Un attribut est considéré chargé si:
 
@@ -141,6 +141,11 @@ Retourne un itérateur sur l'ensemble des attributs modifiés et la valeur modif
 
 #### outdatedAttributes(): IterableIterator<{ attribute: Aspect.InstalledAttribute, outdated: any }>
 Retourne un itérateur sur l'ensemble des attributs en conflits et l'ancienne valeur sauvé associée, __id_ et __version_ omits.
+
+#### validateAttribute(at: PathReporter, attribute_name: string)
+Valide la valeur courante de l'attribut _attribute\_name_.
+
+__!__: Lève une exception si l'attribut n'est pas chargé
 
 ### Gestion
 

@@ -1,7 +1,7 @@
 import {
   Identifier, VersionedObject, VersionedObjectManager,
   ControlCenter, ControlCenterContext, Result,
-  DataSourceInternal,
+  DataSourceInternal, PathReporter,
   ImmutableSet, Aspect,
 } from './core';
 import {Reporter} from '@openmicrostep/msbuildsystem.shared';
@@ -122,7 +122,7 @@ function filterValidateChangedObjects(reporter: Reporter, objects: VersionedObje
       changed.add(o);
       if (sz < changed.size) {
         ordered.push(o);
-        o.validate(reporter);
+        o.validate(new PathReporter(reporter));
         add_sub_objects(o.manager());
       }
     }
@@ -133,7 +133,7 @@ function filterValidateChangedObjects(reporter: Reporter, objects: VersionedObje
     let sz = changed.size;
     changed.add(o);
     if (sz < changed.size) {
-      o.validate(reporter);
+      o.validate(new PathReporter(reporter));
       add_sub_objects(o.manager());
     }
   }
@@ -275,7 +275,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
       if (reporter.diagnostics.length === 0) {
         let safe_post_saves = new Map<SafePostSave, SafePostSaveContext>();
         for (let o of changed) {
-          o.validate(reporter);
+          o.validate(new PathReporter(reporter));
           let validator = this._safeValidators && this._safeValidators.get(o.manager().classname());
           if (validator) for (let safe_post_save of validator.safe_post_save) {
             let f = safe_post_saves.get(safe_post_save);

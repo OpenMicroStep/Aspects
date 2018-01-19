@@ -287,17 +287,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     }
   }
 
-  validateAttributeValue(attribute_name: string, value: any): Diagnostic[] {
-    let reporter = new Reporter();
-    let attribute = this._aspect.attributes.get(attribute_name);
-    let at = new PathReporter(reporter, this.classname(), '{id=', this.id(), '}.', attribute_name);
-    if (!attribute)
-      at.diagnostic({ is: "error", msg: `attribute doesn't exists` });
-    else
-      attribute.type.validate(at, value);
-    return reporter.diagnostics;
+  validateAttribute(at: PathReporter, attribute_name: string) {
+    this.validateAttributeFast(at, this._aspect.checkedAttribute(attribute_name));
   }
 
+  validateAttributeFast(at: PathReporter, attribute: Aspect.InstalledAttribute) {
+    attribute.validate(at, this.attributeValueFast(attribute));
+  }
 
   // Management
   setAttributeValue(attribute_name: string, value: any);
@@ -856,7 +852,7 @@ export class VersionedObject {
       methods: [
         { is: "method",
           name: "validate",
-          argumentTypes: [{ is: "type", type: "class", name: "Reporter" } as Aspect.Definition.Type],
+          argumentTypes: [{ is: "type", type: "class", name: "PathReporter" } as Aspect.Definition.Type],
           returnType: { is: "type", type: "void" } as Aspect.Definition.Type,
         },
       ]
@@ -890,7 +886,13 @@ Object.defineProperty(VersionedObject, "category", {
 });
 
 VersionedObject.category('validation', {
-  validate(reporter: Reporter): void {}
+  validate(at: PathReporter): void {
+    at.push('');
+    for (let [attribute, value] of this.manager().loadedAttributes()) {
+      attribute.validate(at.set(attribute.name), value);
+    }
+    at.pop();
+  }
 });
 
 Object.defineProperty(VersionedObject.prototype, '_id', {
@@ -926,12 +928,12 @@ export namespace VersionedObject {
   }
   export namespace Categories {
     export type validation = VersionedObject & {
-      validate(reporter: Reporter): void;
+      validate(at: PathReporter): void;
     }
   }
   export namespace ImplCategories {
     export type validation<C extends VersionedObject = VersionedObject> = {
-      validate: (this: C, reporter: Reporter) => void;
+      validate: (this: C, at: PathReporter) => void;
     }
   }
 }
