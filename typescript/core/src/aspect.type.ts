@@ -862,10 +862,20 @@ export namespace Type {
       public oneOf: Type[],
     ) { super(); }
     canEncode(value: Type.Value): value is VersionedObjectType.Value {
-      return true;
+      for (let type of this.oneOf) {
+        if (type.canEncode(value)) {
+          return true;
+        }
+      }
+      return false;
     }
     canDecode(data: Type.Data): data is VersionedObjectType.Data {
-      return true;
+      for (let type of this.oneOf) {
+        if (type.canDecode(data)) {
+          return true;
+        }
+      }
+      return false;
     }
     _encode(at: PathReporter, ctx, value: Type.Value): Type.Data {
       for (let type of this.oneOf) {
