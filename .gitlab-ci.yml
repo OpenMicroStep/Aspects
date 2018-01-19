@@ -28,14 +28,3 @@ build-8:
 build-latest:
   <<: *build_tpl
   image: node:alpine
-
-deploy:
-  stage: deploy
-  image: node:8-alpine
-  only:
-    - tags
-  script:
-   - echo "$NPM_AUTH" >> ~/.npmrc
-   - npm install -q -g @openmicrostep/msbuildsystem.cli
-   - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
-   - msbuildsystem build -w dist/gitlab/ --target deploy --env gitlab --no-progress

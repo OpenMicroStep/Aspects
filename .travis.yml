@@ -8,7 +8,7 @@ services:
   - mysql
   - postgresql
 
-script:
+script: &script
   - export MYSQL_HOST=localhost
   - export MYSQL_USER=root
   - export MYSQL_PASSWORD=
