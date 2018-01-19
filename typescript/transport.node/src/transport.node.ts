@@ -1,5 +1,4 @@
 import { FarTransport, VersionedObject, ControlCenter, Result, Aspect } from '@openmicrostep/aspects';
-import {Reporter, AttributeTypes, AttributePath} from '@openmicrostep/msbuildsystem.shared';
 import * as http from 'http';
 import * as https from 'https';
 import * as URL from 'url';
