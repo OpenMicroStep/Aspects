@@ -74,7 +74,7 @@ const transport = new ExpressTransport(router, async (cstor, id) => {
       return Promise.reject('not found')
     }));
 });
-cfg.installPublicTransport(transport, DataSource, ["server"]);
+cfg.installPublicTransport(transport, DataSource, ["Public"]);
 cfg.installPublicTransport(transport, DemoApp, ["far"]);
 cfg.installPublicTransport(transport, Person, ["calculation"]);
 
