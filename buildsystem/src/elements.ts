@@ -40,7 +40,7 @@ elementFactories.registerSimple('type', (at, name, definition, parent: AspectBas
   return new TypeElement('type', name, parent);
 });
 export class TypeElement extends Element {
-  type: 'primitive' | 'class' | 'array' | 'set' | 'dictionary' | 'or';
+  type: 'primitive' | 'class' | 'array' | 'set' | 'dictionary' | 'or' | 'void';
   itemType?: TypeElement = undefined;
   properties?: { [s: string]: TypeElement } = undefined;
   types?: TypeElement[] = undefined;
@@ -72,6 +72,8 @@ export class TypeElement extends Element {
         return embedType(isAttribute, [`ImmutableObject<`, ``], `{${Object.keys(this.properties!).map(k => `${k === '*' ? '[k: string]' : `${k}`}: ${this.properties![k].__decl(isAttribute)}`).join(', ')}}` , [`>`, ``]);
       case 'or':
         return this.types ? `(${this.types.map(t => t.__decl(isAttribute)).join(' | ')})` : 'any';
+      case 'void':
+        return "void";
     }
   }
 
