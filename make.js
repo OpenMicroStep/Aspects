@@ -190,7 +190,6 @@ module.exports =  {
         "main": "transport.node.js",
         "typings": "transport.node.d.ts",
         "dependencies": { is: "component",
-          "@openmicrostep/msbuildsystem.shared": "^0.5.6",
         },
       },
     },
