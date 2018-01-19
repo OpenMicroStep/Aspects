@@ -44,20 +44,13 @@ export class AspectConfiguration {
   private readonly _aspects = new Map<string, VersionedObjectConstructorCache>();
   private readonly _cachedCategories = new Map<string, Map<string, Aspect.InstalledMethod>>();
   /** @internal */ readonly _initDefaultContext: ((ccc: ControlCenterContext) => AspectConfiguration.DefaultContext) | undefined;
-  constructor(options: {
-    selection: AspectSelection,
-    farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
-    defaultFarTransport?: FarTransport,
-    initDefaultContext?: (ccc: ControlCenterContext) => AspectConfiguration.DefaultContext,
-    customClasses?: { [s: string]: Function },
-  })
-  constructor(selection: AspectSelection)
   constructor(options: AspectSelection | {
     selection: AspectSelection,
     farTransports?: { transport: FarTransport, classes: string[], farCategories: string[] }[],
     defaultFarTransport?: FarTransport,
     initDefaultContext?: (ccc: ControlCenterContext) => AspectConfiguration.DefaultContext,
     customClasses?: { [s: string]: Function },
+    validators?: { [s: string]: (at: PathReporter, value: any) => void },
   }) {
     this._custom_classes.set("ObjectSet", DataSourceInternal.ObjectSet);
     this._custom_classes.set("ResolvedScope", DataSourceInternal.ResolvedScope);
@@ -113,7 +106,7 @@ export class AspectConfiguration {
         this.installFarCategoryCache(this.cachedCategory(name, category_name, cstor), aspect_cstor!, cstor, t);
       });
 
-      this.install_attributes(aspect_cstor, installed_attributes, pending_relations);
+      this.install_attributes(aspect_cstor, installed_attributes, pending_relations, options.validators || {});
     }
     this.install_attribute_relations(pending_relations);
   }
@@ -149,7 +142,6 @@ export class AspectConfiguration {
     for (let cstor of this._aspects.values())
       yield cstor.aspect;
   }
-
   installPublicTransport(transport: PublicTransport, on: VersionedObjectConstructor, categories: string[]) {
     for (let categoryName of categories) {
       this.buildCategoryCache(categoryName, on).forEach(method => {
@@ -248,7 +240,8 @@ export class AspectConfiguration {
   private install_attributes(
     aspect_cstor: VersionedObjectConstructorCache,
     installed_attributes: Set<VersionedObjectConstructorCache>,
-    pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
+    pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][],
+    validators: { [s: string]: (at: PathReporter, value) => void },
   ) {
     if (!installed_attributes.has(aspect_cstor)) {
       let attributes = aspect_cstor.aspect.attributes;
@@ -262,7 +255,7 @@ export class AspectConfiguration {
       for (cstor of will_install) {
         this._vo_classes.set(cstor.definition.name, cstor);
         for (let attribute of cstor.definition.attributes || []) {
-          const data = this.install_attribute(aspect_cstor, attribute, attributes_by_index.length, pending_relations);
+          const data = this.install_attribute(aspect_cstor, attribute, attributes_by_index.length, pending_relations, validators);
           (attributes_by_index as Aspect.InstalledAttribute[]).push(data);
           (attributes as Map<string, Aspect.InstalledAttribute>).set(data.name, data);
         }
@@ -275,7 +268,8 @@ export class AspectConfiguration {
     aspect_cstor: VersionedObjectConstructorCache,
     attribute_definition: Aspect.Definition.Attribute,
     index: number,
-    pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][]
+    pending_relations: [Aspect.Installed, Aspect.InstalledAttribute, string][],
+    validators: { [s: string]: (at: PathReporter, value) => void },
   ) {
     let type = this.createType(attribute_definition.type, true, true);
     let is_sub_object = attribute_definition.is_sub_object === true;
@@ -290,6 +284,13 @@ export class AspectConfiguration {
       contained_aspects.add(contained_aspect);
     }
     let cstor = type.attribute_cstor();
+    let resolved_validators: ((at: PathReporter, value) => void)[] = [];
+    for (let validator_name of attribute_definition.validators || []) {
+      let validator = validators[validator_name];
+      if (!validator)
+        throw new Error(`validator ${validator_name} not found`);
+        resolved_validators.push(validator);
+    }
     const attribute = new cstor(
       attribute_definition.name as keyof VersionedObject,
       index,
@@ -297,6 +298,10 @@ export class AspectConfiguration {
       undefined,
       contained_aspects,
       attribute_definition.is_sub_object === true,
+      resolved_validators.length > 0 ? function validateAttributeLogic(at: PathReporter, value) {
+        for (let validate of resolved_validators)
+          validate(at, value);
+      } : undefined
     );
     for (let contained_aspect of contained_aspects) {
       (contained_aspect.references as Aspect.Reference[]).push({ class: aspect_cstor.aspect, attribute: attribute });
@@ -382,7 +387,7 @@ export class AspectConfiguration {
               dynamic_scope = new Type.ResolvedDynamicScope(resolved_scope);
           }
           let t = new Type.VersionedObjectType(type.name, cstor, dynamic_scope);
-          return forAttribute ? new Type.OrUndefinedType(t) : t;
+          return forAttribute && lvl === 0 ? new Type.OrUndefinedType(t) : t;
         }
         case "array": return new Type.ArrayType(type.min, type.max === '*' ? Type.ArrayType.INFINITE : type.max, mktype(type.itemType, lvl + 1));
         case "set": return new Type.SetType(type.min, type.max === '*' ? Type.SetType.INFINITE : type.max, mktype(type.itemType, lvl + 1));

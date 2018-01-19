@@ -1,10 +1,10 @@
 import {
   ControlCenter, ControlCenterContext, VersionedObject, VersionedObjectManager, VersionedObjectConstructor,
   Result, DataSource,
-  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal, AspectConfiguration
+  ImmutableList, ImmutableMap, ImmutableSet, DataSourceInternal, AspectConfiguration,
+  Reporter, PathReporter, Validate as V
 } from './core';
 import * as T from './aspect.type';
-import {Reporter, PathReporter, Validate as V} from '@openmicrostep/msbuildsystem.shared';
 
 export interface FarTransport {
   manual_coding?: boolean;
@@ -77,6 +77,7 @@ export namespace Aspect {
       type: Type;
       relation?: string;
       is_sub_object?: boolean;
+      validators?: string[];
     };
     export interface Category {
       is: string;
@@ -104,6 +105,7 @@ export namespace Aspect {
     class: Installed;
     attribute: InstalledAttribute;
   };
+  function doNothing(at: PathReporter, value: any) {}
   export abstract class InstalledAttribute {
     constructor(
       public readonly name: string,
@@ -112,6 +114,7 @@ export namespace Aspect {
       public readonly relation: Reference | undefined = undefined,
       public readonly contained_aspects: ImmutableSet<Aspect.Installed> = new Set(),
       public readonly is_sub_object: boolean = false,
+      public readonly validateLogic: (at: PathReporter, value: any) => void = doNothing,
     ) {}
 
     abstract defaultValue(): any;
@@ -133,6 +136,22 @@ export namespace Aspect {
     abstract traverseValue<T>(value: any): IterableIterator<T>;
     abstract diffValue<T>(newV: any, oldV: any): IterableIterator<[number, T]>;
     abstract subobjectChanges<T extends VersionedObject>(newV: any, oldV: any): IterableIterator<[-1 | 0 | 1, T]>;
+
+    validate(at: PathReporter, value: Type.Value) {
+      let s = at.reporter.snapshot();
+      this.validateType(at, value);
+      if (!at.reporter.hasChanged(s)) {
+        this.validateLogic(at, value);
+        if (!at.reporter.hasChanged(s) && this.is_sub_object)
+          this._validateSubObjects(at, value);
+      }
+    }
+
+    validateType(at: PathReporter, value: Type.Value) {
+      this.type.validate(at, value);
+    }
+
+    protected abstract _validateSubObjects(at: PathReporter, value: Type.Value);
   }
 
   export function create_virtual_attribute(name: string, type: Type.VirtualType) : Aspect.InstalledAttribute {
@@ -172,6 +191,10 @@ export namespace Aspect {
       else if (newV && newV.manager().isModified()) {
         yield [0, newV];
       }
+    }
+
+    protected _validateSubObjects(at: PathReporter, value: VersionedObject.Categories.validation) {
+      value.validate(at);
     }
   }
 
@@ -228,6 +251,13 @@ export namespace Aspect {
         }
       }
     }
+
+    protected _validateSubObjects(at: PathReporter, value: VersionedObject.Categories.validation[]) {
+      at.pushArray();
+      for (let [i, v] of value.entries())
+        v.validate(at.setArrayKey(i));
+      at.popArray();
+    }
   }
 
   export class InstalledSetAttribute extends InstalledAttribute {
@@ -270,6 +300,13 @@ export namespace Aspect {
         else if (n.manager().isModified())
           yield [0, n];
       }
+    }
+
+    protected _validateSubObjects(at: PathReporter, value: Set<VersionedObject.Categories.validation>) {
+      at.pushArray();
+      for (let v of value.values())
+        v.validate(at);
+      at.popArray();
     }
   }
 
