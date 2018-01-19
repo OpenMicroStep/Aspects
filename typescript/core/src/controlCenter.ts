@@ -32,6 +32,7 @@ export class ControlCenterContext {
       }
     }
     this._cc._components.delete(this._component);
+    this._component = undefined;
   }
 
   controlCenter(): ControlCenter {
