@@ -41,7 +41,7 @@ Element.load(reporter, {
           "core-js": "^2.4.1",
           "rxjs": "5.0.1",
           "zone.js": "^0.8.4",
-          "@openmicrostep/msbuildsystem.shared": "^0.6.3",
+          "@openmicrostep/msbuildsystem.shared": "^0.7.0",
         },
       }
     }, {
@@ -52,7 +52,7 @@ Element.load(reporter, {
           "@openmicrostep/async": "^0.1.1",
           "@openmicrostep/aspects": "^0.9.0",
           "@openmicrostep/aspects.xhr": "^0.9.0",
-          "@openmicrostep/msbuildsystem.shared": "^0.6.3",
+          "@openmicrostep/msbuildsystem.shared": "^0.7.0",
         },
       },
     }],
@@ -101,7 +101,7 @@ Element.load(reporter, {
           "@openmicrostep/aspects.express": "^0.9.0",
           "@openmicrostep/aspects.sql": "^0.9.0",
           "@openmicrostep/aspects.obi": "^0.9.0",
-          "@openmicrostep/msbuildsystem.shared": "^0.6.3",
+          "@openmicrostep/msbuildsystem.shared": "^0.7.0",
         },
       },
     }],
