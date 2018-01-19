@@ -133,11 +133,14 @@ __!__: Lève une exception si l'attribut n'est pas chargé ou en conflit
 #### attributes(): IterableIterator<Aspect.InstalledAttribute>
 Retourne un itérateur sur l'ensemble des attributs de l'aspect, __id_ et __version_ omits.
 
+#### loadedAttributes(): IterableIterator<[Aspect.InstalledAttribute, any]>
+Retourne un itérateur sur l'ensemble des attributs chargés et la valeur courante associée, __id_ et __version_ omits.
+
 #### modifiedAttributes(): IterableIterator<{ attribute: Aspect.InstalledAttribute, modified: any }>
-Retourne un itérateur sur l'ensemble des attributs modifiés et la valeur associée.
+Retourne un itérateur sur l'ensemble des attributs modifiés et la valeur modifiée associée, __id_ et __version_ omits.
 
 #### outdatedAttributes(): IterableIterator<{ attribute: Aspect.InstalledAttribute, outdated: any }>
-Retourne un itérateur sur l'ensemble des attributs en conflits et l'ancienne valeur sauvé associée.
+Retourne un itérateur sur l'ensemble des attributs en conflits et l'ancienne valeur sauvé associée, __id_ et __version_ omits.
 
 ### Gestion
 

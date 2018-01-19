@@ -263,6 +263,13 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return this._virtual_attributes.keys();
   }
 
+  *loadedAttributes(): IterableIterator<[Aspect.InstalledAttribute, any]> {
+    for (let attribute of this.attributes()) {
+      if (this.hasAttributeValueFast(attribute))
+        yield [attribute, this.attributeValueFast(attribute)];
+    }
+  }
+
   *modifiedAttributes() {
     for (let idx = 2; idx <  this._attribute_data.length; idx++) {
       let data = this._attribute_data[idx];
