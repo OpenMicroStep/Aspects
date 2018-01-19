@@ -194,7 +194,8 @@ export namespace Aspect {
     }
 
     protected _validateSubObjects(at: PathReporter, value: VersionedObject.Categories.validation) {
-      value.validate(at);
+      if (value !== undefined)
+        value.validate(at);
     }
   }
 
