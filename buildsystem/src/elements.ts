@@ -203,6 +203,7 @@ export class AttributeElement extends Element {
   type: TypeElement;
   relation?: string;
   is_sub_object: boolean = false;
+  validators: string[] = [];
 
   __resolveWithPath(at: PathReporter) {
     super.__resolveWithPath(at);
@@ -217,6 +218,7 @@ export class AttributeElement extends Element {
       type: this.type,
       relation: this.relation,
       is_sub_object: this.is_sub_object || undefined,
+      validators: this.validators.length > 0 ? this.validators : undefined,
     };
   }
 }

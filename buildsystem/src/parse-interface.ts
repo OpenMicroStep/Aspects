@@ -187,6 +187,7 @@ namespace Element {
     type: Type,
     relation?: string
     is_sub_object?: boolean,
+    validators?: string[],
   }
   export type Query = {
     is: 'query',
@@ -241,6 +242,9 @@ function parseAttribute(parser: Parser) : Element.Attribute {
       attr.relation = relation;
     if (parseBooleanOption(parser, "sub object") === true)
       attr.is_sub_object = true;
+    let validators = parseStringListOption(parser, "validators");
+    if (validators.length > 0)
+      attr.validators = validators;
   });
   return attr;
 }
@@ -378,6 +382,17 @@ function parseOptions(parser: Parser, try_parse_option: (parser: Parser) => void
     parser.skip(Parser.isSpaceChar);
     try_parse_option(parser);
   } while (parseUntilNextLine(parser));
+}
+function parseStringListOption(parser: Parser, option: string) : string[] {
+  let options: string[] = [];
+  if (parser.test(`_${option}_:`)) {
+    do {
+      parser.skip(Parser.isSpaceChar);
+      options.push(parseQuotedString(parser, '`'));
+      parser.skip(Parser.isSpaceChar);
+    } while (parser.test(','));
+  }
+  return options;
 }
 
 function parseStringOption(parser: Parser, option: string) : string | undefined {
