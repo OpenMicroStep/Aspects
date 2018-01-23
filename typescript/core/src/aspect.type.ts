@@ -642,12 +642,12 @@ export namespace Type {
       let push_scope = this._push_scope(ctx);
       if (ctx.scope.beginObject(m.aspect())) {
         let found = ctx.encodedWithLocalId.get(id);
-        let is_new = !found;
-        if (!found) {
+        let is_new = !found || found[1].length === 0;
+        if (is_new) {
           let attributes = new Array(m.aspect().attributes_by_index.length) ;
           ctx.encodedWithLocalId.set(id, found = [vo, attributes]);
         }
-        let attributes = found[1];
+        let attributes = found![1];
         let modified_id = ctx.decodedWithLocalId.get(vo) || id;
         if (is_new) {
           let pending_deletion = m.isPendingDeletion() ? PENDING_DELETION : 0;
@@ -728,14 +728,8 @@ export namespace Type {
             }
           }
           if (!vo) {
-            vo = ctx.ccc.create(data.cls);
-            if (is_saved)
-              vo.manager().setSavedIdVersion(real_id, VersionedObjectManager.UndefinedVersion);
-            else if (ctx.location === Type.ModeLocation.Parameter) {
-              ctx.encodedWithLocalId.set(real_id, [vo, []]);
-              ctx.decodedWithLocalId.set(vo, real_id);
-            }
-            else {
+            vo = this._create(ctx, data.cls, real_id, is_saved);
+            if (!vo) {
               at.diagnostic({ is: "error", msg: `reference to locally defined object ${local_id}` });
               return undefined;
             }
@@ -813,22 +807,31 @@ export namespace Type {
         let found = ctx.encodedWithLocalId.get(data.v);
         vo = found ? found[0] : ctx.ccc.find(data.v);
         if (!vo) {
-          vo = ctx.ccc.create(data.cls);
           let is_saved = !VersionedObjectManager.isLocalId(data.v);
-          if (is_saved)
-            vo.manager().setSavedIdVersion(data.v, VersionedObjectManager.UndefinedVersion);
-          else if (ctx.location === Type.ModeLocation.Parameter) {
-            // Local object can be created
-            ctx.encodedWithLocalId.set(data.v, [vo, []]);
-            ctx.decodedWithLocalId.set(vo, data.v);
-          }
-          else {
+          vo = this._create(ctx, data.cls, data.v, is_saved);
+          if (!vo) {
             at.diagnostic({ is: "error", msg: `locally identified object ${data.v} must have been previously encoded` })
           }
         }
       }
       this._pop_scope(ctx, push_scope);
 
+      return vo;
+    }
+
+    private _create(ctx: Type.Context, classname: string, real_id: Identifier, is_saved: boolean) {
+      let vo: VersionedObject | undefined = ctx.ccc.create(classname);
+      if (is_saved) {
+        vo.manager().setSavedIdVersion(real_id, VersionedObjectManager.UndefinedVersion);
+        ctx.encodedWithLocalId.set(real_id, [vo, []]);
+      }
+      else if (ctx.location === Type.ModeLocation.Parameter) {
+        ctx.encodedWithLocalId.set(real_id, [vo, []]);
+        ctx.decodedWithLocalId.set(vo, real_id);
+      }
+      else {
+        vo = undefined;
+      }
       return vo;
     }
 
