@@ -103,21 +103,17 @@ export namespace Type {
     Parameter,
     Return,
   }
-  let allow_object = true;
   export const loadedScope: DynamicScope = {
     beginObject(aspect: Aspect.Installed): boolean {
-      return allow_object;
+      return true;
     },
     beginAttribute(attribute: Aspect.InstalledAttribute): boolean {
-      allow_object = attribute.is_sub_object;
       return true;
     },
     isAttributeRequired(): boolean {
       return false;
     },
-    endAttribute() {
-      allow_object = true;
-    },
+    endAttribute() {},
     endObject() {}
   };
   export const emptyScope: DynamicScope = {
