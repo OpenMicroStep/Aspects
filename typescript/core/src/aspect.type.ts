@@ -103,9 +103,16 @@ export namespace Type {
     Parameter,
     Return,
   }
+  let stack = new Set<VersionedObject>();
+  let stack_arr: VersionedObject[] = [];
   export const loadedScope: DynamicScope = {
-    beginObject(aspect: Aspect.Installed): boolean {
-      return true;
+    beginObject(vo: VersionedObject, aspect: Aspect.Installed): boolean {
+      let sz = stack.size;
+      stack.add(vo);
+      if (stack.size > sz) {
+        stack_arr.push(vo);
+      }
+      return stack.size > sz;
     },
     beginAttribute(attribute: Aspect.InstalledAttribute): boolean {
       return true;
@@ -114,10 +121,13 @@ export namespace Type {
       return false;
     },
     endAttribute() {},
-    endObject() {}
+    endObject() {
+      let last = stack_arr.pop()!;
+      stack.delete(last);
+    }
   };
   export const emptyScope: DynamicScope = {
-    beginObject(aspect: Aspect.Installed): boolean {
+    beginObject(vo: VersionedObject, aspect: Aspect.Installed): boolean {
       return false;
     },
     beginAttribute(attribute: Aspect.InstalledAttribute): boolean {
@@ -138,7 +148,7 @@ export namespace Type {
     }
 
     constructor(public scope: ResolvedScope) {}
-    beginObject(aspect: Aspect.Installed): boolean {
+    beginObject(vo: VersionedObject, aspect: Aspect.Installed): boolean {
       this.attributes = this.scope.attributes(aspect.classname, this.path_stack_top());
       return true;
     }
@@ -160,7 +170,7 @@ export namespace Type {
     }
   }
   export interface DynamicScope {
-    beginObject(aspect: Aspect.Installed): boolean;
+    beginObject(vo: VersionedObject, aspect: Aspect.Installed): boolean;
     beginAttribute(attribute: Aspect.InstalledAttribute): boolean;
     isAttributeRequired(): boolean;
     endAttribute(): void;
@@ -636,7 +646,7 @@ export namespace Type {
       let local_id = ctx.decodedWithLocalId.get(vo);
       let ret: VersionedObjectType.Data = { is: "vo", cls: m.classname(), v: local_id || id };
       let push_scope = this._push_scope(ctx);
-      if (ctx.scope.beginObject(m.aspect())) {
+      if (ctx.scope.beginObject(vo, m.aspect())) {
         let found = ctx.encodedWithLocalId.get(id);
         let is_new = !found || found[1].length === 0;
         if (is_new) {
@@ -703,39 +713,39 @@ export namespace Type {
       let vo: VersionedObject | undefined = undefined;
       let allow_modified = ctx.location === Type.ModeLocation.Parameter;
       if (Array.isArray(data.v)) {
-        if (!ctx.scope.beginObject(ctx.ccc.controlCenter().aspectChecked(data.cls))) {
-          at.diagnostic({ is: "error", msg: "unexpected versioned object with data" });
+        // Phase 1: findOrCreate in ccc
+        let attributes = data.v;
+        let v_0 = attributes[0]!;
+        let real_id = v_0[IDX_SAVED];
+        let local_id = v_0[IDX_MODIFIED];
+        let is_saved = !VersionedObjectManager.isLocalId(real_id);
+        let found = ctx.encodedWithLocalId.get(local_id);
+        vo = found ? found[0] : undefined;
+        if (!vo && is_saved) {
+          vo = ctx.ccc.find(real_id);
+          if (vo && allow_modified) {
+            at.diagnostic({ is: "error", msg: "reference to existing before decode object is not allowed in this context" });
+            return undefined;
+          }
+        }
+        if (!vo) {
+          vo = this._create(ctx, data.cls, real_id, is_saved);
+          if (!vo) {
+            at.diagnostic({ is: "error", msg: `reference to locally defined object ${local_id}` });
+            return undefined;
+          }
         }
         else {
-          let attributes = data.v;
-          let v_0 = attributes[0]!;
-          let real_id = v_0[IDX_SAVED];
-          let local_id = v_0[IDX_MODIFIED];
-          let is_saved = !VersionedObjectManager.isLocalId(real_id);
+          ctx.encodedWithLocalId.set(real_id, [vo, []]);
+        }
+        if (v_0[IDX_FLAGS] & PENDING_DELETION)
+          vo.manager().setPendingDeletion(true);
 
-          // Phase 1: findOrCreate in ccc
-          let found = ctx.encodedWithLocalId.get(local_id);
-          vo = found ? found[0] : undefined;
-          if (!vo && is_saved) {
-            vo = ctx.ccc.find(real_id);
-            if (vo && allow_modified) {
-              at.diagnostic({ is: "error", msg: "reference to existing before decode object is not allowed in this context" });
-              return undefined;
-            }
-          }
-          if (!vo) {
-            vo = this._create(ctx, data.cls, real_id, is_saved);
-            if (!vo) {
-              at.diagnostic({ is: "error", msg: `reference to locally defined object ${local_id}` });
-              return undefined;
-            }
-          }
-          else {
-            ctx.encodedWithLocalId.set(real_id, [vo, []]);
-          }
-          if (v_0[IDX_FLAGS] & PENDING_DELETION)
-            vo.manager().setPendingDeletion(true);
-
+        if (!ctx.scope.beginObject(vo, ctx.ccc.controlCenter().aspectChecked(data.cls))) {
+          at.diagnostic({ is: "error", msg: "unexpected versioned object with data" });
+          vo = undefined;
+        }
+        else {
           // Phase 2: merge attributes
           let m = vo.manager();
           let aspect = m.aspect();

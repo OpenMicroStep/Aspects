@@ -200,7 +200,28 @@ async function manual_server_save(flux) {
     ]},
     { is: "vo", cls: "People", v: [[3, "_localid:300092", "memory:6"], [2, 0, 0],
       [2, 0, "Lisa Simpsons" ], [2, 0, "Lisa" ], [2, 0, "Simpsons"],
-      [2, 0, { is: "vo", cls: "People", v: "_localid:300094" }], // _father
+      [2, 0, { is: "vo", cls: "People", v: [[3, "_localid:300094", "memory:7"], [2, 0, 0],
+        [2, 0, "Homer Simpsons"], [2, 0, "Homer"], [2, 0, "Simpsons"],
+        [2, 0, null], // _father
+        [2, 0, null], // _mother
+        [2, 0, { is: "set", v: [
+          { is: "vo", cls: "People", v: "_localid:300092" },
+          { is: "vo", cls: "People", v: [[3, "_localid:300093", "memory:8"], [2, 0, 0],
+            [2, 0, "Bart Simpsons" ], [2, 0, "Bart" ], [2, 0, "Simpsons"],
+            [2, 0, { is: "vo", cls: "People", v: "_localid:300094" }], // _father
+            [2, 0, null], // _mother
+            [2, 0, { is: "set" }], // _childrens_by_father
+            [2, 0, { is: "set" }], // _childrens_by_mother
+            [2, 0, { is: "set" }], // _cars
+            [2, 0, { is: "set" }], // _drivenCars
+            [2, 0, { is: "date", v: "1970-01-01T00:00:00.000Z" }],
+          ] }]
+        }], // _childrens_by_father
+        [2, 0, { is: "set" }], // _childrens_by_mother
+        [2, 0, { is: "set" }], // _cars
+        [2, 0, { is: "set" }], // _drivenCars
+        [2, 0, { is: "date", v: "2017-09-26T15:31:54.422Z" }],
+      ]}], // _father
       [2, 0, null], // _mother
       [2, 0, { is: "set" }], // _childrens_by_father
       [2, 0, { is: "set" }], // _childrens_by_mother
@@ -208,29 +229,8 @@ async function manual_server_save(flux) {
       [2, 0, { is: "set" }], // _drivenCars
       [2, 0, { is: "date", v: "2017-09-26T15:31:54.422Z" }],
     ] },
-    { is: "vo", cls: "People", v: [[3, "_localid:300093", "memory:8"], [2, 0, 0],
-      [2, 0, "Bart Simpsons" ], [2, 0, "Bart" ], [2, 0, "Simpsons"],
-      [2, 0, { is: "vo", cls: "People", v: "_localid:300094" }], // _father
-      [2, 0, null], // _mother
-      [2, 0, { is: "set" }], // _childrens_by_father
-      [2, 0, { is: "set" }], // _childrens_by_mother
-      [2, 0, { is: "set" }], // _cars
-      [2, 0, { is: "set" }], // _drivenCars
-      [2, 0, { is: "date", v: "1970-01-01T00:00:00.000Z" }],
-    ] },
-    { is: "vo", cls: "People", v: [[3, "_localid:300094", "memory:7"], [2, 0, 0],
-      [2, 0, "Homer Simpsons"], [2, 0, "Homer"], [2, 0, "Simpsons"],
-      [2, 0, null], // _father
-      [2, 0, null], // _mother
-      [2, 0, { is: "set", v: [
-        { is: "vo", cls: "People", v: "_localid:300092" },
-        { is: "vo", cls: "People", v: "_localid:300093" }]
-      }], // _childrens_by_father
-      [2, 0, { is: "set" }], // _childrens_by_mother
-      [2, 0, { is: "set" }], // _cars
-      [2, 0, { is: "set" }], // _drivenCars
-      [2, 0, { is: "date", v: "2017-09-26T15:31:54.422Z" }],
-    ]}];
+    { is: "vo", cls: "People", v: "_localid:300093" },
+    { is: "vo", cls: "People", v: "_localid:300094" }];
   let ds = new InMemoryDataSource.DataStore();
   let s1 = createContext_S1(ds, new Map());
   let c1 = createContext_C1(s1.publicTransport);
