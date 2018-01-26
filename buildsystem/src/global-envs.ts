@@ -26,21 +26,21 @@ Element.load(reporter, {
       is: "component", name: "angular",
       npmPackage: { is: "component",
         dependencies: { is: "component",
-          "@angular/common": "~4.1.0",
-          "@angular/compiler": "~4.1.0",
-          "@angular/core": "~4.1.0",
-          "@angular/forms": "~4.1.0",
-          "@angular/http": "~4.1.0",
-          "@angular/platform-browser": "~4.1.0",
-          "@angular/platform-browser-dynamic": "~4.1.0",
-          "@angular/router": "~4.1.0",
-          "@angular/animations": "~4.1.0",
-
-          "angular-in-memory-web-api": "~0.3.0",
           "systemjs": "0.19.40",
           "core-js": "^2.4.1",
-          "rxjs": "5.0.1",
+          "rxjs": "^5.5.5",
           "zone.js": "^0.8.4",
+          "@angular/common": "^5.1.1",
+          "@angular/compiler": "^5.1.1",
+          "@angular/core": "^5.1.1",
+          "@angular/forms": "^5.1.1",
+          "@angular/http": "^5.1.1",
+          "@angular/platform-browser": "^5.1.1",
+          "@angular/platform-browser-dynamic": "^5.1.1",
+          "@angular/router": "^5.1.1",
+          "@angular/animations": "^5.1.1",
+          "angular-in-memory-web-api": "^0.5.2",
+
           "@openmicrostep/msbuildsystem.shared": "^0.7.0",
         },
       }
@@ -115,7 +115,21 @@ Element.load(reporter, {
       },
       componentsByEnvironment: {
         "=js": ["=openms.aspects.angular:target", "=openms.aspects.angular:angular", "=::aspects core::", "=::aspects client::"],
+      },
+      npmPackage: { is: "component",
+        dependencies: { is: "component",
+          "@openmicrostep/async": "^0.1.0",
       }
+    }
+  },
+  "openms.aspects.angular.material=": {
+    is: "component",
+    npmPackage: { is: "component",
+      dependencies: { is: "component",
+        "@angular/material": "~5.1.0",
+        "@angular/cdk": "~5.1.0",
+      },
+    }
   },
   "openms.aspects.node.dev=": {
       is: "component",
