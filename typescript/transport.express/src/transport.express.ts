@@ -35,8 +35,10 @@ export class ExpressTransport implements PublicTransport {
         let code_ctx = new Aspect.Type.Context(ccc, Aspect.Type.ModeLocation.Parameter);
         let arg0: any = undefined;
         if (arg0Type) {
+          let s = at.reporter.snapshot();
           arg0 = arg0Type.decode(at, code_ctx, req.body);
-          arg0Type.validate(at, arg0);
+          if (!at.reporter.hasChanged(s)) // decode succeeded
+            arg0Type.validate(at, arg0);
         }
         let out_result: any;
         let out_status: number;

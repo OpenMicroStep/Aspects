@@ -35,7 +35,12 @@ export class NodeReqTransport implements FarTransport {
           reject(err)
         });
         res.on('end', () => {
-          resolve(JSON.parse(data));
+          if (res.statusCode === 200)
+            resolve(JSON.parse(data))
+          else {
+            console.error(`problem with res: ${res.statusMessage}`);
+            reject(res.statusMessage);
+            }
         });
       };
       switch (u.protocol) {
