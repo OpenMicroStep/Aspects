@@ -25,6 +25,6 @@ build-8:
   <<: *build_tpl
   image: node:8-alpine
 
-build-latest:
+build-9:
   <<: *build_tpl
-  image: node:alpine
+  image: node:9-alpine
