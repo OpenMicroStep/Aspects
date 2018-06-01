@@ -76,7 +76,7 @@ function query(
 
 export const PostgresDBConnectorFactory = DBConnector.createSimple<{ Client: { new(o: object): any } }, {
   host: string, port?: number, ssl?: boolean,
-  user: string, password?: string, database: string,
+  user?: string, password?: string, database: string,
   application_name?: string
 }, { errored: Promise<void>, client: {
   query(sql: string, bind: ReadonlyArray<any>, cb: (err, result) => void),

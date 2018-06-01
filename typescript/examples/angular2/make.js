@@ -36,7 +36,7 @@ module.exports =  {
       interfaces: [{ is: "group", elements: ['=files:shared ? interface'], header: `import {DataSource} from '@openmicrostep/aspects';` }],
       npmPackage: { is: "component",
         dependencies: { is: "component",
-          "sqlite3": "^3.1.8",
+          "sqlite3": "4.0.0",
         }
       },
     }

@@ -31,7 +31,7 @@ class MySqlMaker extends SqlMaker {
 }
 MySqlMaker.prototype.select_with_recursive = undefined;
 
-export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: string, port: number, user: string, password: string, database: string }, any>({
+export const MySQLDBConnectorFactory = DBConnector.createSimple<any, { host: string, port: number, user?: string, password?: string, database: string }, any>({
   maker: new MySqlMaker(),
   create(mysql2, options) {
     return new Promise((resolve, reject) => {

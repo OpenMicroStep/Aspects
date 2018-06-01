@@ -52,6 +52,7 @@ export class ExpressTransport implements PublicTransport {
           out_result = returnType.encode(at, code_ctx, inv);
           out_status = 200;
           if (reporter.failed) {
+            console.info(reporter.description());
             out_status = 501;
             out_result = fatal_error_result;
           }

@@ -88,7 +88,7 @@ Element.load(reporter, {
         },
         devDependencies: { is: "component",
           "@types/express": "^4.0.34",
-          "@types/node": "^6.0.78",
+          "@types/node": "9.6.21",
         },
       }
     }, {

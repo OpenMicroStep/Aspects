@@ -19,6 +19,7 @@ before_script:
    - export MYSQL_PASSWORD=my-secret-pw
    - npm install -q -g @openmicrostep/msbuildsystem.cli
    - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
+   - msbuildsystem modules install typescript@2.8.3
    - msbuildsystem build -w dist/gitlab/ --target build --env gitlab --no-progress
 
 build-8:

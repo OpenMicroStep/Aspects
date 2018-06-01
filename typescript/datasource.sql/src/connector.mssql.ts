@@ -89,7 +89,7 @@ function request(tedious, sql: SqlBinding, cb: (err, rowCount) => void) {
 
 export const MSSQLDBConnectorFactory = DBConnector.createSimple<any, {
   server: string, domain?: string,
-  userName: string, password?: string,
+  userName?: string, password?: string,
   options?: {
     port?: number,
     instanceName?: string,

@@ -61,7 +61,7 @@ END;`, bind: [] });
 }
 export const OracleDBConnectorFactory = DBConnector.createSimple<any, {
   connectString: string,
-  user: string, password?: string
+  user?: string, password?: string
 }, any>({
   maker: new OracleSqlMaker(),
   create(oracledb, options) {

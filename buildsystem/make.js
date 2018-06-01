@@ -24,7 +24,7 @@ module.exports =  {
       "main": "index.js",
       "typings": "index.d.ts",
       devDependencies: { is: "component",
-        "@types/node": "^6.0.78"
+        "@types/node": "9.6.21"
       }
     },
     components: ['=::core::'],

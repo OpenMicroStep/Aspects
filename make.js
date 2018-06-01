@@ -59,7 +59,7 @@ module.exports =  {
     },
     npmPackage: { is: "component",
       devDependencies: { is: "component",
-        "@types/node": "^6.0.78"
+        "@types/node": "9.6.21"
       }
     },
   },
@@ -218,7 +218,7 @@ module.exports =  {
       interfaces: ["=Files:core:tst ? interface"],
       npmPackage: { is: "component",
         "dependencies": { is: "component",
-          "sqlite3": "^3.1.8",
+          "sqlite3": "4.0.0",
           "mysql2": "^1.2.0",
           "pg": "^6.1.5",
           "tedious": "^2.0.0",
@@ -252,7 +252,7 @@ module.exports =  {
       interfaces: ["=Files:core:tst ? interface"],
       npmPackage: { is: "component",
         "dependencies": { is: "component",
-          "sqlite3": "^3.1.8",
+          "sqlite3": "4.0.0",
           "@openmicrostep/msbuildsystem.shared": "^0.7.0",
         },
       },
@@ -297,7 +297,7 @@ module.exports =  {
     'cwd=': { is: 'group', elements: [{ is: 'file', name: "./" }] },
     "install-deps=": { is: "task", components: ["=cmd"], cmd: "npm install -g -q coveralls nyc @openmicrostep/tests" },
     "build-bs=": { is: "task", components: ["=cmd"], cmd: Value([
-      "msbuildsystem", "build", "-p", "MSBuildSystem/@msbuildsystem", "-p", "buildsystem", "-w", "dist/bs-aspects/"
+      "msbuildsystem", "build", "-p", "MSBuildSystem", "-p", "buildsystem", "-w", "dist/bs-aspects/"
     ]) },
     "tests-bs=": { is: "task", components: ["=cmd"], cmd: Value([
       "mstests", "-c", "-t", "20000", ...tests_buildsystem("dist/bs-aspects")
