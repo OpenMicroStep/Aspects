@@ -1,4 +1,4 @@
-const version = require('child_process').execSync('git describe --always', { cwd: __dirname }).toString().trim();
+const version = require('child_process').execSync('git describe --always --tags', { cwd: __dirname }).toString().trim();
 
 function tests_buildsystem(path) {
   return [
