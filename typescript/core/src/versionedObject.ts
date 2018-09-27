@@ -209,6 +209,12 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     return this.attributeValueFast(this._aspect.checkedAttribute(attribute_name));
   }
 
+  attributeValueUnchecked(attribute_name: string): any | undefined;
+  attributeValueUnchecked<K extends VersionedObjectManager.AttributeNames<T>>(attribute_name: K): T[K] | undefined;
+  attributeValueUnchecked<K extends VersionedObjectManager.AttributeNames<T>>(attribute_name: K): T[K] | undefined {
+    return this.attributeValueFastUnchecked(this._aspect.checkedAttribute(attribute_name));
+  }
+
   attributeValueFast(attribute: Aspect.InstalledAttribute): any {
     let data = this._attribute_data[attribute.index];
     if (data.flags & MODIFIED_MASK)
@@ -220,10 +226,26 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     throw new Error(`attribute '${this.classname()}.${attribute.name}' is not loaded`);
   }
 
+  attributeValueFastUnchecked(attribute: Aspect.InstalledAttribute): any {
+    // code is duplicated from attributeValueFast for performance reasons
+    let data = this._attribute_data[attribute.index];
+    if (data.flags & MODIFIED_MASK)
+      return data.modified;
+    if (data.flags & SAVED)
+      return data.saved;
+    if (this.isNew())
+      return attribute.defaultValue();
+    return undefined;
+  }
+
   virtualAttributeValue(attribute_name: string): any {
     if (this.hasVirtualAttributeValue(attribute_name))
       return this._virtual_attributes.get(attribute_name);
     throw new Error(`attribute '${this.classname()}.${attribute_name}' is not loaded`);
+  }
+
+  virtualAttributeValueUnchecked(attribute_name: string): any | undefined {
+    return this._virtual_attributes.get(attribute_name);
   }
 
   savedAttributeValue(attribute_name: string) : any;
