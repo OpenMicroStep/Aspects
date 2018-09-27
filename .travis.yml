@@ -17,6 +17,7 @@ script: &script
   - export POSTGRES_PASSWORD=
   - npm install -q -g @openmicrostep/msbuildsystem.cli
   - msbuildsystem modules install @openmicrostep/msbuildsystem.js.typescript
+  - msbuildsystem modules install typescript@2.8.3
   - git submodule sync --recursive
   - git submodule update --init --recursive
   - msbuildsystem build -w dist/travis/ --target build --env travis --no-progress
