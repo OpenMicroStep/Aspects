@@ -622,7 +622,7 @@ export namespace Type {
   //nom d'une classe
   export namespace VersionedObjectType {
     export type Value = VersionedObject;
-    export type Data = { is: "vo", cls: string, v: Identifier | (DataAttribute[]) };
+    export type Data = { is: "vo", cls: string, v: Identifier | (DataAttribute[]), virt?: (string | Type.Data)[] };
     export type DataAttribute = ([/** flags */ number, /** modified */ Type.Data, /** saved */ Type.Data] | 0);
   }
   export class VersionedObjectType extends Type<VersionedObjectType.Value, VersionedObjectType.Data> {
@@ -689,6 +689,14 @@ export namespace Type {
         }
         if (is_new)
           ret.v = attributes;
+
+        if (m._virtual_attributes.size > 0) {
+          let virt: (string | Type.Data)[] = ret.virt = [];
+          m._virtual_attributes.forEach((v,k) => {
+            virt.push(k, anyType.encode(at, ctx, v));
+          });
+        }
+
         ctx.scope.endObject();
       }
 
@@ -748,8 +756,6 @@ export namespace Type {
         else {
           // Phase 2: merge attributes
           let m = vo.manager();
-          let aspect = m.aspect();
-          let attributes_by_index = aspect.attributes_by_index;
           let mergeable = ctx.missings_by_vo.get(vo);
           let snapshot = mergeable ? mergeable.snapshot : new VersionedObjectSnapshot(m.aspect(), real_id);
           let reporter_snapshot = at.reporter.snapshot();
@@ -775,6 +781,16 @@ export namespace Type {
               at.diagnostic({ is: "warning", msg: `attribute ${attribute.name} is forbidden by scope` })
             }
           }
+
+          let virt = data.virt;
+          if (virt) {
+            for (let i = 0; i < virt.length;) {
+              let k = virt[i++];
+              let v = anyType.decode(at, ctx, virt[i++]);
+              m.setVirtualAttributeValue(k, v);
+            }
+          }
+
           let missings = m.computeMissingAttributes(snapshot);
           let snapshot_ok = !at.reporter.hasChanged(reporter_snapshot);
           if (snapshot_ok) {
