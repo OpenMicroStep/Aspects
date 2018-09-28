@@ -110,41 +110,79 @@ export type SafeValidator = {
 }
 export type SafeValidators = Map<string, SafeValidator>;
 
-function filterValidateChangedObjects(reporter: Reporter, objects: VersionedObject.Categories.validation[]) : { ordered: VersionedObject.Categories.validation[], changed: Set<VersionedObject.Categories.validation> } {
+function filterValidateChangedObjects(
+  reporter: Reporter,
+  objects: VersionedObject.Categories.validation[]
+) : {
+  ordered: VersionedObject.Categories.validation[],
+  changed: Set<VersionedObject.Categories.validation>,
+  missing_relations: { objects: VersionedObject[], scope: DataSourceInternal.ResolvedScope },
+} {
   let changed = new Set<VersionedObject.Categories.validation>();
   let ordered: VersionedObject.Categories.validation[] = [];
+  let all_objects = new Set(objects);
+  let missing_relations = { objects: [] as VersionedObject[], scope: new DataSourceInternal.ResolvedScope() };
+  let missing_scope = missing_relations.scope.scope;
+
   for (let o of objects) {
-    if (o.manager().isSubObject()) {
+    let m = o.manager();
+    if (m.isSubObject()) {
       reporter.diagnostic({ is: "error", msg: `you cannot save sub-objects directly, you must save the root object` })
     }
-    else if (o.manager().isModified() || o.manager().isPendingDeletion()) {
-      let sz = changed.size;
-      changed.add(o);
-      if (sz < changed.size) {
+    else if (m.isModified() || m.isPendingDeletion()) {
+      if (add_object(o)) {
         ordered.push(o);
         o.validate(new PathReporter(reporter));
-        add_sub_objects(o.manager());
+        add_attributes(m);
       }
     }
   }
-  return { ordered, changed };
+  return { ordered, changed, missing_relations };
 
-  function add_sub_object(o: VersionedObject.Categories.validation) {
+  function add_object(o: VersionedObject.Categories.validation) {
     let sz = changed.size;
     changed.add(o);
-    if (sz < changed.size) {
+    return sz < changed.size;
+  }
+
+  function add_sub_object(o: VersionedObject.Categories.validation) {
+    if (add_object(o)) {
       o.validate(new PathReporter(reporter));
-      add_sub_objects(o.manager());
+      add_attributes(o.manager());
     }
   }
 
-  function add_sub_objects(m: VersionedObjectManager) {
+  function add_attributes(m: VersionedObjectManager) {
     for (let { attribute, modified } of m.modifiedAttributes()) {
       if (attribute.is_sub_object) {
         for (let sub_vo of attribute.traverseValue<VersionedObject.Categories.validation>(modified))
           add_sub_object(sub_vo);
         for (let sub_vo of attribute.traverseValue<VersionedObject.Categories.validation>(m.savedAttributeValueFast(attribute)))
           add_sub_object(sub_vo);
+      }
+      else if (attribute.relation) {
+        // both side of a relation must be saved
+        for (let [, vo] of attribute.diffValue<VersionedObject.Categories.validation>(m.attributeValueFast(attribute), m.savedAttributeValueFast(attribute))) {
+          if (!all_objects.has(vo) || !vo.manager().hasAttributeValueFast(attribute.relation.attribute)) {
+            missing_relations.objects.push(vo);
+            let missing_scope_cls = missing_scope.get(vo.manager().classname());
+            let missing_scope_attr: Set<Aspect.InstalledAttribute>;
+            if (!missing_scope_cls) {
+              let missing_scope_cls = new Map<string, Set<Aspect.InstalledAttribute>>();
+              missing_scope_attr = new Set();
+              missing_scope_cls.set('.', missing_scope_attr);
+              missing_scope.set(vo.manager().classname(), missing_scope_cls);
+            }
+            else {
+              missing_scope_attr = missing_scope_cls.get('.')!;
+            }
+
+            missing_scope_attr.add(attribute.relation.attribute);
+            if (add_object(vo)) {
+              ordered.push(vo);
+            }
+          }
+        }
       }
     }
   }
@@ -243,7 +281,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     // TODO: Do we want to force load attributes in case of failure or for unchanged objects ?
     // TODO: snapshot/restore object scope, until then, SafePreSave can leak data
     let reporter = new Reporter();
-    let { ordered, changed } = filterValidateChangedObjects(reporter, objects);
+    let { ordered, changed, missing_relations } = filterValidateChangedObjects(reporter, objects);
     if (changed.size === 0 || reporter.failed)
       return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects); // safe, there is no way new attributes have been loaded
 
@@ -254,7 +292,15 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     let tr = begin.value();
     try {
       {
-        let ordered_push = ordered.push.bind(this);
+        if (missing_relations.objects.length) {
+          (await ccc.farPromise(this.implLoad, { tr: undefined, ...missing_relations })).safeValue(reporter);
+        }
+        let ordered_push = (vo: VersionedObject.Categories.validation) => {
+          if (!changed.has(vo)) {
+            changed.add(vo);
+            ordered.push(vo);
+          }
+        };
         let safe_pre_saves = new Map<SafePreSave, SafePreSaveContext>();
         for (let o of changed) {
           let validator = this._safeValidators && this._safeValidators.get(o.manager().classname());
@@ -314,13 +360,18 @@ DataSource.category('raw', <DataSource.ImplCategories.raw<DataSource.Categories.
   },
   async rawSave({ context: { ccc } }, objects: VersionedObject.Categories.validation[]) {
     let reporter = new Reporter();
-    let { ordered } = filterValidateChangedObjects(reporter, objects);
+    let { ordered, missing_relations } = filterValidateChangedObjects(reporter, objects);
     if (ordered.length === 0 || reporter.failed)
       return Result.fromDiagnosticsAndValue(reporter.diagnostics, objects);
 
     let begin = await ccc.farPromise(this.implBeginTransaction, undefined);
     if (begin.hasOneValue() && !begin.hasDiagnostics()) {
       let tr = begin.value();
+      if (missing_relations.objects.length) {
+        let load_missings = await ccc.farPromise(this.implLoad, { tr: undefined, ...missing_relations });
+        if (load_missings.hasDiagnostics())
+          return Result.fromResultWithNewValue(load_missings, objects);
+      }
       let save = await ccc.farPromise(this.implSave, { tr: tr, objects: ordered });
       let end = await ccc.farPromise(this.implEndTransaction, { tr: tr, commit: !save.hasDiagnostics() });
       return Result.fromDiagnosticsAndValue([...save.diagnostics(), ...end.diagnostics()], objects);
