@@ -331,6 +331,8 @@ export class AspectConfiguration {
       let relation_aspect = attribute.containedVersionedObjectIfAlone();
       if (!relation_aspect)
         throw new Error(`attribute ${aspect.classname}.${attribute.name} type of a relation must be a class, an array of classes or a set of classes`);
+      if (relation_aspect.is_sub_object)
+        throw new Error(`attribute ${aspect.classname}.${attribute.name} contains a relation to a subobject attribute ${relation_aspect.classname}.${relation}, this is forbidden`);
       let relation_attribute = relation_aspect.attributes.get(relation);
       if (!relation_attribute)
         throw new Error(`attribute ${aspect.classname}.${attribute.name} contains a relation to an unknown attribute ${relation_aspect.classname}.${relation}`);
