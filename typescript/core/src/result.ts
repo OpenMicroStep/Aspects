@@ -6,6 +6,13 @@ export class Result<T = any> {
   /** @internal */ _values: T[] = [];
   /** @internal */ _diagnostics: Diagnostic[] = [];
 
+  static safeValueAt<T extends {}, K extends keyof T>(reporter: Reporter, result: Result<T>, at: K, defaultValue: T[K]): T[K] ;
+  static safeValueAt<T extends {}, K extends keyof T>(reporter: Reporter, result: Result<T>, at: K, defaultValue?: T[K]): T[K] | undefined;
+  static safeValueAt<T extends {}, K extends keyof T>(reporter: Reporter, result: Result<T>, at: K, defaultValue: T[K] | undefined = undefined) : T[K] | undefined {
+    let v = result.safeValue(reporter);
+    return v && v[at] || defaultValue;
+  }
+
   static fromDiagnostics<T = any>(diagnostics: Diagnostic[]) : Result<T> {
     return new Result([...diagnostics]);
   }
@@ -84,6 +91,25 @@ export class Result<T = any> {
 
   diagnostics(): ImmutableList<Diagnostic> {
     return this._diagnostics;
+  }
+
+  safeValue(reporter: Reporter, defaultValue: T): T;
+  safeValue(reporter: Reporter, defaultValue?: T): T | undefined;
+  safeValue(reporter: Reporter, defaultValue: T | undefined = undefined): T | undefined {
+    let values = this.safeValues(reporter);
+    if (values.length === 1)
+      return values[0];
+    else if (values.length === 0)
+      reporter.diagnostic({ is: "warning", msg: "no value in this result" });
+    else
+      reporter.diagnostic({ is: "warning", msg: "more than one value in the result" });
+    return defaultValue;
+  }
+
+  safeValues(reporter: Reporter): ImmutableList<T> {
+    for (let d of this._diagnostics)
+      reporter.diagnostic(d);
+    return this._values;
   }
 }
 
