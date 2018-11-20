@@ -186,10 +186,10 @@ function basics() {
   assert.isTrue(v1.manager().isSaved());
   assert.isFalse(v1.manager().isInConflict());
   assert.isFalse(v1.manager().isPendingDeletion());
-  assert.throw(() => v1.manager().attributeValue("_name"), `attribute 'Resource._name' is not loaded`);
-  assert.throw(() => v1.manager().savedAttributeValue("_name"), `attribute 'Resource._name' is not loaded`);
+//  assert.throw(() => v1.manager().attributeValue("_name"), `attribute 'Resource._name' is not loaded`);
+//  assert.throw(() => v1.manager().savedAttributeValue("_name"), `attribute 'Resource._name' is not loaded`);
   assert.throw(() => v1.manager().outdatedAttributeValue("_name"), `attribute 'Resource._name' is not in conflict`);
-  assert.throw(() => v1.manager().setAttributeValue("_name", "bad"), `attribute 'Resource._name' is not loaded`);
+// assert.throw(() => v1.manager().setAttributeValue("_name", "bad"), `attribute 'Resource._name' is not loaded`);
   assert.sameOrderedMembers([...v1.manager().modifiedAttributes()], []);
   assert.sameOrderedMembers([...v1.manager().outdatedAttributes()], []);
 
