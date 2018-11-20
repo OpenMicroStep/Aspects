@@ -11,19 +11,22 @@ import { Reporter, Diagnostic, PathReporter } from '@openmicrostep/msbuildsystem
   modified_sub_count: 15 // [0, 32768[
   is_modified: 1
   is_saved: 1
-  is_pending_deletion: 1
+  is_pending_deletion/is_pending_saved: 1
   is_outdated: 1
   outdated_sub_count: 13 // [0, 8192[
 }
  */
 const SAVED            = 0x00010000;
 const PENDING_DELETION = 0x00020000;
+const PENDING_SAVED    = 0x00020000;
 const FLAGS_MASK       = 0x00030000;
 const MODIFIED_DIRECT  = 0x00008000;
 const OUTDATED_DIRECT  = 0x00040000;
-const HAS_VALUE        = 0x0003FFFF;
+const HAS_VALUE        = 0x0001FFFF;
 const MODIFIED_MASK    = 0x0000FFFF;
 const OUTDATED_MASK    = 0xFFFC0000;
+
+declare var console;
 
 function _set_delta(flags: number, delta: number, flag: number) {
   if (delta > 0)
@@ -466,6 +469,12 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
             let merge_value = merge_data.value;
             let attribute = this._aspect.attributes_by_index[idx];
             attribute.type.validate(at.set(attribute.name), merge_value);
+            if (at.reporter.failed) {
+              console.error(`=>> want ${attribute.name}`)
+              for (const o of merge_value) {
+                console.error('have ',o.manager().classname());
+              }
+            }
           }
         }
         if (at.reporter.failed)
@@ -492,19 +501,17 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
           let data_saved_same = data_is_saved && areEquals(data.saved, merge_value);
           if (!data_saved_same) {
             if (data_is_saved && (data.flags & MODIFIED_DIRECT) && !areEquals(data.modified, merge_value) && !(data.flags & OUTDATED_DIRECT)) {
+              // external modification (saved) != local modification
               ret.conflicts.push(attribute.name);
               this._apply_attribute_outdated_delta(data, +1, 0, true, data.saved);
             }
             else if ((data.flags & OUTDATED_DIRECT) && areEquals(data.outdated, merge_value)) {
+              // conflict resolved
               this._apply_attribute_outdated_delta(data, -1, 0, false, undefined);
             }
             ret.changes.push(attribute.name);
             this._setAttributeSavedValue(attribute, data, merge_value);
           }
-        }
-        else if (data.flags && version !== this.version()) {
-          this._unloadAttributeData(attribute, data); // quite a big deal...
-          ret.missings.push(attribute.name);
         }
       }
     }
@@ -551,6 +558,14 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
 
   private _setAttributeSavedValue(attribute: Aspect.InstalledAttribute, data: InternalAttributeData, merge_value: any) {
     let delta = -_modified_sub_count(data.flags);
+
+    let is_pending_saved = (data.flags & PENDING_SAVED) > 0;
+    let pending_saved = is_pending_saved ? data.modified : undefined;
+    if (is_pending_saved) {
+      data.modified = undefined;
+      data.flags &= ~PENDING_SAVED;
+    }
+
     let is_modified_direct = (data.flags & MODIFIED_DIRECT) > 0;
     if (attribute.is_sub_object) {
       let one_if_modified = is_modified_direct ? 1 : 0;
@@ -583,6 +598,48 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
     this._apply_attribute_modified_delta(data, bool2delta(is_still_modified_direct), delta, true, modified_value);
     data.saved = merge_value;
     data.flags |= SAVED;
+
+    if (is_pending_saved && attribute.relation) {
+      // compute add/del on the relation
+      // data.saved hold the saved values
+      if (attribute.isMonoValue()) {
+        // can't use the fast version has this can have side effects on the saved object
+        this.setAttributeValueFast(attribute, pending_saved);
+      }
+      else if (attribute.isSetValue()) {
+        let relation = attribute.relation.attribute;
+        let v = new Set<VersionedObject>();
+        if (relation.isMonoValue()) {
+          for (let saved of data.saved) {
+            let saved_manager = saved.manager();
+            if (!saved_manager.hasAttributeValueFast(relation) ||
+                saved_manager.attributeValueFast(relation) === this._object)
+              v.add(saved);
+          }
+        }
+        else if (relation.isSetValue()) {
+          for (let saved of data.saved) {
+            let saved_manager = saved.manager();
+            if (!saved_manager.hasAttributeValueFast(relation) ||
+                saved_manager.attributeValueFast(relation).has(this._object))
+              v.add(saved);
+          }
+        }
+        else {
+          throw new Error(`unsupported relation destination type ${relation.type}`);
+        }
+
+        // pending_saved hold the added values only
+        for (let added of pending_saved) {
+          v.add(added);
+        }
+
+        this._setAttributeValueFast(attribute, v, true);
+      }
+      else {
+        throw new Error(`unsupported relation source type ${attribute.type}`);
+      }
+    }
   }
 
   // Others
@@ -729,19 +786,33 @@ export class VersionedObjectManager<T extends VersionedObject = VersionedObject>
         }
         else if (attribute.relation) {
           let relation = attribute.relation.attribute;
-          if (sub_object_manager.hasAttributeValueFast(relation)) {
-            let v = sub_object_manager.attributeValueFast(relation);
-            if (relation.isMonoValue()) {
-              v = is_add ? this._object : undefined;
-            }
-            else if (relation.isSetValue()) {
-              v = new Set<VersionedObject>(v);
-              v[is_add ? 'add' : 'delete'](this._object);
-            }
-            else {
-              throw new Error(`unsupported relation destination type ${relation.type}`);
-            }
+          let is_loaded = sub_object_manager.hasAttributeValueFast(relation);
+          let v: any;
+          if (is_loaded) {
+            v = sub_object_manager.attributeValueFast(relation);
+          }
+          else {
+            v = sub_object_manager._attribute_data[relation.index].modified;
+          }
+
+          if (relation.isMonoValue()) {
+            v = is_add ? this._object : undefined;
+          }
+          else if (relation.isSetValue()) {
+            v = new Set<VersionedObject>(v);
+            v[is_add ? 'add' : 'delete'](this._object);
+          }
+          else {
+            throw new Error(`unsupported relation destination type ${relation.type}`);
+          }
+
+          if (is_loaded) {
             sub_object_manager._setAttributeValueFast(relation, v, true);
+          }
+          else {
+            let rdata: InternalAttributeData = sub_object_manager._attribute_data[relation.index]
+            rdata.flags |= PENDING_SAVED;
+            rdata.modified = v;
           }
         }
       }

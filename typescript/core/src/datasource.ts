@@ -293,7 +293,7 @@ DataSource.category('safe', <DataSource.ImplCategories.safe<DataSource.Categorie
     try {
       {
         if (missing_relations.objects.length) {
-          (await ccc.farPromise(this.implLoad, { tr: undefined, ...missing_relations })).safeValue(reporter);
+          (await ccc.farPromise(this.implLoad, { tr, ...missing_relations })).safeValue(reporter);
         }
         let ordered_push = (vo: VersionedObject.Categories.validation) => {
           if (!changed.has(vo)) {
